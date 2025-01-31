@@ -63,7 +63,7 @@
 
       <!-- Address input container -->
       <div class="address-input-box">
-        <form class="address-form">
+        <form class="address-form" id="address-form">
           <input 
             type="text" 
             name="address" 
@@ -84,7 +84,7 @@
       <p>Get a glimpse of local market activity</p>
     </div>
     <div class="trending-list" id="trending-homes">
-      <!-- Placeholder cards: dynamic content would be inserted here via JS -->
+      <!-- Placeholder cards (original) -->
       <div class="home-card">
         <img src="https://via.placeholder.com/300x200" alt="Trending Home" />
         <div class="card-details">
@@ -92,7 +92,6 @@
           <p>2,000 sq ft · 3 Beds · 2 Baths</p>
         </div>
       </div>
-
       <div class="home-card">
         <img src="https://via.placeholder.com/300x200" alt="Trending Home" />
         <div class="card-details">
@@ -100,7 +99,6 @@
           <p>1,900 sq ft · 4 Beds · 3 Baths</p>
         </div>
       </div>
-
       <div class="home-card">
         <img src="https://via.placeholder.com/300x200" alt="Trending Home" />
         <div class="card-details">
@@ -108,6 +106,15 @@
           <p>2,500 sq ft · 4 Beds · 3.5 Baths</p>
         </div>
       </div>
+    </div>
+    
+    <!-- Dynamic Comparables Section -->
+    <div class="section-header" style="margin-top: 3rem;">
+      <h2>Comparable Properties</h2>
+      <p>Search results below</p>
+    </div>
+    <div class="trending-list" id="comparable-results">
+      <!-- This will be populated dynamically via JS -->
     </div>
   </section>
 
@@ -146,5 +153,54 @@
     <p>© 2025 Renvo. All rights reserved.</p>
     <p>Data sourced from multiple real estate data providers.</p>
   </footer>
+
+  <script>
+    // Grab relevant elements
+    const form = document.getElementById('address-form');
+    const addressInput = document.getElementById('address-input');
+    const comparableResults = document.getElementById('comparable-results');
+
+    // Listen for the form submission
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const address = addressInput.value.trim();
+      if (!address) {
+        alert('Please enter a valid address.');
+        return;
+      }
+
+      // Clear old search results
+      comparableResults.innerHTML = '';
+
+      try {
+        // Example: calls /api/comparables?address=...
+        const response = await fetch(`/api/comparables?address=${encodeURIComponent(address)}`);
+        const data = await response.json();
+
+        if (data.success && data.data.length > 0) {
+          data.data.forEach(property => {
+            // Create a new card for each comparable
+            const card = document.createElement('div');
+            card.classList.add('home-card');
+
+            // For now, we use a placeholder image again
+            card.innerHTML = `
+              <img src="https://via.placeholder.com/300x200" alt="Comparable Home"/>
+              <div class="card-details">
+                <h3>${property.address}</h3>
+                <p>${property.bedrooms || 0} Beds · ${property.bathrooms || 0} Baths · $${(property.sale_price || 0).toLocaleString()}</p>
+              </div>
+            `;
+            comparableResults.appendChild(card);
+          });
+        } else {
+          comparableResults.innerHTML = '<p>No comparable properties found.</p>';
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        comparableResults.innerHTML = '<p>Unable to fetch comparable properties at this time.</p>';
+      }
+    });
+  </script>
 </body>
 </html>
