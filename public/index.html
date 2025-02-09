@@ -6,39 +6,50 @@
   <title>Renvo - Find the Highest and Best Use of Your Property</title>
   <!-- Link to external CSS -->
   <link rel="stylesheet" href="styles.css" />
-
-  <!-- Optionally, import a Google Font for a modern look -->
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <!-- Import Poppins font from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link 
-    href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" 
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;700&display=swap" 
     rel="stylesheet"
   />
+  <!-- Inline CSS for auto-suggest dropdown -->
+  <style>
+    .suggestions-list {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      list-style: none;
+      width: 100%;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      margin: 0;
+      padding: 0;
+    }
+    .suggestions-list li {
+      padding: 8px;
+      cursor: pointer;
+    }
+    .suggestions-list li:hover {
+      background-color: #f0f0f0;
+    }
+    /* Optional: ensure the input container is positioned relative */
+    .input-container {
+      position: relative;
+    }
+  </style>
 </head>
 <body>
   <!-- Header Section -->
   <header class="site-header">
     <div class="header-inner">
-      <!-- Logo in the middle -->
-      <div class="site-logo">
-        <!-- Inline SVG logo that says "Renvo" with a small house or building icon -->
-        <svg version="1.1" width="120" height="40" viewBox="0 0 600 200" aria-label="Renvo Logo">
-          <title>Renvo Logo</title>
-          <style>
-            .logo-building { fill: var(--brand-color-1); }
-            .logo-text { fill: var(--brand-color-2); }
-          </style>
-          <!-- Simple shape (house or building) -->
-          <polygon class="logo-building" points="50,60 90,100 10,100" />
-          <rect class="logo-building" x="32" y="100" width="36" height="40" />
-          <!-- "Renvo" text -->
-          <text class="logo-text" x="120" y="130" font-family="Roboto" font-size="60" font-weight="700">
-            Renvo
-          </text>
-        </svg>
+      <!-- Branding: Logo image and text -->
+      <div class="site-branding">
+        <img src="assets/icons/Renvo.header.logo.nobackground.png" alt="Renvo Logo" class="logo-image" />
+        <span class="site-title">Renvo</span>
       </div>
-
-      <!-- Header Nav -->
+      <!-- Navigation -->
       <nav class="header-nav">
         <ul>
           <li><a href="sign-in.html">Sign In</a></li>
@@ -49,21 +60,21 @@
     </div>
   </header>
 
-  <!-- Hero Section with Background Image & Address Input -->
-  <section class="hero-section">
-    <div class="hero-overlay"></div>
-    <div class="hero-content">
-      <!-- Value proposition text -->
-      <div class="hero-text">
-        <h1>Maximize the Value of Your Property <br/> with Highest and Best Use Analysis</h1>
-        <p>
-          At Renvo, we help homeowners and investors discover the most profitable use for any property—whether that means adding an ADU, renovating for more bedrooms, or renting out. Unlock your property's full potential.
-        </p>
-      </div>
-
-      <!-- Address input container -->
-      <div class="address-input-box">
-        <form class="address-form" id="address-form">
+<!-- Hero Section with Background Image & Address Input -->
+<section class="hero-section">
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <!-- Value Proposition -->
+    <div class="hero-text">
+      <h1>Maximize the Value of Your Property <br> with Highest and Best Use Analysis</h1>
+      <p>
+        At Renvo, we help homeowners and investors discover the most profitable use for any property—whether that means adding an ADU, renovating for more bedrooms, or renting out. Unlock your property's full potential.
+      </p>
+    </div>
+    <!-- Address Input with Auto-Suggest -->
+    <div class="address-input-box">
+      <form class="address-form" id="address-form" autocomplete="off">
+        <div class="input-container">
           <input 
             type="text" 
             name="address" 
@@ -71,54 +82,100 @@
             placeholder="Enter Address (e.g., 1234 Oak Street)" 
             aria-label="Enter property address"
           />
-          <button type="submit" class="btn-search">Search</button>
-        </form>
-      </div>
+          <!-- Dropdown for address suggestions -->
+          <ul id="address-suggestions" class="suggestions-list"></ul>
+        </div>
+        <button type="submit" class="btn-search">Search</button>
+      </form>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- Trending Homes Section -->
+<!-- Place your inline JavaScript here (or in a separate .js file) -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const form = document.getElementById("address-form");
+    const addressInput = document.getElementById("address-input");
+    const suggestionsList = document.getElementById("address-suggestions");
+    let debounceTimeout;
+
+    addressInput.addEventListener("input", function() {
+      clearTimeout(debounceTimeout);
+      const query = addressInput.value.trim();
+      if (query.length < 2) {
+        suggestionsList.innerHTML = "";
+        return;
+      }
+      debounceTimeout = setTimeout(async function() {
+        try {
+          const response = await fetch(`/api/property-addresses?search=${encodeURIComponent(query)}`);
+          const data = await response.json();
+          if (data.success && data.data && data.data.length > 0) {
+            suggestionsList.innerHTML = "";
+            data.data.forEach(item => {
+              const li = document.createElement("li");
+              // Display full address including city, state, and zip code
+              li.textContent = `${item.address}, ${item.city}, ${item.state} ${item.zip_code}`;
+              li.addEventListener("click", function() {
+                addressInput.value = li.textContent;
+                suggestionsList.innerHTML = "";
+              });
+              suggestionsList.appendChild(li);
+            });
+          } else {
+            suggestionsList.innerHTML = "";
+          }
+        } catch (error) {
+          console.error("Error fetching suggestions:", error);
+          suggestionsList.innerHTML = "";
+        }
+      }, 300);
+    });
+
+    form.addEventListener("submit", function(e) {
+      e.preventDefault();
+      const address = addressInput.value.trim();
+      if (!address) {
+        alert("Please enter an address.");
+        return;
+      }
+      window.location.href = `property-results.html?address=${encodeURIComponent(address)}`;
+    });
+  });
+</script>
+  <!-- Trending Properties Section -->
   <section class="trending-section">
     <div class="section-header">
       <h2>Trending Properties Near You</h2>
       <p>Get a glimpse of local market activity</p>
     </div>
     <div class="trending-list" id="trending-homes">
-      <!-- Placeholder cards (original) -->
+      <!-- Static property cards with local images -->
       <div class="home-card">
-        <img src="https://via.placeholder.com/300x200" alt="Trending Home" />
+        <img src="assets/images/trending/trending1.png" alt="Trending Home 1">
         <div class="card-details">
-          <h3>1234 Maple Street</h3>
-          <p>2,000 sq ft · 3 Beds · 2 Baths</p>
+          <h3>1234 Maple Street, Los Angeles, CA</h3>
+          <p>2,100 sq ft · 3 Beds · 2 Baths</p>
         </div>
       </div>
       <div class="home-card">
-        <img src="https://via.placeholder.com/300x200" alt="Trending Home" />
+        <img src="assets/images/trending/trending2.png" alt="Trending Home 2">
         <div class="card-details">
-          <h3>5678 Elm Avenue</h3>
+          <h3>5678 Elm Avenue, Culver City, CA</h3>
           <p>1,900 sq ft · 4 Beds · 3 Baths</p>
         </div>
       </div>
       <div class="home-card">
-        <img src="https://via.placeholder.com/300x200" alt="Trending Home" />
+        <img src="assets/images/trending/trending3.png" alt="Trending Home 3">
         <div class="card-details">
-          <h3>90 River Road</h3>
+          <h3>90 River Road, Los Angeles, CA</h3>
           <p>2,500 sq ft · 4 Beds · 3.5 Baths</p>
         </div>
       </div>
     </div>
-    
-    <!-- Dynamic Comparables Section -->
-    <div class="section-header" style="margin-top: 3rem;">
-      <h2>Comparable Properties</h2>
-      <p>Search results below</p>
-    </div>
-    <div class="trending-list" id="comparable-results">
-      <!-- This will be populated dynamically via JS -->
-    </div>
   </section>
 
-  <!-- Customer Anecdotes & Reviews Section -->
+  <!-- Reviews Section -->
   <section class="reviews-section">
     <div class="section-header">
       <h2>Success Stories</h2>
@@ -126,20 +183,21 @@
     </div>
     <div class="reviews-container">
       <div class="review-card">
+        <img src="images/person1.jpg" alt="Sarah K." class="review-avatar">
         <p class="review-text">
           “Renvo showed me how converting my garage into an ADU would greatly increase my property’s rental income. I’m now earning extra cash each month!”
         </p>
         <p class="review-author">- Sarah K.</p>
       </div>
-
       <div class="review-card">
+        <img src="images/person2.jpg" alt="David B." class="review-avatar">
         <p class="review-text">
           “Thanks to their HBU analysis, I realized adding a second floor for more bedrooms would significantly boost the resale value. Renvo made the decision easy.”
         </p>
         <p class="review-author">- David B.</p>
       </div>
-
       <div class="review-card">
+        <img src="images/person3.jpg" alt="Megan R." class="review-avatar">
         <p class="review-text">
           “I love how user-friendly Renvo is. In just a few clicks, I saw how a minor remodel could raise my home's value by nearly 15%.”
         </p>
@@ -154,53 +212,138 @@
     <p>Data sourced from multiple real estate data providers.</p>
   </footer>
 
+  <!-- JavaScript for Address Suggestions and Form Submission -->
   <script>
-    // Grab relevant elements
+    // Grab elements for address suggestions
     const form = document.getElementById('address-form');
     const addressInput = document.getElementById('address-input');
-    const comparableResults = document.getElementById('comparable-results');
+    const suggestionsList = document.getElementById('address-suggestions');
 
-    // Listen for the form submission
-    form.addEventListener('submit', async (e) => {
+    let debounceTimeout;
+
+    async function fetchAddressSuggestions(query) {
+      if (!query) {
+        suggestionsList.innerHTML = '';
+        return;
+      }
+      try {
+        const response = await fetch(`/api/property-addresses?search=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        if (data.success && data.data && data.data.length > 0) {
+          displaySuggestions(data.data);
+        } else {
+          suggestionsList.innerHTML = '';
+        }
+      } catch (error) {
+        console.error('Error fetching address suggestions:', error);
+        suggestionsList.innerHTML = '';
+      }
+    }
+
+    function displaySuggestions(suggestions) {
+      suggestionsList.innerHTML = '';
+      suggestions.forEach(suggestion => {
+        const li = document.createElement('li');
+        // Display full address details if available
+        li.textContent = `${suggestion.address}, ${suggestion.city}, ${suggestion.state} ${suggestion.zip_code}`;
+        li.addEventListener('click', () => {
+          addressInput.value = li.textContent;
+          suggestionsList.innerHTML = '';
+        });
+        suggestionsList.appendChild(li);
+      });
+    }
+
+    addressInput.addEventListener('input', (e) => {
+      clearTimeout(debounceTimeout);
+      const query = e.target.value.trim();
+      debounceTimeout = setTimeout(() => {
+        fetchAddressSuggestions(query);
+      }, 300);
+    });
+
+    form.addEventListener('submit', (e) => {
       e.preventDefault();
       const address = addressInput.value.trim();
       if (!address) {
         alert('Please enter a valid address.');
         return;
       }
-
-      // Clear old search results
-      comparableResults.innerHTML = '';
-
-      try {
-        // Example: calls /api/comparables?address=...
-        const response = await fetch(`/api/comparables?address=${encodeURIComponent(address)}`);
-        const data = await response.json();
-
-        if (data.success && data.data.length > 0) {
-          data.data.forEach(property => {
-            // Create a new card for each comparable
-            const card = document.createElement('div');
-            card.classList.add('home-card');
-
-            // For now, we use a placeholder image again
-            card.innerHTML = `
-              <img src="https://via.placeholder.com/300x200" alt="Comparable Home"/>
-              <div class="card-details">
-                <h3>${property.address}</h3>
-                <p>${property.bedrooms || 0} Beds · ${property.bathrooms || 0} Baths · $${(property.sale_price || 0).toLocaleString()}</p>
-              </div>
-            `;
-            comparableResults.appendChild(card);
-          });
-        } else {
-          comparableResults.innerHTML = '<p>No comparable properties found.</p>';
-        }
-      } catch (err) {
-        console.error('Error:', err);
-        comparableResults.innerHTML = '<p>Unable to fetch comparable properties at this time.</p>';
-      }
+      // Redirect to the property results page with the selected address
+      window.location.href = `property-results.html?address=${encodeURIComponent(address)}`;
     });
   </script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const form = document.getElementById("address-form");
+      const addressInput = document.getElementById("address-input");
+      const suggestionsList = document.getElementById("address-suggestions");
+      let debounceTimeout;
+      // Global variable to store the selected property id
+      let selectedPropertyId = null;
+  
+      async function fetchAddressSuggestions(query) {
+        if (!query) {
+          suggestionsList.innerHTML = "";
+          return;
+        }
+        try {
+          const response = await fetch(`/api/property-addresses?search=${encodeURIComponent(query)}`);
+          const data = await response.json();
+          if (data.success && data.data && data.data.length > 0) {
+            displaySuggestions(data.data);
+          } else {
+            suggestionsList.innerHTML = "";
+          }
+        } catch (error) {
+          console.error("Error fetching suggestions:", error);
+          suggestionsList.innerHTML = "";
+        }
+      }
+  
+      function displaySuggestions(suggestions) {
+        suggestionsList.innerHTML = "";
+        suggestions.forEach(item => {
+          const li = document.createElement("li");
+          // Display full address including city, state, and zip code
+          li.textContent = `${item.address}, ${item.city}, ${item.state} ${item.zip_code}`;
+          // Store the property id in a data attribute
+          li.setAttribute("data-id", item.id);
+          li.addEventListener("click", function() {
+            addressInput.value = li.textContent;
+            // Save the selected property id globally
+            selectedPropertyId = li.getAttribute("data-id");
+            suggestionsList.innerHTML = "";
+          });
+          suggestionsList.appendChild(li);
+        });
+      }
+  
+      addressInput.addEventListener("input", function() {
+        // Clear the selected property id when user types
+        selectedPropertyId = null;
+        clearTimeout(debounceTimeout);
+        const query = addressInput.value.trim();
+        debounceTimeout = setTimeout(() => {
+          fetchAddressSuggestions(query);
+        }, 300);
+      });
+  
+      form.addEventListener("submit", function(e) {
+        e.preventDefault();
+        const address = addressInput.value.trim();
+        if (!address) {
+          alert("Please enter a valid address.");
+          return;
+        }
+        // Redirect using property_id if available; otherwise, fallback to the address search.
+        if (selectedPropertyId) {
+          window.location.href = `property-results.html?property_id=${encodeURIComponent(selectedPropertyId)}`;
+        } else {
+          window.location.href = `property-results.html?address=${encodeURIComponent(address)}`;
+        }
+      });
+    });
+  </script>  
 </body>
 </html>
