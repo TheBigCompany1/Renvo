@@ -1,0 +1,184 @@
+/* Popup Styling */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+  background-color: #f9f9f9;
+}
+
+.app-container {
+  width: 320px;
+  height: 450px;
+  display: flex;
+  flex-direction: column;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Header */
+header {
+  padding: 15px;
+  background-color: #4CAF50;
+  color: white;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+/* Content */
+.content {
+  flex: 1;
+  padding: 15px;
+  overflow-y: auto;
+  background-color: white;
+}
+
+/* Property Detection Status */
+.property-detection-status {
+  margin-bottom: 20px;
+}
+
+.status-message {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 6px;
+  background-color: #f0f0f0;
+}
+
+.status-icon {
+  font-size: 24px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.status-message p {
+  font-size: 13px;
+  color: #555;
+}
+
+#on-property-page {
+  background-color: #e8f5e9;
+}
+
+/* Recent Reports */
+.recent-reports {
+  margin-bottom: 20px;
+}
+
+.recent-reports h2 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.reports-list {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.report-item {
+  padding: 12px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+}
+
+.report-item:last-child {
+  border-bottom: none;
+}
+
+.report-property {
+  font-weight: 500;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.report-date {
+  font-size: 12px;
+  color: #777;
+  margin-bottom: 8px;
+}
+
+.view-report-btn {
+  align-self: flex-start;
+  background-color: transparent;
+  color: #2196F3;
+  border: 1px solid #2196F3;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-report-btn:hover {
+  background-color: #2196F3;
+  color: white;
+}
+
+.empty-message {
+  padding: 20px;
+  text-align: center;
+  color: #888;
+  font-style: italic;
+}
+
+/* Main CTA */
+.main-cta {
+  text-align: center;
+  padding: 15px;
+  background-color: #f5f9ff;
+  border-radius: 6px;
+}
+
+.cta-button {
+  display: inline-block;
+  background-color: #2196F3;
+  color: white;
+  text-decoration: none;
+  padding: 10px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  margin-bottom: 10px;
+  transition: background-color 0.2s;
+}
+
+.cta-button:hover {
+  background-color: #0d8aee;
+}
+
+.cta-description {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Footer */
+footer {
+  padding: 10px;
+  border-top: 1px solid #e0e0e0;
+  text-align: center;
+  font-size: 11px;
+  color: #888;
+  background-color: #f9f9f9;
+}
+
+.extension-info {
+  display: inline-block;
+}
