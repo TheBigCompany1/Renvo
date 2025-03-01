@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Renovation ROI Insights</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <div class="app-container">
+    <header>
+      <h1>Renovation ROI Insights</h1>
+    </header>
+
+    <div class="content">
+      <div class="property-detection-status">
+        <div id="not-on-property-page" class="status-message">
+          <div class="status-icon">🏠</div>
+          <p>Visit a property page on Zillow, Redfin, or Realtor.com to generate a renovation ROI report</p>
+        </div>
+
+        <div id="on-property-page" class="status-message hidden">
+          <div class="status-icon">✅</div>
+          <p>Property detected! Look for the "Generate Renovation ROI Report" button on the page</p>
+        </div>
+      </div>
+
+      <div class="recent-reports" id="recent-reports">
+        <h2>Recent Reports</h2>
+        <div id="reports-list" class="reports-list">
+          <!-- Reports will be populated here -->
+          <div class="empty-message">No recent reports</div>
+        </div>
+      </div>
+
+      <div class="main-cta">
+        <a href="https://app.yourdomain.com" target="_blank" class="cta-button">
+          Visit Full Dashboard
+        </a>
+        <p class="cta-description">Get detailed renovation ROI analysis, property comparisons, and advanced insights</p>
+      </div>
+    </div>
+
+    <footer>
+      <div class="extension-info">v1.0.0</div>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

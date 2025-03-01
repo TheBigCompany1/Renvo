@@ -1,0 +1,339 @@
+// overlay.js - Injects the one-click report generation button
+
+// Create and inject ROI report button
+function injectReportButton() {
+    // Create button container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'roi-extension-button-container';
+
+    // Create button
+    const reportButton = document.createElement('button');
+    reportButton.className = 'roi-extension-button';
+    reportButton.innerHTML = '<span class="button-icon">📊</span> Generate Renovation ROI Report';
+    reportButton.addEventListener('click', handleReportButtonClick);
+
+    // Add button to container
+    buttonContainer.appendChild(reportButton);
+
+    // Determine where to inject based on the website
+    const website = detectWebsite();
+    let targetElement;
+
+    switch (website) {
+        case 'zillow.com':
+            // Find Zillow's action bar
+            targetElement = document.querySelector('[data-testid="home-details-action-bar"]');
+            break;
+        case 'redfin.com':
+            // Find Redfin's action bar
+            targetElement = document.querySelector('.HomePageActions');
+            break;
+        case 'realtor.com':
+            // Find Realtor's action bar
+            targetElement = document.querySelector('.pdp-action-bar');
+            break;
+        default:
+            return; // Exit if not on a supported site
+    }
+
+    // Inject button if target element exists
+    if (targetElement) {
+        targetElement.appendChild(buttonContainer);
+    } else {
+        // Fallback: inject at a fixed position on the page
+        buttonContainer.style.position = 'fixed';
+        buttonContainer.style.top = '100px';
+        buttonContainer.style.right = '20px';
+        buttonContainer.style.zIndex = '9999';
+        document.body.appendChild(buttonContainer);
+    }
+}
+
+// Handle button click
+function handleReportButtonClick() {
+    // Show loading state
+    toggleLoadingState(true);
+
+    // Request data extraction
+    chrome.runtime.sendMessage({ action: 'extractData' }, (response) => {
+        if (response && response.success) {
+            // Generate report with the extracted data
+            generateReport(response.data);
+        } else {
+            // Show error
+            showNotification('Error extracting property data', 'error');
+            toggleLoadingState(false);
+        }
+    });
+}
+
+// Send data to backend API
+function generateReport(propertyData) {
+    // Get API endpoint from storage or use default
+    chrome.storage.local.get(['apiEndpoint'], (result) => {
+        const apiEndpoint = result.apiEndpoint || 'https://api.yourdomain.com/v1/quickreport';
+
+        // Get device ID for anonymous tracking
+        getOrCreateDeviceId().then(deviceId => {
+            // Send data to API
+            fetch(apiEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Device-ID': deviceId
+                },
+                body: JSON.stringify({
+                    property: propertyData,
+                    source: 'chrome_extension',
+                    timestamp: new Date().toISOString()
+                })
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`API error: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Report generation initiated successfully
+                    if (data.reportId) {
+                        // Store report info in local storage
+                        storeReportInfo(data.reportId, propertyData.address);
+
+                        // Show results preview
+                        if (data.quickInsights) {
+                            showResultsPreview(data.quickInsights, data.reportId);
+                        } else {
+                            // Show processing message with link to full report
+                            showProcessingMessage(data.reportId);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('API request failed:', error);
+                    showNotification('Failed to generate report. Please try again.', 'error');
+                })
+                .finally(() => {
+                    toggleLoadingState(false);
+                });
+        });
+    });
+}
+
+// Generate or retrieve unique device ID
+async function getOrCreateDeviceId() {
+    const result = await chrome.storage.local.get(['deviceId']);
+
+    if (result.deviceId) {
+        return result.deviceId;
+    }
+
+    // Create a new ID
+    const newDeviceId = 'ext_' + Math.random().toString(36).substring(2, 15);
+    await chrome.storage.local.set({ deviceId: newDeviceId });
+
+    return newDeviceId;
+}
+
+// Store report info in local storage
+async function storeReportInfo(reportId, propertyAddress) {
+    // Get existing reports
+    const { generatedReports = [] } = await chrome.storage.local.get(['generatedReports']);
+
+    // Add new report
+    const updatedReports = [
+        {
+            reportId,
+            propertyAddress,
+            timestamp: new Date().toISOString()
+        },
+        ...generatedReports
+    ].slice(0, 10); // Keep only the 10 most recent reports
+
+    // Save to storage
+    chrome.storage.local.set({ generatedReports: updatedReports });
+}
+
+// Show results preview
+function showResultsPreview(quickInsights, reportId) {
+    const modal = createModal('Renovation ROI Insights');
+
+    const content = document.createElement('div');
+    content.className = 'roi-results-preview';
+
+    // Create the content based on quick insights
+    content.innerHTML = `
+      <div class="roi-insights-summary">
+        <div class="roi-summary-item">
+          <div class="summary-label">Property Potential</div>
+          <div class="summary-value">${quickInsights.potentialScore}/10</div>
+        </div>
+        <div class="roi-summary-item">
+          <div class="summary-label">Est. Renovation Budget</div>
+          <div class="summary-value">$${formatNumber(quickInsights.estimatedBudget)}</div>
+        </div>
+        <div class="roi-summary-item">
+          <div class="summary-label">Potential Value Increase</div>
+          <div class="summary-value">$${formatNumber(quickInsights.potentialValueAdd)}</div>
+        </div>
+      </div>
+      
+      <h3>Top Renovation Opportunities</h3>
+      <ul class="roi-opportunities-list">
+        ${quickInsights.topOpportunities.map(opportunity => `
+          <li>
+            <strong>${opportunity.name}</strong>
+            <div class="opportunity-roi">ROI: ${opportunity.estimatedRoi}%</div>
+          </li>
+        `).join('')}
+      </ul>
+      
+      <div class="roi-cta">
+        <p>Get the complete analysis with detailed cost breakdowns and ROI calculations</p>
+        <button id="view-full-report" class="roi-extension-primary-button">View Full Report</button>
+      </div>
+    `;
+
+    modal.appendChild(content);
+
+    // Handle view full report button
+    document.getElementById('view-full-report').addEventListener('click', () => {
+        openFullReport(reportId);
+        closeModal();
+    });
+}
+
+// Show processing message
+function showProcessingMessage(reportId) {
+    const modal = createModal('Report Processing');
+
+    const content = document.createElement('div');
+    content.className = 'roi-processing-message';
+
+    content.innerHTML = `
+      <div class="processing-icon">⚙️</div>
+      <p>Your comprehensive renovation ROI report is being generated!</p>
+      <p class="processing-details">Our AI agents are analyzing the property and calculating the best renovation opportunities for maximum return on investment.</p>
+      <div class="roi-cta">
+        <button id="view-full-report" class="roi-extension-primary-button">Go to Full Report</button>
+      </div>
+    `;
+
+    modal.appendChild(content);
+
+    // Handle view full report button
+    document.getElementById('view-full-report').addEventListener('click', () => {
+        openFullReport(reportId);
+        closeModal();
+    });
+}
+
+// Open full report in new tab
+function openFullReport(reportId) {
+    const reportUrl = `https://app.yourdomain.com/report/${reportId}`;
+    window.open(reportUrl, '_blank');
+}
+
+// Helper functions for UI
+function createModal(title) {
+    // Remove any existing modals
+    const existingModal = document.querySelector('.roi-extension-modal-overlay');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'roi-extension-modal-overlay';
+
+    // Create modal container
+    const modal = document.createElement('div');
+    modal.className = 'roi-extension-modal';
+
+    // Create header with title and close button
+    const header = document.createElement('div');
+    header.className = 'roi-extension-modal-header';
+
+    const titleElement = document.createElement('h2');
+    titleElement.textContent = title;
+
+    const closeButton = document.createElement('button');
+    closeButton.className = 'roi-extension-modal-close';
+    closeButton.innerHTML = '&times;';
+    closeButton.addEventListener('click', closeModal);
+
+    header.appendChild(titleElement);
+    header.appendChild(closeButton);
+
+    // Add header to modal
+    modal.appendChild(header);
+
+    // Add modal to overlay, and overlay to document
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    return modal;
+}
+
+function closeModal() {
+    const overlay = document.querySelector('.roi-extension-modal-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `roi-extension-notification roi-extension-notification-${type}`;
+    notification.textContent = message;
+
+    document.body.appendChild(notification);
+
+    // Remove notification after 5 seconds
+    setTimeout(() => {
+        notification.classList.add('roi-extension-notification-hide');
+        setTimeout(() => {
+            notification.remove();
+        }, 500);
+    }, 5000);
+}
+
+function toggleLoadingState(isLoading) {
+    const button = document.querySelector('.roi-extension-button');
+    if (button) {
+        if (isLoading) {
+            button.classList.add('loading');
+            button.innerHTML = '<span class="spinner"></span> Generating Report...';
+            button.disabled = true;
+        } else {
+            button.classList.remove('loading');
+            button.innerHTML = '<span class="button-icon">📊</span> Generate Renovation ROI Report';
+            button.disabled = false;
+        }
+    }
+}
+
+function formatNumber(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+// Initialize overlay when page is fully loaded
+window.addEventListener('load', () => {
+    // Small delay to ensure page elements are fully rendered
+    setTimeout(injectReportButton, 1000);
+});
+
+// Listen for DOM changes to handle single-page apps
+const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+            // Check if we need to re-inject our button
+            if (!document.querySelector('.roi-extension-button-container')) {
+                setTimeout(injectReportButton, 1000);
+            }
+        }
+    }
+});
+
+// Start observing changes to the body element
+observer.observe(document.body, { childList: true, subtree: true });
