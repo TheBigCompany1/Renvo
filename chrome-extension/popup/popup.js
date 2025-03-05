@@ -13,34 +13,75 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadRecentReports() {
     const { generatedReports = [] } = await chrome.storage.local.get(['generatedReports']);
     const reportsList = document.getElementById('reports-list');
-
+    
     if (generatedReports.length === 0) {
-        reportsList.innerHTML = '<div class="empty-message">No recent reports</div>';
-        return;
+      reportsList.innerHTML = '<div class="empty-message">No recent reports</div>';
+      return;
     }
-
+    
     // Generate HTML for recent reports
-    const reportsHTML = generatedReports.map((report, index) => {
-        const date = new Date(report.timestamp).toLocaleDateString();
-        return `
+    const reportsHTML = generatedReports.map((report) => {
+      const date = new Date(report.timestamp).toLocaleDateString();
+      const statusClass = getStatusClass(report.status || 'processing');
+      const statusText = getStatusText(report.status || 'processing');
+      
+      return `
         <div class="report-item" data-report-id="${report.reportId}">
           <div class="report-property">${report.propertyAddress || 'Property Report'}</div>
-          <div class="report-date">${date}</div>
+          <div class="report-meta">
+            <span class="report-date">${date}</span>
+            <span class="report-status ${statusClass}">${statusText}</span>
+          </div>
           <button class="view-report-btn" data-report-id="${report.reportId}">
             View Report
           </button>
         </div>
       `;
     }).join('');
-
+    
     reportsList.innerHTML = reportsHTML;
-
+    
     // Add click event listeners to view report buttons
     document.querySelectorAll('.view-report-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            const reportId = button.dataset.reportId;
-            openFullReport(reportId);
-        });
+      button.addEventListener('click', () => {
+        const reportId = button.dataset.reportId;
+        openFullReport(reportId);
+      });
+    });
+  }
+
+// Helper functions for report status
+function getStatusClass(status) {
+    switch (status) {
+      case 'processing':
+        return 'status-processing';
+      case 'completed':
+        return 'status-completed';
+      case 'failed':
+        return 'status-failed';
+      default:
+        return 'status-processing';
+    }
+  }
+  
+  function getStatusText(status) {
+    switch (status) {
+      case 'processing':
+        return 'Processing';
+      case 'completed':
+        return 'Completed';
+      case 'failed':
+        return 'Failed';
+      default:
+        return 'Processing';
+    }
+  }
+  
+// Open full report in new tab
+function openFullReport(reportId) {
+    chrome.runtime.sendMessage({ 
+      action: 'openReport', 
+      reportId 
     });
 }
 

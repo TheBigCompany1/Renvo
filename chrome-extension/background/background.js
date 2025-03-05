@@ -89,3 +89,92 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         }
     }
 });
+
+const API_CONFIG = {
+    baseUrl: "http://localhost:8000/api/extension/v1", // Change this to your deployed API URL
+    endpoints: {
+      quickReport: "/quickreport",
+      getReport: "/report/" // Will be appended with report ID
+      }
+    };
+
+// Check status of a report
+async function checkReportStatus(reportId) {
+    try {
+      const response = await fetch(`${API_CONFIG.baseUrl}${API_CONFIG.endpoints.getReport}${reportId}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const reportData = await response.json();
+      
+      // Update report status in storage
+      const { generatedReports = [] } = await chrome.storage.local.get(['generatedReports']);
+      
+      const updatedReports = generatedReports.map(report => {
+        if (report.reportId === reportId) {
+          return {
+            ...report,
+            status: reportData.status,
+            lastChecked: new Date().toISOString()
+          };
+        }
+        return report;
+      });
+      
+      await chrome.storage.local.set({ generatedReports: updatedReports });
+      
+      // If report is complete, show notification
+      if (reportData.status === 'completed') {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: '/assets/icons/icon128.png',
+          title: 'ROI Analysis Complete',
+          message: 'Your renovation ROI analysis is ready to view!',
+          buttons: [{ title: 'View Report' }]
+        });
+      }
+      
+      return reportData;
+    } catch (error) {
+      console.error('Error checking report status:', error);
+      return null;
+    }
+  }
+  
+  // Poll for report status updates
+  function setupReportPolling() {
+    // Check every 30 seconds for pending reports
+    setInterval(async () => {
+      try {
+        const { generatedReports = [] } = await chrome.storage.local.get(['generatedReports']);
+        
+        // Find reports that are still processing
+        const pendingReports = generatedReports.filter(report => 
+          report.status !== 'completed' && report.status !== 'failed'
+        );
+        
+        // Check status for each pending report
+        for (const report of pendingReports) {
+          await checkReportStatus(report.reportId);
+        }
+      } catch (error) {
+        console.error('Error in report polling:', error);
+      }
+    }, 30000); // 30 seconds
+  }
+  
+  // Initialize when extension is installed or updated
+  chrome.runtime.onInstalled.addListener(() => {
+    console.log('Renovation ROI Analyzer extension installed');
+    
+    // Set default options
+    chrome.storage.local.set({
+      apiEndpoint: `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.quickReport}`,
+      generatedReports: []
+    });
+    
+    // Setup report polling
+    setupReportPolling();
+  });

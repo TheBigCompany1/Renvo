@@ -92,47 +92,69 @@ function extractTextByLabel(label) {
   return null;
 }
   
-// Redfin-specific data extraction
+// Function to extract property data from Redfin pages
 function extractRedfinData() {
   try {
-    const price = document.querySelector('.price-section .statsValue')?.textContent;
-    const address = document.querySelector('.street-address')?.textContent;
-    const city = document.querySelector('.locality')?.textContent;
-    const state = document.querySelector('.region')?.textContent;
-    const zip = document.querySelector('.postal-code')?.textContent;
-    const fullAddress = `${address}, ${city}, ${state} ${zip}`;
+    // Extract address components
+    const address = document.querySelector('meta[name="twitter:text:street_address"]')?.content;
+    const city = document.querySelector('meta[name="twitter:text:city"]')?.content;
+    const state = document.querySelector('meta[name="twitter:text:state_code"]')?.content;
+    const zipCode = document.querySelector('meta[name="twitter:text:zip"]')?.content;
     
-    // Find property details
-    const beds = document.querySelector('.beds .statsValue')?.textContent;
-    const baths = document.querySelector('.baths .statsValue')?.textContent;
-    const sqft = document.querySelector('.sqft .statsValue')?.textContent;
+    // Full address
+    const fullAddress = [address, city, state, zipCode].filter(Boolean).join(', ');
     
-    // More details from the home facts section
-    const yearBuilt = getRedfinFactValue('Year Built');
-    const lotSize = getRedfinFactValue('Lot Size');
-    const homeType = getRedfinFactValue('Style');
+    // Extract basic property details using meta tags
+    const price = document.querySelector('meta[name="twitter:text:price"]')?.content;
+    const beds = document.querySelector('meta[name="twitter:text:beds"]')?.content;
+    const baths = document.querySelector('meta[name="twitter:text:baths"]')?.content;
+    const sqft = document.querySelector('meta[name="twitter:text:sqft"]')?.content;
+    
+    // Extract property type, year built, etc. from the house-info section
+    const houseInfoDiv = document.getElementById('house-info');
+    let propertyType = null;
+    let yearBuilt = null;
+    let lotSize = null;
+    
+    if (houseInfoDiv) {
+      const houseInfoText = houseInfoDiv.textContent;
+      
+      // Extract property type using regex
+      const propertyTypeMatch = /((Single-family|Townhouse|Condo|Multi-family))/i.exec(houseInfoText);
+      propertyType = propertyTypeMatch ? propertyTypeMatch[1] : null;
+      
+      // Extract year built using regex
+      const yearBuiltMatch = /Built in (\d{4})/i.exec(houseInfoText);
+      yearBuilt = yearBuiltMatch ? yearBuiltMatch[1] : null;
+      
+      // Extract lot size using regex
+      const lotSizeMatch = /(?<!Built in )(\d{1,3}(?:,\d{3})*) sq ft lot/i.exec(houseInfoText);
+      lotSize = lotSizeMatch ? lotSizeMatch[1] + ' sq ft' : null;
+    }
     
     // Extract images
-    const images = Array.from(document.querySelectorAll('.InlinePhotoPreview img'))
-      .map(img => img.src);
+    const images = Array.from(
+      document.querySelectorAll('meta[name^="twitter:image:photo"]')
+    ).map(meta => meta.content);
     
+    // Return structured data
     return {
-      price,
+      url: window.location.href,
       address: fullAddress,
+      price,
       beds,
       baths,
       sqft,
       yearBuilt,
       lotSize,
-      homeType,
-      images: images.slice(0, 10)
+      homeType: propertyType,
+      images: images.slice(0, 10) // Limit to first 10 images
     };
   } catch (error) {
     console.error('Error extracting Redfin data:', error);
     return {};
   }
 }
-
 // Helper for Redfin facts
 function getRedfinFactValue(factName) {
   const factElements = document.querySelectorAll('.table-row');

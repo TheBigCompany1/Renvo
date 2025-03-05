@@ -23,9 +23,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.zillow.com/homes/*",
         "https://*.redfin.com/*/home/*",
-        "https://*.realtor.com/realestateandhomes-detail/*"
+        "https://*.redfin.com/*/property/*"
       ],
       "js": ["content/content.js", "content/overlay.js"],
       "css": ["content/styles.css"]

@@ -9,7 +9,7 @@ function injectReportButton() {
     // Create button
     const reportButton = document.createElement('button');
     reportButton.className = 'roi-extension-button';
-    reportButton.innerHTML = '<span class="button-icon">📊</span> Generate Renovation ROI Report';
+    reportButton.innerHTML = '<span class="button-icon">📊</span> Add More Values to The Property';
     reportButton.addEventListener('click', handleReportButtonClick);
 
     // Add button to container
@@ -67,58 +67,80 @@ function handleReportButtonClick() {
     });
 }
 
+// content/overlay.js
+
 // Send data to backend API
 function generateReport(propertyData) {
+    // Show loading state
+    toggleLoadingState(true);
+    
     // Get API endpoint from storage or use default
     chrome.storage.local.get(['apiEndpoint'], (result) => {
-        const apiEndpoint = result.apiEndpoint || 'https://api.yourdomain.com/v1/quickreport';
-
-        // Get device ID for anonymous tracking
-        getOrCreateDeviceId().then(deviceId => {
-            // Send data to API
-            fetch(apiEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Device-ID': deviceId
-                },
-                body: JSON.stringify({
-                    property: propertyData,
-                    source: 'chrome_extension',
-                    timestamp: new Date().toISOString()
-                })
-            })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`API error: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    // Report generation initiated successfully
-                    if (data.reportId) {
-                        // Store report info in local storage
-                        storeReportInfo(data.reportId, propertyData.address);
-
-                        // Show results preview
-                        if (data.quickInsights) {
-                            showResultsPreview(data.quickInsights, data.reportId);
-                        } else {
-                            // Show processing message with link to full report
-                            showProcessingMessage(data.reportId);
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('API request failed:', error);
-                    showNotification('Failed to generate report. Please try again.', 'error');
-                })
-                .finally(() => {
-                    toggleLoadingState(false);
-                });
+      const apiEndpoint = result.apiEndpoint || `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.quickReport}`;
+      
+      // Get device ID for anonymous tracking
+      getOrCreateDeviceId().then(deviceId => {
+        // Prepare the request data
+        const requestData = {
+          url: propertyData.url,
+          address: propertyData.address,
+          price: propertyData.price,
+          beds: parseInt(propertyData.beds) || null,
+          baths: parseFloat(propertyData.baths) || null,
+          sqft: parseInt(propertyData.sqft?.replace(/[^0-9]/g, '')) || null,
+          yearBuilt: parseInt(propertyData.yearBuilt) || null,
+          lotSize: propertyData.lotSize,
+          homeType: propertyData.homeType,
+          images: propertyData.images || []
+        };
+        
+        // Send data to API
+        fetch(apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId
+          },
+          body: JSON.stringify(requestData)
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          // Report generation initiated successfully
+          if (data.reportId) {
+            // Store report info in local storage
+            storeReportInfo(data.reportId, propertyData.address);
+            
+            // Show results preview
+            if (data.quickInsights) {
+              showResultsPreview(data.quickInsights, data.reportId);
+            } else {
+              // Show processing message with link to full report
+              showProcessingMessage(data.reportId);
+            }
+            
+            // Notify background script about the new report
+            chrome.runtime.sendMessage({ 
+              action: 'trackReportGeneration', 
+              reportId: data.reportId,
+              propertyAddress: propertyData.address
+            });
+          }
+        })
+        .catch(error => {
+          console.error('API request failed:', error);
+          showNotification('Failed to generate report. Please try again.', 'error');
+        })
+        .finally(() => {
+          toggleLoadingState(false);
         });
+      });
     });
-}
+  }
 
 // Generate or retrieve unique device ID
 async function getOrCreateDeviceId() {
@@ -157,10 +179,10 @@ async function storeReportInfo(reportId, propertyAddress) {
 // Show results preview
 function showResultsPreview(quickInsights, reportId) {
     const modal = createModal('Renovation ROI Insights');
-
+    
     const content = document.createElement('div');
     content.className = 'roi-results-preview';
-
+    
     // Create the content based on quick insights
     content.innerHTML = `
       <div class="roi-insights-summary">
@@ -193,15 +215,15 @@ function showResultsPreview(quickInsights, reportId) {
         <button id="view-full-report" class="roi-extension-primary-button">View Full Report</button>
       </div>
     `;
-
+    
     modal.appendChild(content);
-
+    
     // Handle view full report button
     document.getElementById('view-full-report').addEventListener('click', () => {
-        openFullReport(reportId);
-        closeModal();
+      openFullReport(reportId);
+      closeModal();
     });
-}
+  }
 
 // Show processing message
 function showProcessingMessage(reportId) {
@@ -230,9 +252,10 @@ function showProcessingMessage(reportId) {
 
 // Open full report in new tab
 function openFullReport(reportId) {
-    const reportUrl = `https://app.yourdomain.com/report/${reportId}`;
+    // You can change this to your web app URL when it's ready
+    const reportUrl = `http://localhost:8000/report/${reportId}`;
     window.open(reportUrl, '_blank');
-}
+  }
 
 // Helper functions for UI
 function createModal(title) {
@@ -337,3 +360,20 @@ const observer = new MutationObserver((mutations) => {
 
 // Start observing changes to the body element
 observer.observe(document.body, { childList: true, subtree: true });
+
+function handleReportButtonClick() {
+  // Show loading state
+  toggleLoadingState(true);
+  
+  // Request data extraction from the page
+  chrome.runtime.sendMessage({ action: 'extractData' }, (response) => {
+    if (response && response.success && response.data) {
+      // Send data to API for analysis
+      generateReport(response.data);
+    } else {
+      // Show error
+      showNotification('Error extracting property data', 'error');
+      toggleLoadingState(false);
+    }
+  });
+}
