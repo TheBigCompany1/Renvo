@@ -1,38 +1,30 @@
-// public/js/main.js
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('address-form');
+  const addressInput = document.getElementById('address-input');
 
-// Example: handle the sign-in form submission (if you included it on sign-in.html)
-const signinForm = document.getElementById('signin-form');
-
-if (signinForm) {
-  signinForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-
-    const email = event.target.email.value;
-    const password = event.target.password.value;
-
-    // In a real app, you'd send this to your server, e.g., using fetch:
-    // const response = await fetch('/api/auth/login', { ... });
-    // Then handle success/failure accordingly.
-
-    console.log('Sign-In attempt:', { email, password });
-    alert('Sign-In request sent (placeholder)!');
-    // Clear form
-    event.target.reset();
-  });
-}
-
-// Example: handle the address form from index.html
-const addressForm = document.querySelector('.address-form');
-
-if (addressForm) {
-  addressForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const addressInput = document.getElementById('address-input').value;
-    console.log('Searching for comps near:', addressInput);
-
-    // You might fetch from your server, e.g.:
-    // const res = await fetch(`/api/compare?address=${encodeURIComponent(addressInput)}`);
-    // const data = await res.json();
-    // Then display the results on the page.
-  });
-}
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const address = addressInput.value.trim();
+      if (!address) {
+        alert('Please enter an address.');
+        return;
+      }
+      try {
+        // Call your Flask endpoint. If backend is on a different port, include the full URL.
+        const response = await fetch('http://127.0.0.1:5000/api/generate-ideas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ property_json: address })
+        });
+        const data = await response.json();
+        console.log('Renovation ideas:', data.renovation_ideas);
+        // Display the AI response (for now, in an alert)
+        alert('Renovation Ideas:\n' + data.renovation_ideas);
+      } catch (err) {
+        console.error(err);
+        alert('Error generating ideas. Please try again.');
+      }
+    });
+  }
+});

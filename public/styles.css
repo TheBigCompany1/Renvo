@@ -1,14 +1,18 @@
 /*-----------------------------------------------
-  Base & Global Styles
+  Root Variables & Global Styles
 -----------------------------------------------*/
 :root {
-  --primary-color: #FFAB40;   /* Brand main color */
+  --primary-color: #FFAB40;   /* Your main brand color */
   --secondary-color: #FF7043; /* Accent color */
   --white-color: #FFFFFF;
   --text-color: #333;
+  --bg-color: #f5f5f5;
   --heading-font: 'Poppins', sans-serif;
   --body-font: 'Poppins', sans-serif;
-  --bg-color: #f5f5f5;
+  
+  /* Hero-specific variables */
+  --hero-title-size: 4rem;     /* Big title size */
+  --hero-tagline-size: 1.5rem; /* Tagline size */
 }
 
 * {
@@ -30,380 +34,140 @@ body {
 }
 
 /*-----------------------------------------------
-  Header Section
+  Header & Footer Styles
 -----------------------------------------------*/
-.site-header {
-  background-color: var(--white-color);
-  border-bottom: 1px solid #ddd;
-  padding: 0.05rem 2rem;
-  height: 75px;  /* Explicitly set header height */
-  overflow: hidden;  /* Prevent content from expanding beyond header height */
-}
-
-.header-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;  /* This centers the logo and text vertically */
-  justify-content: space-between;
-}
-
-/* Branding (Logo & Company Name) */
-.site-branding {
-  display: flex;
-  align-items: center;  /* This ensures logo and site title are vertically centered */
-}
-
-.logo-image {
-  height: 100px;  /* Set fixed height instead of max-height */
-  width: auto;   /* Maintain aspect ratio */
-  margin-right: 0.8rem;
-}
-
-.site-title {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: var(--primary-color);
-}
-
-/* Navigation */
-.header-nav ul {
-  list-style: none;
-  display: flex;
-  gap: 1.5rem;
-}
-
-.header-nav a {
-  text-decoration: none;
-  color: var(--primary-color);
-  font-weight: 500;
-  font-size: 1rem;
-}
-
-.header-nav a:hover {
-  color: var(--secondary-color);
-}
+/* (Place your existing header and footer CSS here. This file assumes those remain unchanged.) */
 
 /*-----------------------------------------------
-  Hero Section
+  New Hero Section (Vertical Scrolling Background)
 -----------------------------------------------*/
-.hero-section {
+.hero {
   position: relative;
-  min-height: 500px;
-  background: url('/assets/images/hero/Hero.background.png') no-repeat center center/cover;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--white-color);
+  width: 100%;
+  height: 100vh; /* One full viewport */
+  overflow: hidden;
 }
 
-.hero-overlay {
+/* Container for the two videos */
+.video-container {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(43, 58, 85, 0.4);
-  z-index: 1;
+  width: 100%;
+  height: 200vh; /* Double the viewport height */
+  animation: scrollUp 40s linear infinite;
 }
 
-.hero-content {
-  position: relative;
+/* Each video occupies 100vh, so they stack vertically */
+.hero-video {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  object-fit: cover;
+}
+
+/* Animate the video container upward by 100vh */
+@keyframes scrollUp {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100vh);
+  }
+}
+
+/* Fixed dark overlay for contrast */
+.hero-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5); /* 50% opacity */
   z-index: 2;
-  max-width: 1200px;
-  width: 90%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 2rem;
 }
 
-.hero-text {
-  flex: 1 1 350px;
-  margin: 1rem 0;
+/* Fixed hero content (text and search form) */
+.hero-content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  text-align: center;
+  padding: 0 1rem;
+  color: var(--white-color);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  width: 100%;
 }
 
-.hero-text h1 {
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
-  line-height: 1.2;
+/* Big RENVO Title */
+.hero-title {
+  font-size: var(--hero-title-size);
+  font-weight: 700;
+  margin-bottom: 0.5rem;
   font-family: var(--heading-font);
 }
 
-.hero-text p {
-  font-size: 1.1rem;
+/* Value Proposition Tagline */
+.hero-tagline {
+  font-size: var(--hero-tagline-size);
+  max-width: 1200px;
+  margin: 0 auto 2rem auto; /* 0 top, auto left/right, 2rem bottom, auto left/right */
+  line-height: 1.3;
+  text-align: center; /* ensures the text itself is centered */
+}
+
+/* Search Form Styles */
+.hero-search-form {
+  display: flex;
+  width: 100%;
   max-width: 600px;
+  margin: 0 auto;
 }
 
-/*-----------------------------------------------
-  Address Input & Suggestions
------------------------------------------------*/
-/* Updated section: The form is now column-based so that the suggestions list is part of the normal flow and pushes the button down */
-.address-input-box {
-  flex: 1 1 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.address-form {
-  display: flex;
-  flex-direction: column;  /* Stack input, suggestions, and button vertically */
-  gap: 0.5rem;
-  width: 100%;
-  max-width: 300px;
-}
-
-.input-container {
-  width: 100%;
-  max-width: 300px;
-}
-
-.address-form input[type="text"] {
-  padding: 0.75rem;
+.hero-search-form input {
+  flex: 1;
+  padding: 1rem;
   font-size: 1rem;
-  width: 100%;
   border: 2px solid var(--white-color);
-  border-radius: 4px;
-  background-color: var(--white-color);
-  color: var(--text-color);
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  outline: none;
 }
 
-/* Suggestions Dropdown: Now static in the flow so it pushes down the search button */
-.suggestions-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  background: var(--white-color);
-  border: 1px solid #ccc;
-  border-top: none;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.suggestions-list li {
-  padding: 0.5rem;
-  cursor: pointer;
-  color: var(--text-color);
-}
-
-.suggestions-list li:hover {
-  background-color: #f0f0f0;
-}
-
-/*-----------------------------------------------
-  Search Button
------------------------------------------------*/
-.btn-search {
+.hero-search-form button {
+  padding: 1rem 1.5rem;
+  font-size: 1rem;
+  border: 2px solid var(--white-color);
+  border-left: none;
+  border-radius: 0 4px 4px 0;
   background-color: var(--secondary-color);
   color: var(--white-color);
-  border: none;
-  padding: 0.75rem 1.25rem;
-  font-size: 1rem;
   cursor: pointer;
-  border-radius: 4px;
-  font-weight: 500;
 }
 
-.btn-search:hover {
+.hero-search-form button:hover {
   background-color: var(--primary-color);
 }
 
 /*-----------------------------------------------
-  Trending Properties Section
+  Responsive Adjustments
 -----------------------------------------------*/
-.trending-section {
-  max-width: 1200px;
-  margin: 2rem auto;
-  padding: 1rem;
-  background-color: var(--white-color);
-  border-radius: 6px;
-}
-
-.section-header {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-.section-header h2 {
-  font-size: 1.8rem;
-  color: var(--primary-color);
-  font-family: var(--heading-font);
-}
-
-.section-header p {
-  font-size: 1rem;
-  color: #666;
-  margin-top: 0.5rem;
-}
-
-.trending-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
-}
-
-.home-card {
-  border: 1px solid #eee;
-  background-color: #fafafa;
-  border-radius: 6px;
-  overflow: hidden;
-  transition: box-shadow 0.3s ease;
-}
-
-.home-card:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-
-.home-card img {
-  width: 100%;
-  height: 180px;
-  object-fit: cover;
-  display: block;
-}
-
-.card-details {
-  padding: 1rem;
-}
-
-.card-details h3 {
-  font-size: 1.2rem;
-  margin-bottom: 0.5rem;
-  color: var(--primary-color);
-}
-
-.card-details p {
-  font-size: 0.9rem;
-  color: #555;
-}
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 3rem;
+  }
+  .hero-tagline {
+    font-size: 1.2rem;
+  }
+  .hero-search-form input,
+  .hero-search-form button {
+    font-size: 0.9rem;
+    padding: 0.75rem;
+  }
 
 /*-----------------------------------------------
-  Reviews Section
+  Other Sections (Trending, Reviews, etc.)
 -----------------------------------------------*/
-.reviews-section {
-  max-width: 1200px;
-  margin: 2rem auto;
-  padding: 1rem;
-}
-
-.reviews-container {
-  display: grid;
-  gap: 1.5rem;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-}
-
-.review-card {
-  background-color: var(--white-color);
-  border-radius: 6px;
-  padding: 1.5rem;
-  border: 1px solid #eee;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  text-align: center;
-}
-
-.review-avatar {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-bottom: 1rem;
-}
-
-.review-text {
-  font-size: 1rem;
-  color: #444;
-  margin-bottom: 1rem;
-}
-
-.review-author {
-  font-weight: 500;
-  color: var(--primary-color);
-}
-
-/*-----------------------------------------------
-  Footer Section
------------------------------------------------*/
-.site-footer {
-  background-color: var(--white-color);
-  border-top: 1px solid #ddd;
-  padding: 1rem 2rem;
-  text-align: center;
-  margin-top: 2rem;
-}
-
-.site-footer p {
-  color: #666;
-  margin: 0.5rem 0;
-}
-
-/*-----------------------------------------------
-  Additional Pages (Auth, Info, etc.)
------------------------------------------------*/
-.auth-section,
-.info-section,
-.help-section {
-  max-width: 700px;
-  margin: 2rem auto;
-  background-color: var(--white-color);
-  padding: 2rem;
-  border-radius: 6px;
-  border: 1px solid #eee;
-}
-
-.auth-section h2,
-.info-section h2,
-.help-section h2 {
-  font-family: var(--heading-font);
-  font-size: 1.8rem;
-  margin-bottom: 1rem;
-  color: var(--primary-color);
-}
-
-.auth-section form,
-.help-section article {
-  margin-top: 1rem;
-}
-
-.auth-section form label {
-  display: block;
-  margin-bottom: 0.5rem;
-}
-
-.auth-section form input {
-  width: 100%;
-  padding: 0.75rem;
-  margin-bottom: 1.2rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-.auth-section form button {
-  background-color: var(--secondary-color);
-  color: var(--white-color);
-  border: none;
-  padding: 0.75rem 1.25rem;
-  font-size: 1rem;
-  cursor: pointer;
-  border-radius: 4px;
-  font-weight: 500;
-}
-
-.auth-section form button:hover {
-  background-color: var(--primary-color);
-}
-
-.faq-item {
-  margin-bottom: 1.5rem;
-}
-
-.faq-item h3 {
-  font-size: 1.2rem;
-  color: var(--primary-color);
-  margin-bottom: 0.5rem;
-}
-
-.faq-item p {
-  color: #444;
-  font-size: 1rem;
-}
+/* (Place your existing styles for these sections below as-is) */
