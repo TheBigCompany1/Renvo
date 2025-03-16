@@ -30,3 +30,10 @@ renovation-roi-extension/
         ├── icon128.png
         └── logo.svg
 ```
+
+## How to Use 
+- Add OPENAI_API_KEY and OPENAI_MODEL to `backend/agent_service/core/config.py`
+- run `pip install -r backend/agent_service/requirements.txt`
+- run `python -m uvicorn backend.agent_service.main:app --reloadpython -m uvicorn backend.agent_service.main:app --reload`
+- Go to chrome://extensions/, and select load unpacked option, then load everything in chrome-extension folder
+- Visit redfin.com to start using
