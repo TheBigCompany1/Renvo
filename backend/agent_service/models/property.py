@@ -13,6 +13,7 @@ class PropertyDetails(BaseModel):
     yearBuilt: Optional[int] = Field(None, alias="year_built")
     lotSize: Optional[str] = Field(None, alias="lot_size")
     homeType: Optional[str] = Field(None, alias="property_type")
+    propertyDescription: Optional[str] = Field(None, alias="description")
     images: List[str] = []
     
     class Config:
@@ -28,6 +29,7 @@ class PropertyDetails(BaseModel):
                 "yearBuilt": 1985,
                 "lotSize": "0.25 acres",
                 "homeType": "Single Family",
+                "propertyDescription": "Welcome to this beautifully remodeled turnkey property in the heart of Chino Hills, CA!",
                 "images": ["https://example.com/image1.jpg", "https://example.com/image2.jpg"]
             }
         }

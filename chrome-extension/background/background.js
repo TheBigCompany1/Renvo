@@ -1,4 +1,11 @@
 // background.js - Simple background script for Chrome extension
+const API_CONFIG = {
+  baseUrl: "http://localhost:8000", // Your FastAPI server URL
+  endpoints: {
+    quickReport: "/api/extension/v1/quickreport",
+    getReport: "/api/extension/v1/report/" // Will be appended with report ID
+  }
+};
 
 // Initialize extension when installed
 chrome.runtime.onInstalled.addListener(() => {
@@ -32,11 +39,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break;
 
         case 'openReport':
-            // Open a report in a new tab
-            const reportUrl = `https://app.yourdomain.com/report/${message.reportId}`;
-            chrome.tabs.create({ url: reportUrl });
-            sendResponse({ success: true });
-            break;
+          const reportUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.getReport}${message.reportId}`;
+          chrome.tabs.create({ url: reportUrl });
+          sendResponse({ success: true });
+          break;
     }
 });
 
@@ -89,14 +95,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         }
     }
 });
-
-const API_CONFIG = {
-    baseUrl: "http://localhost:8000/api/extension/v1", // Change this to your deployed API URL
-    endpoints: {
-      quickReport: "/quickreport",
-      getReport: "/report/" // Will be appended with report ID
-      }
-    };
 
 // Check status of a report
 async function checkReportStatus(reportId) {

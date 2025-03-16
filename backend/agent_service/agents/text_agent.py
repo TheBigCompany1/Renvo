@@ -8,13 +8,13 @@ class TextAnalysisAgent(BaseAgent):
     """Agent for generating renovation ideas based on property text data."""
     
     PROMPT_TEMPLATE = """
-    Given the following property details, suggest some renovation ideas to increase its value:
+    Given the following detailed property description, generate renovation ideas to increase its value:
     
     Property: {property_json}
     
-    - Example renovation options include adding more bedrooms, building an ADU, replacing carpet
-    - Suggest cost-effective improvements
-    - Provide detailed explanations for each suggestion
+    - Renovation ideas should include both structural and cosmetic improvements. Example renovation options include adding bedrooms, building an ADU, replacing carpet.
+    - Provide detailed explanations for each suggestion.
+    - Estimate the financial cost and required time based on property's geolocation and size.
     
     Return a structured JSON with the following format:
     {{

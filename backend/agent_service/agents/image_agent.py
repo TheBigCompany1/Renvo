@@ -16,9 +16,9 @@ class ImageAnalysisAgent(BaseAgent):
     
     Your tasks:
     - Check if each renovation is structurally feasible based on the images
-    - Expand each feasible idea with more detailed suggestions
     - Identify additional improvements visible in the images
     - Flag any unrealistic suggestions
+    - Expand each feasible idea with more detailed suggestions
     
     Return a refined JSON with the following format and sorted by feasibility:
     {{

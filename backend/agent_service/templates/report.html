@@ -1,0 +1,540 @@
+<!-- app/templates/report.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Renovation ROI Report</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #2196F3;
+            --accent-color: #FFC107;
+            --text-color: #333;
+            --light-gray: #f5f5f5;
+            --border-color: #e0e0e0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            border-radius: 10px 10px 0 0;
+            margin-bottom: 30px;
+        }
+        
+        h1, h2, h3, h4 {
+            margin-top: 0;
+        }
+        
+        .report-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .property-card {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+        
+        .property-header {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .property-details {
+            flex: 1;
+        }
+        
+        .property-address {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .property-price {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+        
+        .property-stats {
+            display: flex;
+            gap: 20px;
+            font-size: 16px;
+            color: #666;
+        }
+        
+        .property-stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .image-gallery {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .gallery-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        
+        .gallery-image:hover {
+            transform: scale(1.02);
+        }
+        
+        .summary-card {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .summary-title {
+            font-size: 22px;
+            font-weight: 600;
+        }
+        
+        .summary-score {
+            background-color: var(--primary-color);
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 30px;
+        }
+        
+        .metrics-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .metric-card {
+            background-color: var(--light-gray);
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+        
+        .metric-range {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .renovation-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin: 25px 0;
+        }
+        
+        .renovation-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            padding: 0;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        
+        .renovation-header {
+            padding: 15px 20px;
+            background-color: var(--light-gray);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .renovation-name {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .renovation-roi {
+            background-color: var(--accent-color);
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        
+        .renovation-content {
+            padding: 20px;
+        }
+        
+        .renovation-description {
+            margin-bottom: 15px;
+            font-size: 15px;
+            color: #555;
+        }
+        
+        .renovation-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .renovation-metric {
+            background-color: var(--light-gray);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .renovation-metric-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        
+        .renovation-metric-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 35px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .disclaimer {
+            font-size: 12px;
+            color: #777;
+            margin-top: 40px;
+            padding: 15px;
+            background-color: var(--light-gray);
+            border-radius: 5px;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        
+        .modal-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+        
+        .modal-image {
+            max-width: 90%;
+            max-height: 90%;
+            border: 3px solid white;
+        }
+        
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 25px;
+            font-size: 35px;
+            color: #f1f1f1;
+            cursor: pointer;
+        }
+        
+        @media (max-width: 768px) {
+            .property-header {
+                flex-direction: column;
+            }
+            .property-stats {
+                flex-wrap: wrap;
+            }
+            .metrics-container, .renovation-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="report-meta">
+                <span>Report ID: {{ report_id }}</span>
+                <span>Generated: {{ report.created_at.strftime('%B %d, %Y') }}</span>
+            </div>
+            <h1>Renovation ROI Analysis</h1>
+        </header>
+        
+        <!-- Property Details -->
+        <div class="property-card">
+            <div class="property-header">
+                <div class="property-details">
+                    <div class="property-address">{{ report.property.address }}</div>
+                    <div class="property-price">{{ report.property.price }}</div>
+                    <div class="property-stats">
+                        {% if report.property.beds %}
+                        <div class="property-stat">
+                            <span>🛏️</span>
+                            <span>{{ report.property.beds }} beds</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if report.property.baths %}
+                        <div class="property-stat">
+                            <span>🚿</span>
+                            <span>{{ report.property.baths }} baths</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if report.property.sqft %}
+                        <div class="property-stat">
+                            <span>📏</span>
+                            <span>{{ report.property.sqft }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if report.property.yearBuilt %}
+                        <div class="property-stat">
+                            <span>🏗️</span>
+                            <span>Built in {{ report.property.yearBuilt }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Image Gallery -->
+            {% if report.property.images and report.property.images|length > 0 %}
+            <div class="image-gallery">
+                {% for image in report.property.images %}
+                <img src="{{ image }}" alt="Property Image {{ loop.index }}" class="gallery-image" onclick="openModal('{{ image }}')">
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Summary Stats -->
+        <div class="summary-card">
+            <div class="summary-header">
+                <div class="summary-title">Renovation Potential</div>
+                {% if report.quick_insights %}
+                <div class="summary-score">{{ report.quick_insights.potentialScore }}/10</div>
+                {% endif %}
+            </div>
+            
+            {% if report.quick_insights %}
+            <div class="metrics-container">
+                <div class="metric-card">
+                    <div class="metric-label">Estimated Renovation Budget</div>
+                    <div class="metric-value">${{ "{:,}".format(report.quick_insights.estimatedBudget) }}</div>
+                    {% if report.detailed_report %}
+                    <div class="metric-range">
+                        Range: ${{ "{:,}".format(report.detailed_report.total_budget.low) }} - ${{ "{:,}".format(report.detailed_report.total_budget.high) }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-label">Potential Value Increase</div>
+                    <div class="metric-value">${{ "{:,}".format(report.quick_insights.potentialValueAdd) }}</div>
+                    {% if report.detailed_report %}
+                    <div class="metric-range">
+                        Range: ${{ "{:,}".format(report.detailed_report.potential_value_increase.low) }} - ${{ "{:,}".format(report.detailed_report.potential_value_increase.high) }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if report.detailed_report %}
+                <div class="metric-card">
+                    <div class="metric-label">Average ROI</div>
+                    <div class="metric-value">{{ report.detailed_report.average_roi }}%</div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Top Renovation Opportunities -->
+        <h2 class="section-title">Top Renovation Opportunities</h2>
+        
+        <div class="renovation-cards">
+            {% if report.quick_insights %}
+            {% for opportunity in report.quick_insights.topOpportunities %}
+            <div class="renovation-card">
+                <div class="renovation-header">
+                    <div class="renovation-name">
+                        {{ opportunity.name }}
+                        <span class="renovation-roi">{{ opportunity.estimatedRoi }}% ROI</span>
+                    </div>
+                </div>
+                <div class="renovation-content">
+                    {% set matching_detailed = [] %}
+                    
+                    {% if report.detailed_report %}
+                    {% for idea in report.detailed_report.renovation_ideas %}
+                    {% if idea.name == opportunity.name %}
+                    {% set _ = matching_detailed.append(idea) %}
+                    {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                    
+                    {% if matching_detailed|length > 0 %}
+                    <div class="renovation-description">{{ matching_detailed[0].description }}</div>
+                    {% endif %}
+                    
+                    <div class="renovation-metrics">
+                        <div class="renovation-metric">
+                            <div class="renovation-metric-label">Estimated Cost</div>
+                            <div class="renovation-metric-value">${{ "{:,}".format(opportunity.estimatedCost) }}</div>
+                        </div>
+                        
+                        <div class="renovation-metric">
+                            <div class="renovation-metric-label">Value Added</div>
+                            <div class="renovation-metric-value">${{ "{:,}".format(opportunity.estimatedValueAdd) }}</div>
+                        </div>
+                        
+                        {% if matching_detailed|length > 0 %}
+                        <div class="renovation-metric">
+                            <div class="renovation-metric-label">Difficulty</div>
+                            <div class="renovation-metric-value">{{ matching_detailed[0].feasibility }}</div>
+                        </div>
+                        
+                        <div class="renovation-metric">
+                            <div class="renovation-metric-label">Timeline</div>
+                            <div class="renovation-metric-value">{{ matching_detailed[0].timeline }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        
+        <!-- Market Analysis -->
+        {% if report.detailed_report and report.detailed_report.market_summary %}
+        <h2 class="section-title">Market Analysis</h2>
+        <div class="summary-card">
+            <p>{{ report.detailed_report.market_summary }}</p>
+        </div>
+        {% endif %}
+        
+        <!-- Additional Suggestions -->
+        {% if report.detailed_report and report.detailed_report.additional_suggestions %}
+        <h2 class="section-title">Additional Suggestions</h2>
+        <div class="renovation-cards">
+            {% for suggestion in report.detailed_report.additional_suggestions %}
+            <div class="renovation-card">
+                <div class="renovation-header">
+                    <div class="renovation-name">
+                        {{ suggestion.name }}
+                    </div>
+                </div>
+                <div class="renovation-content">
+                    <div class="renovation-description">{{ suggestion.description }}</div>
+                    {% if suggestion.reason %}
+                    <div class="renovation-description">
+                        <strong>Why:</strong> {{ suggestion.reason }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <div class="disclaimer">
+            <p><strong>Disclaimer:</strong> This renovation ROI analysis is provided for informational purposes only and should not be considered financial advice. Actual costs and returns may vary based on market conditions, contractor availability, material costs, and other factors. We recommend consulting with local contractors and real estate professionals before making investment decisions.</p>
+        </div>
+    </div>
+    
+    <!-- Image Modal -->
+    <div id="imageModal" class="modal">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <div class="modal-content">
+            <img id="modalImage" class="modal-image">
+        </div>
+    </div>
+    
+    <script>
+        // Image Modal Functions
+        function openModal(imageSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modal.style.display = "block";
+            modalImg.src = imageSrc;
+        }
+        
+        function closeModal() {
+            document.getElementById('imageModal').style.display = "none";
+        }
+        
+        // Close modal when clicking outside the image
+        window.onclick = function(event) {
+            const modal = document.getElementById('imageModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>

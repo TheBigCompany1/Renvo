@@ -1,4 +1,3 @@
-# app/models/report.py
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
 from .property import PropertyDetails
@@ -32,6 +31,18 @@ class ReportStatus(BaseModel):
     """Model for tracking report status."""
     report_id: str
     status: str = "processing"  # processing, completed, failed
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+    property: PropertyDetails
+    quick_insights: Optional[QuickInsights] = None
+    detailed_report: Optional[DetailedReport] = None
+    error: Optional[str] = None
+    
+class ReportStatus(BaseModel):
+    """Model for tracking report status."""
+    report_id: str
+    status: str = "processing"  # processing, completed, failed
+    progress: Optional[str] = None  # To track processing stage
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     property: PropertyDetails

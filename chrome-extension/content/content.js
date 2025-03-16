@@ -130,6 +130,9 @@ function extractRedfinData() {
       // Extract lot size using regex
       const lotSizeMatch = /(?<!Built in )(\d{1,3}(?:,\d{3})*) sq ft lot/i.exec(houseInfoText);
       lotSize = lotSizeMatch ? lotSizeMatch[1] + ' sq ft' : null;
+
+      const remarksElement = document.getElementById('marketing-remarks-scroll');
+      propertyDescription = remarksElement.textContent.trim();
     }
     
     // Extract images
@@ -148,6 +151,7 @@ function extractRedfinData() {
       yearBuilt,
       lotSize,
       homeType: propertyType,
+      propertyDescription,
       images: images.slice(0, 10) // Limit to first 10 images
     };
   } catch (error) {

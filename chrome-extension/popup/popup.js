@@ -113,9 +113,3 @@ function checkCurrentPage() {
         }
     });
 }
-
-// Open full report in new tab
-function openFullReport(reportId) {
-    const reportUrl = `https://app.yourdomain.com/report/${reportId}`;
-    chrome.tabs.create({ url: reportUrl });
-}

@@ -91,6 +91,7 @@ function generateReport(propertyData) {
           yearBuilt: parseInt(propertyData.yearBuilt) || null,
           lotSize: propertyData.lotSize,
           homeType: propertyData.homeType,
+          propertyDescription: propertyData.propertyDescription,
           images: propertyData.images || []
         };
         
@@ -250,12 +251,6 @@ function showProcessingMessage(reportId) {
     });
 }
 
-// Open full report in new tab
-function openFullReport(reportId) {
-    // You can change this to your web app URL when it's ready
-    const reportUrl = `http://localhost:8000/report/${reportId}`;
-    window.open(reportUrl, '_blank');
-  }
 
 // Helper functions for UI
 function createModal(title) {
@@ -361,19 +356,14 @@ const observer = new MutationObserver((mutations) => {
 // Start observing changes to the body element
 observer.observe(document.body, { childList: true, subtree: true });
 
-function handleReportButtonClick() {
-  // Show loading state
-  toggleLoadingState(true);
+function openFullReport(reportId) {
+  console.log("Opening full report for ID:", reportId);
   
-  // Request data extraction from the page
-  chrome.runtime.sendMessage({ action: 'extractData' }, (response) => {
-    if (response && response.success && response.data) {
-      // Send data to API for analysis
-      generateReport(response.data);
-    } else {
-      // Show error
-      showNotification('Error extracting property data', 'error');
-      toggleLoadingState(false);
-    }
+  // Send message to background script to open the report
+  chrome.runtime.sendMessage({ 
+    action: 'openReport', 
+    reportId: reportId
+  }, response => {
+    console.log("Got response from background:", response);
   });
 }

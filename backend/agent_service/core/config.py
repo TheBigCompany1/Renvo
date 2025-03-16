@@ -1,4 +1,3 @@
-# app/core/config.py
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 import os
@@ -10,8 +9,8 @@ load_dotenv()
 class Settings(BaseSettings):
     """Application settings."""
     app_name: str = "Renvo API"
-    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
-    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo-0125")
+    openai_api_key: str = os.getenv("OPENAI_API_KEY")
+    openai_model: str = os.getenv("OPENAI_MODEL")
     
     # Database settings (for future use)
     database_url: str = os.getenv("DATABASE_URL", "")

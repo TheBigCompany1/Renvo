@@ -1,7 +1,7 @@
 {
-  "name": "homecomps",
+  "name": "Renvo",
   "version": "1.0.0",
-  "description": "HomeComps - Real estate comparables platform",
+  "description": "Maximize your home value with highest and best use analyses",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js"
@@ -10,10 +10,8 @@
   "author": "Your Name",
   "license": "ISC",
   "dependencies": {
-    "dotenv": "^16.0.0",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "mongodb": "^6.12.0",
-    "pg-promise": "^11.10.2",
-    "redis": "^4.7.0"
+    "node-fetch": "^2.6.7"
   }
 }

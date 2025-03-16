@@ -3,7 +3,7 @@
   "name": "RENVO AI",
   "version": "1.0.0",
   "description": "Analyze renovation options and ROI for residential properties",
-  "permissions": ["activeTab", "storage"],
+  "permissions": ["activeTab", "storage", "tabs"],
   "host_permissions": [
     "https://*.zillow.com/*",
     "https://*.redfin.com/*",
