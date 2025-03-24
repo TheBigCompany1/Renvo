@@ -94,6 +94,8 @@ class OrchestratorAgent:
         final_ideas = market_adjusted.get("market_adjusted_ideas", 
                       refined_ideas.get("refined_renovation_ideas",
                       initial_ideas.get("renovation_ideas", [])))
+
+        print(final_ideas)
         
         # Additional suggestions from image analysis
         additional_suggestions = refined_ideas.get("additional_suggestions", [])

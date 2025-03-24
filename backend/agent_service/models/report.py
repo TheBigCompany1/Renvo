@@ -10,12 +10,13 @@ class DetailedRenovationIdea(BaseModel):
     description: str
     estimated_cost: Dict[str, float]
     estimated_value_add: Dict[str, float]
-    roi: float
+    adjusted_roi: float
     feasibility: str
     timeline: str
     market_demand: Optional[str] = None
     local_trends: Optional[str] = None
     image_insights: Optional[str] = None
+    buyer_profile: Optional[str] = None
 
 class DetailedReport(BaseModel):
     """Model for a complete renovation report."""

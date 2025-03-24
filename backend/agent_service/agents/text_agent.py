@@ -8,7 +8,7 @@ class TextAnalysisAgent(BaseAgent):
     """Agent for generating renovation ideas based on property text data."""
     
     PROMPT_TEMPLATE = """
-    Given the following detailed property description, generate renovation ideas to increase its value:
+    You are a real eastate flipper. Based on the property details, provide renovation ideas to increase its value:
     
     Property: {property_json}
     

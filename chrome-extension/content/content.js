@@ -136,9 +136,52 @@ function extractRedfinData() {
     }
     
     // Extract images
-    const images = Array.from(
+    let images = Array.from(
       document.querySelectorAll('meta[name^="twitter:image:photo"]')
     ).map(meta => meta.content);
+    
+    console.log(`Found ${images.length} images from meta tags`);
+    
+    // STEP 2: Check if we've successfully extracted gallery images before
+    try {
+      const photoButton = document.querySelector('#photoPreviewButton button, div[data-buttonenum="photos"] button');
+      
+      if (photoButton) {
+        console.log(`Found photo button: ${photoButton.textContent}`);
+        
+        // Try to click the button
+        photoButton.click();
+        console.log("Successfully clicked the photo button");
+        
+        // Wait a bit and try to extract gallery images
+        setTimeout(() => {
+          try {
+            const galleryImages = Array.from(document.querySelectorAll('[id^="MB-image-card-"] img'))
+              .map(img => img.src)
+              .filter(url => url && url.includes('cdn-redfin.com'));
+              
+            console.log(`Found ${galleryImages.length} gallery images`);
+            
+            // Store these for future use
+            window.redfinGalleryImages = galleryImages;
+            
+            closeGallery();
+          } catch (extractError) {
+            console.log(`Error extracting gallery images: ${extractError.message}`);
+          }
+        }, 2000);
+      } else {
+        console.log("Photo button not found");
+      }
+    } catch (buttonError) {
+      console.log(`Error with photo button: ${buttonError.message}`);
+    }
+
+
+    if (window.redfinGalleryImages && window.redfinGalleryImages.length > 0) {
+      console.log(`Adding ${window.redfinGalleryImages.length} previously extracted gallery images`);
+      images = [...images, ...window.redfinGalleryImages];
+    }
     
     // Return structured data
     return {
@@ -152,7 +195,7 @@ function extractRedfinData() {
       lotSize,
       homeType: propertyType,
       propertyDescription,
-      images: images.slice(0, 10) // Limit to first 10 images
+      images: images.slice(0, 20)
     };
   } catch (error) {
     console.error('Error extracting Redfin data:', error);
@@ -239,3 +282,14 @@ window.addEventListener('load', () => {
     });
   }
 });
+
+function closeGallery() {
+  document.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Escape',
+    code: 'Escape',
+    keyCode: 27,
+    which: 27,
+    bubbles: true
+  }));
+  
+}

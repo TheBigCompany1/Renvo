@@ -15,10 +15,10 @@ class ImageAnalysisAgent(BaseAgent):
     Images: {image_urls}
     
     Your tasks:
+    - Expand each feasible idea with detailed break downs, for example, smart home technology integration can be broken down into specific devices and their benefits
     - Check if each renovation is structurally feasible based on the images
     - Identify additional improvements visible in the images
     - Flag any unrealistic suggestions
-    - Expand each feasible idea with more detailed suggestions
     
     Return a refined JSON with the following format and sorted by feasibility:
     {{

@@ -8,15 +8,15 @@ class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing local market trends to refine renovation recommendations."""
     
     PROMPT_TEMPLATE = """
-    Analyze the local real estate market for the property at {address} and adjust these renovation ideas:
+    You are a real estate investment assistant. Analyze the local real estate market for the property at {address} and adjust these renovation ideas:
     
     Renovation Ideas: {renovation_json}
     
     Your tasks:
     - Research current market trends for this location
     - Adjust ROI estimates based on local property values and buyer preferences
-    - Identify high-value renovations specific to this market
     - Consider the property type and local competition
+    - Provide a brief demographic and behaviroal profile of the ideal buyer for that investment proposal (for example, if an idea is to convert a detached garage to an ADU, the profile can be young family seeking additional rental income)
     
     Return a market-adjusted JSON with the following format:
     {{
@@ -28,7 +28,8 @@ class MarketAnalysisAgent(BaseAgent):
                 "estimated_value_add": {{"low": 2000, "medium": 3000, "high": 4000}},
                 "adjusted_roi": 150,
                 "market_demand": "High/Medium/Low",
-                "local_trends": "Specific market insights for this renovation"
+                "local_trends": "Specific market insights for this renovation",
+                "buyer_profile": "Example buyer profile"
             }}
         ],
         "market_summary": "Overall analysis of the local market and its impact on renovation value"
