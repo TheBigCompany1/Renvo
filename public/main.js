@@ -28,13 +28,13 @@ document.addEventListener("DOMContentLoaded", function() {
       const data = await response.json();
       console.log("Analysis result (ChatGPT):", data);
 
-      // Save the analysis result (expected as valid JSON) to localStorage
-      localStorage.setItem("analysisResult", JSON.stringify(data));
+      // Save the report ID or full analysis result if needed
+      localStorage.setItem("reportId", data.reportId);
 
       // Remove the overlay
       document.body.removeChild(overlay);
-      // Redirect to the results page
-      window.location.href = "results.html";
+      // Redirect to the report page with the report ID
+      window.location.href = `http://127.0.0.1:5000/report?reportId=${data.reportId}`;
     } catch (error) {
       console.error("Error fetching analysis result:", error);
       alert("An error occurred while fetching the analysis result.");

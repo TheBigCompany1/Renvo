@@ -112,11 +112,10 @@ class OrchestratorAgent:
         total_value_med = sum(idea.get("estimated_value_add", {}).get("medium", 0) for idea in final_ideas)
         total_value_high = sum(idea.get("estimated_value_add", {}).get("high", 0) for idea in final_ideas)
         
-        return {
-            "property": property_data,
+        # Alex ADDED: Build a nested "detailed_report" block with renovation data
+        detailed_report = {
             "renovation_ideas": final_ideas,
             "additional_suggestions": additional_suggestions,
-            "market_summary": market_summary,
             "total_budget": {
                 "low": total_budget_low,
                 "medium": total_budget_med,
@@ -128,4 +127,13 @@ class OrchestratorAgent:
                 "high": total_value_high
             },
             "average_roi": round(total_value_med / total_budget_med * 100, 1) if total_budget_med > 0 else 0
+        }
+        # ---------------------------------------------------------------------------
+        
+        # Alex ADDED: Return the final report with the scraped property data merged under "property"
+        return {
+            "property": property_data,             # Contains the scraped data (address, price, etc.)
+            "detailed_report": detailed_report,      # Contains renovation ideas and metrics
+            "market_summary": market_summary,
+            "quick_insights": market_adjusted.get("quick_insights", {})
         }
