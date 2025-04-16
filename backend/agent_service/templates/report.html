@@ -1,823 +1,745 @@
-<!-- app/templates/report.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Renovation ROI Report</title>
+    <title>Renovation ROI Report - {{ report.property.address if report.property else 'N/A' }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --primary-color: #4CAF50;
-            --secondary-color: #2196F3;
-            --accent-color: #FFC107;
-            --text-color: #333;
-            --light-gray: #f5f5f5;
-            --border-color: #e0e0e0;
+            --primary-color: #2a9d8f; /* Teal */
+            --secondary-color: #e9c46a; /* Yellow */
+            --accent-color: #f4a261; /* Orange */
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-color: #343a40;
+            --text-muted: #6c757d;
+            --border-color: #dee2e6;
+            --border-radius: 8px;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --header-height: 60px; /* Example height */
+            --light-gray: #f1f1f1; /* Added for consistency if needed */
         }
-        
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             line-height: 1.6;
             color: var(--text-color);
-            margin: 0;
-            padding: 0;
-            background-color: #f9f9f9;
+            background-color: var(--bg-color);
+            padding-top: 20px; /* Add padding for potentially fixed header later */
         }
-        
+
         .container {
             max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 20px auto;
+            padding: 0 15px;
         }
-        
-        header {
+
+        .report-header {
             background-color: var(--primary-color);
             color: white;
-            padding: 20px;
-            border-radius: 10px 10px 0 0;
-            margin-bottom: 30px;
-        }
-        
-        h1, h2, h3, h4 {
-            margin-top: 0;
-        }
-        
-        .report-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.9);
-        }
-        
-        .property-card {
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            margin-bottom: 30px;
-        }
-        
-        .property-header {
-            display: flex;
-            justify-content: space-between;
-            padding: 20px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .property-details {
-            flex: 1;
-        }
-        
-        .property-address {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-        
-        .property-price {
-            font-size: 28px;
-            font-weight: 700;
-            color: var(--primary-color);
-            margin-bottom: 5px;
-        }
-        
-        .property-stats {
-            display: flex;
-            gap: 20px;
-            font-size: 16px;
-            color: #666;
-        }
-        
-        .property-stat {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .image-gallery {
-            padding: 20px;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 15px;
-        }
-        
-        .gallery-image {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-        }
-        
-        .gallery-image:hover {
-            transform: scale(1.02);
-        }
-        
-        .summary-card {
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             padding: 25px;
+            border-radius: var(--border-radius);
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+        }
+        .report-header h1 {
+            margin: 0 0 10px 0; /* Increased bottom margin */
+            font-size: 1.8em;
+            font-weight: 600;
+        }
+        .report-header p {
+            margin: 0 0 5px 0; /* Added bottom margin to paragraphs */
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        .report-header p:last-child {
+             margin-bottom: 0; /* Remove margin from last paragraph */
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
             margin-bottom: 30px;
         }
-        
-        .summary-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
+
+        .grid-col-span-2 {
+            grid-column: span 2;
         }
-        
-        .summary-title {
-            font-size: 22px;
-            font-weight: 600;
+         @media (max-width: 992px) {
+            .grid-col-span-2 {
+                grid-column: span 1;
+            }
         }
-        
-        .summary-score {
-            background-color: var(--primary-color);
-            color: white;
-            font-size: 18px;
-            font-weight: 600;
-            padding: 8px 16px;
-            border-radius: 30px;
-        }
-        
-        .metrics-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 25px;
-        }
-        
-        .metric-card {
-            background-color: var(--light-gray);
-            border-radius: 8px;
+
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: var(--border-radius);
             padding: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
+            margin-bottom: 30px; /* Ensure consistent spacing between cards */
         }
-        
-        .metric-label {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        
-        .metric-value {
-            font-size: 24px;
-            font-weight: 600;
+        .card h2, .card h3 {
             color: var(--primary-color);
-        }
-        
-        .metric-range {
-            font-size: 14px;
-            color: #666;
-            margin-top: 5px;
-        }
-        
-        .renovation-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 20px;
-            margin: 25px 0;
-        }
-        
-        .renovation-card {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-            padding: 0;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-        }
-        
-        .renovation-header {
-            padding: 15px 20px;
-            background-color: var(--light-gray);
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .renovation-name {
-            font-size: 18px;
-            font-weight: 600;
-            margin: 0;
-            display: flex;
-            justify-content: space-between;
-        }
-        
-        .renovation-roi {
-            background-color: var(--accent-color);
-            padding: 2px 8px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 700;
-        }
-        
-        .renovation-content {
-            padding: 20px;
-        }
-        
-        .renovation-description {
             margin-bottom: 15px;
-            font-size: 15px;
-            color: #555;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 8px;
+            font-size: 1.3em;
+            font-weight: 600;
         }
-        
-        .renovation-metrics {
+        .card h3 {
+            font-size: 1.1em;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .card h4 { /* Specific styling for renovation card subheadings */
+             margin-top: 15px;
+             margin-bottom: 5px;
+             font-size: 1em;
+             color: #555;
+             font-weight: bold;
+        }
+        .card ul { /* General list styling within cards */
+             list-style: disc;
+             margin-left: 20px;
+             padding-left: 0;
+             font-size: 0.9em;
+             margin-bottom: 10px;
+        }
+        .card p { /* General paragraph styling within cards */
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+         .card p:last-child {
+             margin-bottom: 0;
+        }
+
+
+        /* Property Summary Card */
+        .property-summary {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            grid-template-columns: 1fr 1fr; /* Two columns */
+            gap: 20px;
+            align-items: start;
         }
-        
-        .renovation-metric {
-            background-color: var(--light-gray);
-            padding: 10px;
-            border-radius: 5px;
-        }
-        
-        .renovation-metric-label {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 3px;
-        }
-        
-        .renovation-metric-value {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-color);
-        }
-        
-        .section-title {
-            font-size: 20px;
-            font-weight: 600;
-            margin: 35px 0 15px 0;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .disclaimer {
-            font-size: 12px;
-            color: #777;
-            margin-top: 40px;
-            padding: 15px;
-            background-color: var(--light-gray);
-            border-radius: 5px;
-        }
-        
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 100;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-        }
-        
-        .modal-content {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-        }
-        
-        .modal-image {
-            max-width: 90%;
-            max-height: 90%;
-            border: 3px solid white;
-        }
-        
-        .close {
-            position: absolute;
-            top: 15px;
-            right: 25px;
-            font-size: 35px;
-            color: #f1f1f1;
-            cursor: pointer;
+         @media (max-width: 768px) { /* Stack columns on smaller screens */
+            .property-summary {
+                grid-template-columns: 1fr;
+            }
         }
 
-        .description-bullets, .metric-bullets {
-            padding-left: 20px;
-            margin-top: 5px;
-            margin-bottom: 5px;
-        }
 
-        .description-bullets li, .metric-bullets li {
-            margin-bottom: 4px;
-        }
-
-        .renovation-metric.full-width {
-            grid-column: 1 / -1; /* Span all columns */
-        }
-
-        .renovation-metric-range {
-            font-size: 13px;
-            color: #666;
-            margin-top: 5px;
-        }
-
-        .renovation-header {
-            padding: 15px 20px;
-            background-color: var(--light-gray);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-        }
-
-        .renovation-name {
-            font-size: 18px;
-            font-weight: 600;
-            margin: 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            flex-wrap: nowrap;
-        }
-
-        .renovation-roi {
-            background-color: var(--accent-color);
-            padding: 2px 8px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 700;
-            white-space: nowrap;
-            min-width: 50px;
-            text-align: center;
-            margin-left: 10px;
-            flex-shrink: 0;
-        }
-
-        /* Carousel Styling */
-        .carousel-container {
-            margin-bottom: 30px;
-            overflow: hidden;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .carousel {
+        .image-carousel-container {
             position: relative;
-            width: 100%;
+            overflow: hidden;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            min-height: 250px; /* Ensure container has height */
+            background-color: var(--light-gray); /* Placeholder bg */
+            margin-bottom: 20px; /* Add space below carousel on mobile */
         }
-
         .carousel-inner {
             display: flex;
-            transition: transform 0.5s ease-in-out;
-            height: 400px;
+            transition: transform 0.5s ease;
         }
-
         .carousel-item {
             min-width: 100%;
-            flex: 0 0 auto;
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: #f1f1f1;
+            flex-shrink: 0;
         }
-
-        .carousel-image {
-            max-width: 100%;
-            max-height: 400px;
-            object-fit: contain;
+        .carousel-item img {
+            width: 100%;
+            height: auto;
+            display: block;
+            max-height: 400px; /* Limit image height */
+            object-fit: cover; /* Cover the area */
         }
-
-        .carousel-control {
+        .carousel-controls {
             position: absolute;
             top: 50%;
-            transform: translateY(-50%);
-            width: 40px;
-            height: 40px;
-            background-color: rgba(255, 255, 255, 0.5);
-            border: none;
-            border-radius: 50%;
-            font-size: 18px;
-            color: #333;
-            cursor: pointer;
-            z-index: 10;
+            width: 100%;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            justify-content: space-between;
+            transform: translateY(-50%);
+            padding: 0 10px;
+            pointer-events: none; /* Allow clicks to pass through container initially */
+        }
+        .carousel-controls button {
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 50%;
+            font-size: 1.2em;
+            pointer-events: auto; /* Enable clicks on buttons */
             transition: background-color 0.3s;
         }
-
-        .carousel-control:hover {
-            background-color: rgba(255, 255, 255, 0.8);
+        .carousel-controls button:hover {
+            background-color: rgba(0, 0, 0, 0.8);
         }
-
-        .carousel-control.prev {
-            left: 10px;
-        }
-
-        .carousel-control.next {
-            right: 10px;
-        }
-
         .carousel-indicators {
             position: absolute;
-            bottom: 15px;
+            bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 8px;
+            gap: 5px;
         }
-
         .indicator {
             width: 10px;
             height: 10px;
             border-radius: 50%;
             background-color: rgba(255, 255, 255, 0.5);
-            border: none;
             cursor: pointer;
+            transition: background-color 0.3s;
+            border: none; /* Ensure it looks like a dot */
             padding: 0;
         }
-
         .indicator.active {
             background-color: white;
-            width: 12px;
-            height: 12px;
         }
-                
-        @media (max-width: 768px) {
-            .property-header {
-                flex-direction: column;
-            }
-            .property-stats {
-                flex-wrap: wrap;
-            }
-            .metrics-container, .renovation-cards {
-                grid-template-columns: 1fr;
-            }
+        /* Hide controls/indicators if only one image or no images */
+        .carousel-item:only-child ~ .carousel-controls,
+        .carousel-item:only-child ~ .carousel-indicators {
+             display: none;
         }
+
+
+        .key-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat {
+            background-color: var(--bg-color);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+        .stat .value {
+            font-size: 1.2em;
+            font-weight: 600;
+            display: block;
+            color: var(--primary-color);
+            margin-bottom: 3px; /* Space between value and label */
+        }
+        .stat .label {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            display: block;
+        }
+        .estimate-details {
+            background-color: #e6f6f4; /* Light teal background */
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #b2dfdb;
+            font-size: 0.9em; /* Smaller text */
+        }
+        .estimate-details strong { color: #00695c; }
+        .estimate-details span { display: block; margin-bottom: 5px; } /* Ensure items are on new lines */
+        .estimate-details span:last-child { margin-bottom: 0; }
+
+        .agent-info h4 { /* Use card's h4 styling */
+             margin-top: 15px;
+             margin-bottom: 5px;
+             font-size: 1em;
+             color: #555;
+             font-weight: bold;
+        }
+        .agent-info p { /* Use card's p styling */
+             font-size: 0.9em;
+             margin-bottom: 0; /* Remove bottom margin if it's the last element */
+        }
+
+
+        /* Renovation Cards */
+        .renovation-ideas {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+        }
+        .renovation-card {
+            border-left: 5px solid var(--secondary-color);
+        }
+        .cost-value-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); /* More flexible columns */
+            gap: 15px; /* Increased gap */
+            font-size: 0.9em;
+            margin-bottom: 15px; /* Increased margin */
+            margin-top: 10px;
+            text-align: center;
+            background-color: var(--bg-color); /* Light background for contrast */
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+        }
+        .cost-value-grid div { /* Style each item in the grid */
+             padding: 5px;
+        }
+        .cost-value-grid span { display: block; }
+        .cost-value-grid .label { font-size: 0.8em; color: var(--text-muted); margin-bottom: 3px; }
+        .cost-value-grid .value { font-weight: bold; }
+        .roi-badge {
+            background-color: var(--accent-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        /* Chart Placeholders */
+        .chart-container {
+            position: relative;
+            height: 350px; /* Increased height */
+            width: 100%;
+            background-color: var(--card-bg); /* Match card background */
+            border: 1px solid var(--border-color); /* Use standard border */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            border-radius: var(--border-radius);
+            padding: 15px; /* Add padding */
+            box-shadow: var(--shadow); /* Add shadow like cards */
+        }
+        .chart-container canvas {
+             max-width: 100%;
+             max-height: 100%;
+        }
+        .chart-container .placeholder-text { /* Keep placeholder distinct */
+             border: 1px dashed var(--border-color);
+             background: var(--bg-color);
+             padding: 20px;
+             border-radius: var(--border-radius);
+        }
+
+
+         /* Comps & Contractors Placeholders */
+         .placeholder-text {
+            color: var(--text-muted);
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+            background-color: var(--bg-color);
+            border-radius: var(--border-radius);
+            border: 1px dashed var(--border-color);
+         }
+         .comp-table { /* Basic table styling */
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9em;
+         }
+         .comp-table th, .comp-table td {
+            border: 1px solid var(--border-color);
+            padding: 8px 10px; /* Adjust padding */
+            text-align: left;
+            vertical-align: top; /* Align content top */
+         }
+         .comp-table th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+         }
+         .comp-table tr:nth-child(even) {
+            background-color: var(--bg-color);
+         }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            font-size: 0.85em; /* Slightly larger */
+            color: var(--text-muted);
+            border-top: 1px solid var(--border-color);
+            line-height: 1.5; /* Improve readability */
+        }
+
+         /* Utility */
+         .margin-top-medium { margin-top: 20px; }
+         .margin-bottom-medium { margin-bottom: 20px; }
+
     </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <div class="report-meta">
-                <span>Report ID: {{ report_id }}</span>
-                <span>Generated: {{ report.created_at.strftime('%B %d, %Y') }}</span>
-            </div>
-            <h1>Renovation ROI Analysis</h1>
+        <header class="report-header">
+            <h1>Renovation ROI Report</h1>
+            <p><strong>Property:</strong> {{ report.property.address if report.property else 'N/A' }}</p>
+            <p><strong>Report ID:</strong> {{ report.report_id }} | <strong>Generated:</strong> {{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else 'N/A' }}</p>
+            <p><small>Data sourced from {{ report.property.source | capitalize if report.property else 'N/A' }}
+                 {% if report.property and report.property.timestamp %}
+                 on {{ report.property.timestamp[:10] }} {% endif %}. Market analysis based on local trends.</small></p>
         </header>
-        
-        <!-- Property Details -->
-        <div class="property-card">
-            <div class="property-header">
+
+        <section class="card">
+            <h2>Property Overview</h2>
+            <div class="property-summary">
+                <div class="image-carousel-container">
+                    <div class="carousel-inner">
+                        {% if report.property and report.property.images and report.property.images|length > 0 %}
+                            {% for image_url in report.property.images %}
+                            <div class="carousel-item">
+                                <img src="{{ image_url }}" alt="Property Image {{ loop.index }}">
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="carousel-item"><div style="height: 250px; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">No Images Available</div></div>
+                        {% endif %}
+                    </div>
+                     {% if report.property and report.property.images and report.property.images|length > 1 %}
+                    <div class="carousel-controls">
+                        <button class="prev-btn" aria-label="Previous Image">&lt;</button>
+                        <button class="next-btn" aria-label="Next Image">&gt;</button>
+                    </div>
+                    <div class="carousel-indicators">
+                        {% for i in range(report.property.images|length) %}
+                        <button class="indicator" data-index="{{ i }}" aria-label="Go to image {{ loop.index }}"></button>
+                        {% endfor %}
+                    </div>
+                     {% endif %}
+                </div>
+
                 <div class="property-details">
-                    <div class="property-address">{{ report.property.address }}</div>
-                    <div class="property-price">{{ report.property.price }}</div>
-                    <div class="property-stats">
-                        {% if report.property.beds %}
-                        <div class="property-stat">
-                            <span>🛏️</span>
-                            <span>{{ report.property.beds }} beds</span>
+                    <div class="key-stats">
+                        <div class="stat">
+                            <span class="value">{{ report.property.price if report.property.price else 'N/A' }}</span>
+                            <span class="label">List Price</span>
                         </div>
-                        {% endif %}
-                        
-                        {% if report.property.baths %}
-                        <div class="property-stat">
-                            <span>🚿</span>
-                            <span>{{ report.property.baths }} baths</span>
+                        <div class="stat">
+                            <span class="value">{{ report.property.beds if report.property.beds else 'N/A' }}</span>
+                            <span class="label">Beds</span>
                         </div>
-                        {% endif %}
-                        
-                        {% if report.property.sqft %}
-                        <div class="property-stat">
-                            <span>📏</span>
-                            <span>{{ report.property.sqft }}</span>
+                        <div class="stat">
+                            <span class="value">{{ report.property.baths if report.property.baths else 'N/A' }}</span>
+                            <span class="label">Baths</span>
                         </div>
-                        {% endif %}
-                        
-                        {% if report.property.yearBuilt %}
-                        <div class="property-stat">
-                            <span>🏗️</span>
-                            <span>Built in {{ report.property.yearBuilt }}</span>
+                        <div class="stat">
+                            <span class="value">{{ "{:,}".format(report.property.sqft|int) if report.property.sqft else 'N/A' }}</span>
+                            <span class="label">Sq. Ft.</span>
                         </div>
-                        {% endif %}
+                         <div class="stat">
+                            <span class="value">{{ report.property.yearBuilt if report.property.yearBuilt else 'N/A' }}</span>
+                            <span class="label">Year Built</span>
+                        </div>
+                         <div class="stat">
+                            <span class="value">{{ report.property.lotSize if report.property.lotSize else 'N/A' }}</span>
+                            <span class="label">Lot Size</span>
+                        </div>
+                         <div class="stat">
+                            <span class="value">{{ report.property.homeType if report.property.homeType else 'N/A' }}</span>
+                            <span class="label">Type</span>
+                        </div>
+                         <div class="stat">
+                            <span class="value">{{ report.property.daysOnMarket if report.property.daysOnMarket is not none else 'N/A' }}</span>
+                            <span class="label">Days on Market</span>
+                        </div>
                     </div>
-                </div>
-            </div>
-            
-            <!-- Image Gallery -->
-            {% if report.property.images and report.property.images|length > 0 %}
-            <div class="carousel-container">
-              <div class="carousel">
-                <div class="carousel-inner">
-                  {% for image in report.property.images %}
-                  <div class="carousel-item {% if loop.first %}active{% endif %}" data-index="{{ loop.index0 }}">
-                    <img src="{{ image }}" alt="Property Image {{ loop.index }}" class="carousel-image">
-                  </div>
-                  {% endfor %}
-                </div>
-                
-                <button class="carousel-control prev" aria-label="Previous image">&#10094;</button>
-                <button class="carousel-control next" aria-label="Next image">&#10095;</button>
-                
-                <div class="carousel-indicators">
-                  {% for image in report.property.images %}
-                  <button class="indicator {% if loop.first %}active{% endif %}" data-index="{{ loop.index0 }}" aria-label="Go to image {{ loop.index }}"></button>
-                  {% endfor %}
-                </div>
-              </div>
-            </div>
-            {% endif %}
-        </div>
-        
-        <!-- Summary Stats -->
-        <div class="summary-card">
-            <div class="summary-header">
-                <div class="summary-title">Renovation Potential</div>
-                {% if report.quick_insights %}
-                <div class="summary-score">{{ report.quick_insights.potentialScore }}/10</div>
-                {% endif %}
-            </div>
-            
-            {% if report.quick_insights %}
-            <div class="metrics-container">
-                <div class="metric-card">
-                    <div class="metric-label">Estimated Renovation Budget</div>
-                    <div class="metric-value">${{ "{:,}".format(report.quick_insights.estimatedBudget) }}</div>
-                    {% if report.detailed_report %}
-                    <div class="metric-range">
-                        Range: ${{ "{:,}".format(report.detailed_report.total_budget.low) }} - ${{ "{:,}".format(report.detailed_report.total_budget.high) }}
+                    <div class="estimate-details">
+                        <span><strong>Estimated Value:</strong> {{ "${:,.0f}".format(report.property.estimate|int) if report.property.estimate else 'N/A' }}</span>
+                        <span><strong>Est. Price/SqFt:</strong> {{ "${:,.0f}".format(report.property.estimatePerSqft|int) if report.property.estimatePerSqft else 'N/A' }}</span>
                     </div>
-                    {% endif %}
+                     <div class="agent-info">
+                        <h4>Listing Information</h4>
+                        <p>
+                            <strong>Agent:</strong> {{ report.property.listingAgent if report.property.listingAgent else 'N/A' }}<br>
+                            <strong>Brokerage:</strong> {{ report.property.listingBrokerage if report.property.listingBrokerage else 'N/A' }}
+                        </p>
+                     </div>
                 </div>
-                
-                <div class="metric-card">
-                    <div class="metric-label">Potential Value Increase</div>
-                    <div class="metric-value">${{ "{:,}".format(report.quick_insights.potentialValueAdd) }}</div>
-                    {% if report.detailed_report %}
-                    <div class="metric-range">
-                        Range: ${{ "{:,}".format(report.detailed_report.potential_value_increase.low) }} - ${{ "{:,}".format(report.detailed_report.potential_value_increase.high) }}
-                    </div>
-                    {% endif %}
-                </div>
-                
-                {% if report.detailed_report %}
-                <div class="metric-card">
-                    <div class="metric-label">Average ROI</div>
-                    <div class="metric-value">{{ report.detailed_report.average_roi }}%</div>
-                </div>
-                {% endif %}
             </div>
-            {% endif %}
-        </div>
-        
-        <!-- Top Renovation Opportunities -->
-        <h2 class="section-title">Top Renovation Opportunities</h2>
-        
-        <div class="renovation-cards">
+             {% if report.property.description %}
+             <div class="description margin-top-medium">
+                 <h3>Property Description</h3>
+                 <p>{{ report.property.description }}</p>
+             </div>
+             {% endif %}
+        </section>
+
+        <section class="card">
+            <h2>Renovation Analysis & ROI</h2>
+
+            <div class="grid margin-bottom-medium">
+                <div class="chart-container">
+                    <canvas id="roiChart"></canvas>
+                    <p class="placeholder-text" id="roiChartPlaceholder">ROI Comparison Chart Loading...</p>
+                </div>
+                 <div class="chart-container">
+                    <canvas id="costValueChart"></canvas>
+                    <p class="placeholder-text" id="costValueChartPlaceholder">Cost vs. Value Add Chart Loading...</p>
+                </div>
+             </div>
+
             {% if report.detailed_report and report.detailed_report.renovation_ideas %}
-              {% for idea in report.detailed_report.renovation_ideas %}
-                <div class="renovation-card">
-                  <div class="renovation-header">
-                    <div class="renovation-name">
-                      {{ idea.name }}
-                      <span class="renovation-roi">      
-                        {% if idea.roi is defined %}
-                        {{ "%.0f"|format(idea.roi) }}%
-                      {% elif idea.adjusted_roi is defined %}
-                        {{ "%.0f"|format(idea.adjusted_roi) }}%
-                      {% else %}
-                        --
-                      {% endif %}</span>
+            <h3>Top Renovation Opportunities</h3>
+            <div class="renovation-ideas">
+                {% for idea in report.detailed_report.renovation_ideas %}
+                <div class="card renovation-card"> <h4>{{ idea.name }}</h4>
+                    <div class="roi-badge">Est. ROI: {{ "%.1f"|format(idea.adjusted_roi) if idea.adjusted_roi is defined else '--' }}%</div>
+                    <p>{{ idea.description }}</p>
+
+                    <div class="cost-value-grid">
+                         <div>
+                            <span class="label">Est. Cost</span>
+                            <span class="value">${{ "{:,.0f}".format(idea.estimated_cost.low|int) if idea.estimated_cost and idea.estimated_cost.low is defined else 'N/A' }} - ${{ "{:,.0f}".format(idea.estimated_cost.high|int) if idea.estimated_cost and idea.estimated_cost.high is defined else 'N/A' }}</span>
+                        </div>
+                         <div>
+                            <span class="label">Est. Value Add</span>
+                            <span class="value">${{ "{:,.0f}".format(idea.estimated_value_add.low|int) if idea.estimated_value_add and idea.estimated_value_add.low is defined else 'N/A' }} - ${{ "{:,.0f}".format(idea.estimated_value_add.high|int) if idea.estimated_value_add and idea.estimated_value_add.high is defined else 'N/A' }}</span>
+                        </div>
+                        <div>
+                            <span class="label">Difficulty</span>
+                            <span class="value">{{ idea.feasibility if idea.feasibility else 'N/A' }}</span>
+                        </div>
                     </div>
-                  </div>
-                  <div class="renovation-content">
-                    {% if idea.description %}
-                      <div class="renovation-description">
-                        <!-- Convert the description to bullet points -->
-                        {% set description_points = idea.description.split('. ') %}
-                        <ul class="description-bullets">
-                          {% for point in description_points %}
-                            {% if point|trim %}
-                              <li>{{ point|trim }}{% if not point.endswith('.') %}.{% endif %}</li>
-                            {% endif %}
-                          {% endfor %}
-                        </ul>
-                      </div>
+
+                    {% if idea.market_demand or idea.local_trends %}
+                     <h4>Market Insights</h4>
+                     <ul>
+                         {% if idea.market_demand %}<li><strong>Demand:</strong> {{ idea.market_demand }}</li>{% endif %}
+                         {% if idea.local_trends %}<li><strong>Trends:</strong> {{ idea.local_trends }}</li>{% endif %}
+                     </ul>
                     {% endif %}
-                    
-                    <div class="renovation-metrics">
-                      {% if idea.estimated_cost %}
-                        <div class="renovation-metric">
-                          <div class="renovation-metric-label">Estimated Cost</div>
-                          <div class="renovation-metric-value">${{ "{:,}".format(idea.estimated_cost.medium) }}</div>
-                          <div class="renovation-metric-range">
-                            <ul class="metric-bullets">
-                              <li>Low: ${{ "{:,}".format(idea.estimated_cost.low) }}</li>
-                              <li>High: ${{ "{:,}".format(idea.estimated_cost.high) }}</li>
-                            </ul>
-                          </div>
-                        </div>
-                      {% endif %}
-                      
-                      {% if idea.estimated_value_add %}
-                        <div class="renovation-metric">
-                          <div class="renovation-metric-label">Value Added</div>
-                          <div class="renovation-metric-value">${{ "{:,}".format(idea.estimated_value_add.medium) }}</div>
-                          <div class="renovation-metric-range">
-                            <ul class="metric-bullets">
-                              <li>Low: ${{ "{:,}".format(idea.estimated_value_add.low) }}</li>
-                              <li>High: ${{ "{:,}".format(idea.estimated_value_add.high) }}</li>
-                            </ul>
-                          </div>
-                        </div>
-                      {% endif %}
-                      
-                      {% if idea.feasibility %}
-                        <div class="renovation-metric">
-                          <div class="renovation-metric-label">Difficulty</div>
-                          <div class="renovation-metric-value">{{ idea.feasibility }}</div>
-                        </div>
-                      {% endif %}
-                      
-                      {% if idea.timeline %}
-                        <div class="renovation-metric">
-                          <div class="renovation-metric-label">Timeline</div>
-                          <div class="renovation-metric-value">{{ idea.timeline }}</div>
-                        </div>
-                      {% endif %}
-                      
-                      {% if idea.local_trends or idea.market_demand %}
-                        <div class="renovation-metric full-width">
-                          <div class="renovation-metric-label">Market Insights</div>
-                          <div class="renovation-metric-value">
-                            <ul class="metric-bullets">
-                              {% if idea.market_demand %}
-                                <li>Demand: {{ idea.market_demand }}</li>
-                              {% endif %}
-                              {% if idea.local_trends %}
-                                <li>{{ idea.local_trends }}</li>
-                              {% endif %}
-                            </ul>
-                          </div>
-                        </div>
-                      {% endif %}
-                    </div>
-                  </div>
-                </div>
-              {% endfor %}
-            {% elif report.quick_insights and report.quick_insights.topOpportunities %}
-              <!-- Quick insights fallback here -->
-            {% endif %}
-          </div>
-        
-        <!-- Market Analysis -->
-        {% if report.detailed_report and report.detailed_report.market_summary %}
-        <h2 class="section-title">Market Analysis</h2>
-        <div class="summary-card">
-            <p>{{ report.detailed_report.market_summary }}</p>
-        </div>
-        {% endif %}
-        
-        <!-- Additional Suggestions -->
-        {% if report.detailed_report and report.detailed_report.additional_suggestions %}
-        <h2 class="section-title">Additional Suggestions</h2>
-        <div class="renovation-cards">
-            {% for suggestion in report.detailed_report.additional_suggestions %}
-            <div class="renovation-card">
-                <div class="renovation-header">
-                    <div class="renovation-name">
-                        {{ suggestion.name }}
-                    </div>
-                </div>
-                <div class="renovation-content">
-                    <div class="renovation-description">{{ suggestion.description }}</div>
-                    {% if suggestion.reason %}
-                    <div class="renovation-description">
-                        <strong>Why:</strong> {{ suggestion.reason }}
-                    </div>
+
+                    {% if idea.buyer_profile %}
+                     <h4>Target Buyer Profile</h4>
+                     <p>{{ idea.buyer_profile }}</p>
+                    {% endif %}
+
+                    {% if idea.timeline %}
+                     <p style="font-size: 0.8em; color: var(--text-muted); margin-top: 10px;">Est. Timeline: {{ idea.timeline }}</p>
                     {% endif %}
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        
-        <div class="disclaimer">
-            <p><strong>Disclaimer:</strong> This renovation ROI analysis is provided for informational purposes only and should not be considered financial advice. Actual costs and returns may vary based on market conditions, contractor availability, material costs, and other factors. We recommend consulting with local contractors and real estate professionals before making investment decisions.</p>
-        </div>
+            {% else %}
+            <p class="placeholder-text">No detailed renovation ideas generated.</p>
+            {% endif %}
+
+            {% if report.detailed_report and report.detailed_report.additional_suggestions %}
+             <h3 class="margin-top-medium">Additional Suggestions</h3>
+             <ul>
+                 {% for suggestion in report.detailed_report.additional_suggestions %}
+                  <li><strong>{{ suggestion.name }}:</strong> {{ suggestion.description }} {% if suggestion.reason %}(Why: {{ suggestion.reason }}){% endif %}</li>
+                 {% endfor %}
+             </ul>
+             {% endif %}
+
+        </section>
+
+        <section class="card">
+            <h2>Market Context & Comparables</h2>
+            <p class="placeholder-text">Comparable property data analysis is planned for a future version. This section will show similar nearby properties used to inform the value estimates.</p>
+
+        </section>
+
+         <section class="card">
+            <h2>Next Steps & Contractor Recommendations</h2>
+             <p>Finding reliable contractors is key. We recommend getting multiple quotes from licensed and insured professionals specializing in the suggested renovations.</p>
+             <p><small>Vetted contractor recommendations specific to your area are planned for a future version. For now, consider using resources like:</small></p>
+             <ul>
+                <li><a href="https://www.angi.com/" target="_blank" rel="noopener noreferrer">Angi</a></li>
+                <li><a href="https://www.thumbtack.com/" target="_blank" rel="noopener noreferrer">Thumbtack</a></li>
+                <li><a href="https://www.houzz.com/professionals" target="_blank" rel="noopener noreferrer">Houzz</a></li>
+                </ul>
+         </section>
+
+        <footer>
+             Disclaimer: This report is generated based on available public data and AI analysis using estimated costs and projected value increases derived from market data. Estimates are for informational purposes only and are not a guarantee of future value or costs. Verify all information and consult with qualified professionals before making financial decisions.
+             <br>
+            Report ID: {{ report.report_id }}
+        </footer>
+
     </div>
-    
-    <!-- Image Modal -->
-    <div id="imageModal" class="modal">
-        <span class="close" onclick="closeModal()">&times;</span>
-        <div class="modal-content">
-            <img id="modalImage" class="modal-image">
-        </div>
-    </div>
-    
+
     <script>
-        // Image Modal Functions
-        function openModal(imageSrc) {
-            const modal = document.getElementById('imageModal');
-            const modalImg = document.getElementById('modalImage');
-            modal.style.display = "block";
-            modalImg.src = imageSrc;
-        }
-        
-        function closeModal() {
-            document.getElementById('imageModal').style.display = "none";
-        }
-        
-        // Close modal when clicking outside the image
-        window.onclick = function(event) {
-            const modal = document.getElementById('imageModal');
-            if (event.target == modal) {
-                closeModal();
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Image Carousel Logic ---
+        const carousel = document.querySelector('.image-carousel-container');
+        if (carousel) {
+            const carouselInner = carousel.querySelector('.carousel-inner');
+            const items = carousel.querySelectorAll('.carousel-item');
+            const prevBtn = carousel.querySelector('.prev-btn');
+            const nextBtn = carousel.querySelector('.next-btn');
+            const indicatorsContainer = carousel.querySelector('.carousel-indicators'); // Get container
+            const indicators = indicatorsContainer ? indicatorsContainer.querySelectorAll('.indicator') : []; // Find indicators within container
+            const itemCount = items.length;
+            let currentIndex = 0;
+            let intervalId = null;
+
+            function updateCarousel() {
+                if (!carouselInner || !items || itemCount === 0) return;
+                carouselInner.style.transform = `translateX(-${currentIndex * 100}%)`;
+                 if (indicators.length > 0) {
+                    indicators.forEach((indicator, index) => {
+                        indicator.classList.toggle('active', index === currentIndex);
+                    });
+                 }
             }
+
+            function startInterval() {
+                stopInterval(); // Clear existing interval first
+                 if (itemCount > 1) {
+                    intervalId = setInterval(() => {
+                        currentIndex = (currentIndex + 1) % itemCount;
+                        updateCarousel();
+                    }, 5000); // Change slide every 5 seconds
+                 }
+            }
+
+            function stopInterval() {
+                if (intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+            }
+
+            if (prevBtn && itemCount > 1) { // Only add listeners if multiple items
+                prevBtn.addEventListener('click', () => {
+                    currentIndex = (currentIndex - 1 + itemCount) % itemCount;
+                    updateCarousel();
+                    startInterval(); // Restart interval on manual navigation
+                });
+            }
+
+            if (nextBtn && itemCount > 1) { // Only add listeners if multiple items
+                nextBtn.addEventListener('click', () => {
+                    currentIndex = (currentIndex + 1) % itemCount;
+                    updateCarousel();
+                     startInterval(); // Restart interval on manual navigation
+                });
+            }
+
+            if (indicators.length > 0) {
+                indicators.forEach(indicator => {
+                    indicator.addEventListener('click', () => {
+                        currentIndex = parseInt(indicator.dataset.index);
+                        updateCarousel();
+                         startInterval(); // Restart interval on manual navigation
+                    });
+                });
+            }
+
+            carousel.addEventListener('mouseenter', stopInterval);
+            carousel.addEventListener('mouseleave', startInterval);
+
+            // Initialize
+            updateCarousel();
+            startInterval();
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
-        // Initialize carousel
-        const carousel = document.querySelector('.carousel');
-        if (!carousel) return;
-        
-        const inner = carousel.querySelector('.carousel-inner');
-        const items = carousel.querySelectorAll('.carousel-item');
-        const indicators = carousel.querySelectorAll('.indicator');
-        const prevBtn = carousel.querySelector('.prev');
-        const nextBtn = carousel.querySelector('.next');
-        const itemCount = items.length;
-        let currentIndex = 0;
-        
-        // Function to update carousel display
-        function updateCarousel() {
-        inner.style.transform = `translateX(-${currentIndex * 100}%)`;
-        
-        // Update active states
-        items.forEach((item, index) => {
-            item.classList.toggle('active', index === currentIndex);
-        });
-        
-        indicators.forEach((indicator, index) => {
-            indicator.classList.toggle('active', index === currentIndex);
-        });
-        }
-        
-        // Event listeners for controls
-        if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-            currentIndex = (currentIndex - 1 + itemCount) % itemCount;
-            updateCarousel();
-        });
-        }
-        
-        if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            currentIndex = (currentIndex + 1) % itemCount;
-            updateCarousel();
-        });
-        }
-        
-        // Event listeners for indicators
-        indicators.forEach(indicator => {
-        indicator.addEventListener('click', () => {
-            currentIndex = parseInt(indicator.dataset.index);
-            updateCarousel();
-        });
-        });
-        
-        // Keyboard navigation
-        document.addEventListener('keydown', event => {
-        if (event.key === 'ArrowLeft') {
-            currentIndex = (currentIndex - 1 + itemCount) % itemCount;
-            updateCarousel();
-        } else if (event.key === 'ArrowRight') {
-            currentIndex = (currentIndex + 1) % itemCount;
-            updateCarousel();
-        }
-        });
-        
-        let interval = setInterval(() => {
-        currentIndex = (currentIndex + 1) % itemCount;
-        updateCarousel();
-        }, 5000); // Change slide every 5 seconds
-        
-        carousel.addEventListener('mouseenter', () => {
-        clearInterval(interval);
-        });
-        
-        carousel.addEventListener('mouseleave', () => {
-        interval = setInterval(() => {
-            currentIndex = (currentIndex + 1) % itemCount;
-            updateCarousel();
-        }, 5000);
-        });
+        // --- Chart Initialization ---
+        // Safely attempt to parse data, default to empty arrays if null/undefined
+        const renovationIdeas = {{ report.detailed_report.renovation_ideas | tojson | safe if report.detailed_report and report.detailed_report.renovation_ideas else '[]' }};
 
-        
-        // Initialize the carousel
-        updateCarousel();
+        let roiData = [];
+        let roiLabels = [];
+        let costData = [];
+        let valueData = [];
+
+        // Check if renovationIdeas is an array and has items
+        if (Array.isArray(renovationIdeas) && renovationIdeas.length > 0) {
+            roiLabels = renovationIdeas.map(idea => idea.name || 'Unnamed');
+            roiData = renovationIdeas.map(idea => (idea.adjusted_roi !== null && idea.adjusted_roi !== undefined) ? parseFloat(idea.adjusted_roi) : 0);
+            costData = renovationIdeas.map(idea => (idea.estimated_cost && idea.estimated_cost.medium !== null && idea.estimated_cost.medium !== undefined) ? idea.estimated_cost.medium : 0);
+            valueData = renovationIdeas.map(idea => (idea.estimated_value_add && idea.estimated_value_add.medium !== null && idea.estimated_value_add.medium !== undefined) ? idea.estimated_value_add.medium : 0);
+        }
+
+
+        // ROI Chart
+        const roiCtx = document.getElementById('roiChart')?.getContext('2d');
+         const roiChartPlaceholder = document.getElementById('roiChartPlaceholder');
+        if (roiCtx && roiData.length > 0) { // Check if we have data
+            if(roiChartPlaceholder) roiChartPlaceholder.style.display = 'none'; // Hide placeholder
+            new Chart(roiCtx, {
+                type: 'bar',
+                data: {
+                    labels: roiLabels,
+                    datasets: [{
+                        label: 'Estimated ROI (%)',
+                        data: roiData,
+                        backgroundColor: 'rgba(42, 157, 143, 0.7)', // --primary-color with alpha
+                        borderColor: 'rgba(42, 157, 143, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // Horizontal bars
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, title: { display: true, text: 'ROI (%)' } }
+                    },
+                     plugins: { legend: { display: false }, title: { display: true, text: 'Estimated ROI Comparison' } }
+                }
+            });
+        } else if(roiChartPlaceholder) {
+             roiChartPlaceholder.textContent = 'ROI data not available for chart.';
+        }
+
+        // Cost vs Value Chart
+        const costValueCtx = document.getElementById('costValueChart')?.getContext('2d');
+        const costValueChartPlaceholder = document.getElementById('costValueChartPlaceholder');
+        if (costValueCtx && costData.length > 0) { // Check if we have data
+            if(costValueChartPlaceholder) costValueChartPlaceholder.style.display = 'none'; // Hide placeholder
+            new Chart(costValueCtx, {
+                type: 'bar', // Use grouped bar chart
+                data: {
+                    labels: roiLabels,
+                    datasets: [
+                        {
+                            label: 'Est. Medium Cost ($)',
+                            data: costData,
+                            backgroundColor: 'rgba(244, 162, 97, 0.7)', // --accent-color with alpha
+                             borderColor: 'rgba(244, 162, 97, 1)',
+                             borderWidth: 1
+                        },
+                         {
+                            label: 'Est. Medium Value Add ($)',
+                            data: valueData,
+                            backgroundColor: 'rgba(42, 157, 143, 0.7)', // --primary-color with alpha
+                             borderColor: 'rgba(42, 157, 143, 1)',
+                             borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                     responsive: true,
+                     maintainAspectRatio: false,
+                     scales: {
+                         y: { beginAtZero: true, title: { display: true, text: 'Amount ($)'} }
+                    },
+                    plugins: { legend: { position: 'top' }, title: { display: true, text: 'Estimated Cost vs. Value Added' } }
+                }
+            });
+         } else if(costValueChartPlaceholder) {
+             costValueChartPlaceholder.textContent = 'Cost/Value data not available for chart.';
+         }
+
     });
     </script>
+
 </body>
 </html>

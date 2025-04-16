@@ -1,35 +1,51 @@
-# app/models/property.py
-from pydantic import BaseModel, Field
-from typing import List, Optional
+# backend/agent_service/models/property.py
+from pydantic import BaseModel, Field, HttpUrl
+from typing import Optional, List, Dict, Any, Union
 
-class PropertyDetails(BaseModel):
-    """Property data model for API requests."""
-    url: Optional[str] = None
-    address: str
-    price: Optional[str] = None
-    beds: Optional[int] = None
+# Define structures for history entries
+class PriceHistoryEntry(BaseModel):
+    date: Optional[str] = None # Keep date flexible (YYYY-MM-DD or other formats)
+    price: Optional[int] = None
+    event: Optional[str] = None
+
+class TaxHistoryEntry(BaseModel):
+    year: Optional[int] = None
+    taxAmount: Optional[int] = None
+    assessment: Optional[int] = None
+
+class Property(BaseModel):
+    # --- Existing & Previously Added Fields ---
+    address: Optional[str] = None
+    price: Optional[Union[int, str]] = None # Allow int or formatted string
+    beds: Optional[float] = None
     baths: Optional[float] = None
     sqft: Optional[int] = None
-    yearBuilt: Optional[int] = Field(None, alias="year_built")
-    lotSize: Optional[str] = Field(None, alias="lot_size")
-    homeType: Optional[str] = Field(None, alias="property_type")
-    propertyDescription: Optional[str] = Field(None, alias="description")
-    images: List[str] = []
-    
+    yearBuilt: Optional[int] = None
+    lotSize: Optional[str] = None
+    homeType: Optional[str] = None
+    description: Optional[str] = None
+    hoaFee: Optional[str] = None
+    propertyTax: Optional[Union[int, str]] = None # Latest tax amount (allow int or formatted string)
+    images: List[HttpUrl] = Field(default_factory=list)
+    source: Optional[str] = None
+    url: Optional[HttpUrl] = None
+    timestamp: Optional[str] = None
+    error: Optional[str] = None
+    estimate: Optional[int] = None
+    estimatePerSqft: Optional[int] = None
+    interiorFeatures: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    parkingFeatures: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    communityFeatures: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    additionalDetails: Optional[Dict[str, Any]] = Field(default_factory=dict) # Keep this catch-all
+
+    # --- NEW FIELDS ---
+    priceHistory: List[PriceHistoryEntry] = Field(default_factory=list)
+    taxHistory: List[TaxHistoryEntry] = Field(default_factory=list)
+    daysOnMarket: Optional[int] = None
+    constructionDetails: Optional[Dict[str, Any]] = Field(default_factory=dict) # Roof, Foundation, Materials, Exterior
+    utilityDetails: Optional[Dict[str, Any]] = Field(default_factory=dict) # Water, Sewer
+    listingAgent: Optional[str] = None
+    listingBrokerage: Optional[str] = None
+
     class Config:
-        populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "url": "https://www.zillow.com/homes/123-main-st...",
-                "address": "123 Main St, Anytown, USA",
-                "price": "$450,000",
-                "beds": 3,
-                "baths": 2,
-                "sqft": 1800,
-                "yearBuilt": 1985,
-                "lotSize": "0.25 acres",
-                "homeType": "Single Family",
-                "propertyDescription": "Welcome to this beautifully remodeled turnkey property in the heart of Chino Hills, CA!",
-                "images": ["https://example.com/image1.jpg", "https://example.com/image2.jpg"]
-            }
-        }
+        pass # Keep previous config settings if any
