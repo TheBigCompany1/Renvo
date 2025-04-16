@@ -9,9 +9,10 @@ from langchain.chat_models import ChatOpenAI
 
 class OrchestratorAgent:
     """Coordinates the multi-agent system workflow."""
-    
-    def __init__(self, api_key: str, model: str = "gpt-3.5-turbo-0125"):
-        """Initialize the orchestrator with the required agents."""
+    def __init__(self, api_key: str, model: str = None):
+        if model is None:
+            # Use your config variable; make sure your .env file has OPENAI_MODEL set.
+            model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo-0125")
         self.llm = ChatOpenAI(model_name=model, openai_api_key=api_key)
         self.text_agent = TextAnalysisAgent(self.llm)
         self.image_agent = ImageAnalysisAgent(self.llm)
@@ -26,29 +27,74 @@ class OrchestratorAgent:
         quick_insights = self._format_quick_insights(renovation_ideas, property_data)
         return quick_insights
     
+    # In gemini/backend/agent_service/agents/orchestrator.py
+
     async def generate_full_report(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate a comprehensive renovation report using all agents."""
-        
-        # Step 1: Generate initial renovation ideas
-        renovation_ideas = await self.text_agent.process(property_data)
-        
-        # Step 2: If images are available, refine ideas using image analysis
-        image_urls = property_data.get("images", [])
-        if image_urls:
-            refined_ideas = await self.image_agent.process(renovation_ideas, image_urls)
-        else:
-            refined_ideas = renovation_ideas
-        
-        # Step 3: Adjust recommendations based on market analysis
-        address = property_data.get("address", "")
-        if address:
-            market_adjusted = await self.market_agent.process(address, refined_ideas)
-        else:
-            market_adjusted = refined_ideas
-        
-        # Step 4: Compile the full report
-        full_report = self._compile_full_report(property_data, renovation_ideas, refined_ideas, market_adjusted)
-        
+        """Generate a comprehensive renovation report using all agents with detailed logging."""
+        print("--- generate_full_report started ---")
+        full_report = {}
+        try:
+            # Step 1: Generate initial renovation ideas
+            print("[Orchestrator] Calling TextAnalysisAgent...")
+            initial_ideas = await self.text_agent.process(property_data)
+            print(f"[Orchestrator] TextAnalysisAgent completed. Result keys: {initial_ideas.keys()}")
+            if "error" in initial_ideas:
+                 print(f"[Orchestrator] TextAnalysisAgent Error: {initial_ideas['error']}")
+
+            # Step 2: If images are available, refine ideas using image analysis
+            image_urls = property_data.get("images", [])
+            print(f"[Orchestrator] Image URLs found: {len(image_urls)}")
+            if image_urls:
+                print("[Orchestrator] Calling ImageAnalysisAgent...")
+                refined_ideas = await self.image_agent.process(initial_ideas, image_urls)
+                print(f"[Orchestrator] ImageAnalysisAgent completed. Result keys: {refined_ideas.keys()}")
+                if "error" in refined_ideas:
+                     print(f"[Orchestrator] ImageAnalysisAgent Error: {refined_ideas['error']}")
+            else:
+                print("[Orchestrator] Skipping ImageAnalysisAgent (no images).")
+                # If no images, 'refined_ideas' are the initial ones for the next step
+                refined_ideas = initial_ideas
+                 # Ensure refined_ideas structure for market agent if skipping image agent
+                if "renovation_ideas" in refined_ideas and "refined_renovation_ideas" not in refined_ideas:
+                     refined_ideas["refined_renovation_ideas"] = refined_ideas["renovation_ideas"]
+
+
+            # Step 3: Adjust recommendations based on market analysis
+            address = property_data.get("address", "")
+            print(f"[Orchestrator] Address for Market Analysis: {address}")
+            if address:
+                print("[Orchestrator] Calling MarketAnalysisAgent...")
+                 # Pass the 'refined_ideas' structure
+                market_adjusted = await self.market_agent.process(address, refined_ideas)
+                print(f"[Orchestrator] MarketAnalysisAgent completed. Result keys: {market_adjusted.keys()}")
+                if "error" in market_adjusted:
+                     print(f"[Orchestrator] MarketAnalysisAgent Error: {market_adjusted['error']}")
+            else:
+                print("[Orchestrator] Skipping MarketAnalysisAgent (no address).")
+                 # If no address, 'market_adjusted' ideas are the refined ones
+                market_adjusted = refined_ideas
+                 # Ensure market_adjusted structure for compilation if skipping market agent
+                if "refined_renovation_ideas" in market_adjusted and "market_adjusted_ideas" not in market_adjusted:
+                     market_adjusted["market_adjusted_ideas"] = market_adjusted["refined_renovation_ideas"]
+
+            # Step 4: Compile the full report
+            print("[Orchestrator] Compiling final report...")
+            full_report = self._compile_full_report(
+                property_data,
+                initial_ideas,
+                refined_ideas,
+                market_adjusted
+            )
+            print("[Orchestrator] Final report compiled.")
+
+        except Exception as e:
+            import traceback
+            print(f"[Orchestrator] ERROR during generate_full_report: {str(e)}")
+            print(f"[Orchestrator] Traceback: {traceback.format_exc()}")
+            # Return a minimal structure in case of error
+            full_report = {"error": str(e), "property": property_data} # Include property data for context
+
+        print("--- generate_full_report finished ---")
         return full_report
     
     def _format_quick_insights(self, renovation_ideas: Dict[str, Any], property_data: Dict[str, Any]) -> Dict[str, Any]:

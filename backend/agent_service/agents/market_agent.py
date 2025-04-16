@@ -8,7 +8,7 @@ class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing local market trends to refine renovation recommendations."""
     
     PROMPT_TEMPLATE = """
-    You are a real estate investment assistant. Analyze the local real estate market for the property at {address} and adjust these renovation ideas:
+    You are a real estate investment expert, whose job it is to analyze prospective properities for your firm. Your analysis will focus on the local real estate market trends for the property at {address} and adjust these renovation ideas:
     
     Renovation Ideas: {renovation_json}
     
@@ -17,7 +17,8 @@ class MarketAnalysisAgent(BaseAgent):
     - Adjust ROI estimates based on local property values and buyer preferences
     - Consider the property type and local competition
     - Provide a brief demographic and behaviroal profile of the ideal buyer for that investment proposal (for example, if an idea is to convert a detached garage to an ADU, the profile can be young family seeking additional rental income)
-    
+    - Recalculate the ROI (now called adjusted_roi) using the same formula: ((estimated_value_add.medium - estimated_cost.medium) / estimated_cost.medium) * 100.
+
     Return a market-adjusted JSON with the following format:
     {{
         "market_adjusted_ideas": [
@@ -26,7 +27,7 @@ class MarketAnalysisAgent(BaseAgent):
                 "description": "Description with market context",
                 "estimated_cost": {{"low": 1000, "medium": 2000, "high": 3000}},
                 "estimated_value_add": {{"low": 2000, "medium": 3000, "high": 4000}},
-                "adjusted_roi": 150,
+                "adjusted_roi": 50,
                 "market_demand": "High/Medium/Low",
                 "local_trends": "Specific market insights for this renovation",
                 "buyer_profile": "Example buyer profile"
@@ -34,6 +35,7 @@ class MarketAnalysisAgent(BaseAgent):
         ],
         "market_summary": "Overall analysis of the local market and its impact on renovation value"
     }}
+    Return only the JSON object without any extra commentary.
     """
     
     async def process(self, address: str, renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
