@@ -1,8 +1,9 @@
 # app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .core.config import get_settings
-from .routers import reports
+from core.config import get_settings
+from routers import reports
+from mangum import Mangum
 
 # Create FastAPI app
 settings = get_settings()
@@ -15,10 +16,10 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update this with your frontend URLs in production
+    allow_origins=["https://www.redfin.com"],  
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*", "X-Device-ID"],
+    allow_headers=["X-Device-ID", "Context-Type"],
 )
 
 # Include routers
@@ -31,6 +32,8 @@ async def root():
         "message": "Welcome to the Renvo API",
         "docs": "/docs"
     }
+
+handler  = Mangum(app)
 
 if __name__ == "__main__":
     import uvicorn

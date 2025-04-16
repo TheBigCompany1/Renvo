@@ -1,10 +1,10 @@
 # agents/orchestrator.py
 from typing import Dict, Any, List, Optional
 import asyncio
-from .base import BaseAgent
-from .text_agent import TextAnalysisAgent
-from .image_agent import ImageAnalysisAgent
-from .market_agent import MarketAnalysisAgent
+from agents.base import BaseAgent
+from agents.text_agent import TextAnalysisAgent
+from agents.image_agent import ImageAnalysisAgent
+from agents.market_agent import MarketAnalysisAgent
 from langchain.chat_models import ChatOpenAI
 
 class OrchestratorAgent:

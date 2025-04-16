@@ -2,7 +2,7 @@
 from typing import Dict, Any
 import json
 import asyncio
-from .base import BaseAgent
+from agents.base import BaseAgent
 
 class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing local market trends to refine renovation recommendations."""

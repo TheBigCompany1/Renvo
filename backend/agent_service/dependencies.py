@@ -1,6 +1,6 @@
 from fastapi import Depends
-from .core.config import get_settings
-from .services.report_service import ReportService
+from core.config import get_settings
+from services.report_service import ReportService
 
 # Create a singleton instance
 _report_service_instance = None

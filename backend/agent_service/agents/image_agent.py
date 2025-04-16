@@ -2,7 +2,7 @@
 from typing import Dict, Any, List
 import json
 import asyncio
-from .base import BaseAgent
+from agents.base import BaseAgent
 
 class ImageAnalysisAgent(BaseAgent):
     """Agent for evaluating renovation ideas based on property images."""

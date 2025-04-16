@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
-from .property import PropertyDetails
-from .renovation import QuickInsights, RenovationOpportunity
+from models.property import PropertyDetails
+from models.renovation import QuickInsights, RenovationOpportunity
 from datetime import datetime
 
 class DetailedRenovationIdea(BaseModel):
