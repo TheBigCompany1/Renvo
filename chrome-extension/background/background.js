@@ -1,6 +1,7 @@
 // background.js - Simple background script for Chrome extension
 const API_CONFIG = {
-  baseUrl: "http://localhost:8000", // Your FastAPI server URL
+  // baseUrl: "http://localhost:8000", // Your FastAPI server URL
+  baseUrl: "https://ww70e6xdhg.execute-api.us-east-2.amazonaws.com/dev",
   endpoints: {
     quickReport: "/api/extension/v1/quickreport",
     getReport: "/api/extension/v1/report/" // Will be appended with report ID
@@ -13,7 +14,8 @@ chrome.runtime.onInstalled.addListener(() => {
 
     // Set default API endpoint
     chrome.storage.local.set({
-        apiEndpoint: 'https://api.yourdomain.com/v1',
+        // apiEndpoint: 'https://api.yourdomain.com/v1',
+        apiEndpoint: 'https://ww70e6xdhg.execute-api.us-east-2.amazonaws.com/dev/api/extension/v1',
         generatedReports: []
     });
 });

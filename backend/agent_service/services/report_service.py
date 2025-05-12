@@ -1,18 +1,16 @@
 # app/services/report_service.py
 from typing import Dict, Any, Optional
-from ..models.property import PropertyDetails
-from ..models.renovation import QuickInsights
-from ..models.report import ReportStatus, DetailedReport
-from fastapi import Depends # type: ignore
+from models.property import PropertyDetails
+from models.renovation import QuickInsights
+from models.report import ReportStatus, DetailedReport
+from fastapi import Depends
 import json
 import asyncio
 import os
 import sys
 
-# Add the parent directory to sys.path to import agents
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from ..agents.orchestrator import OrchestratorAgent
-from ..core.config import get_settings
+from agents.orchestrator import OrchestratorAgent
+from core.config import get_settings
 
 class ReportService:
     """Service for managing renovation reports."""
@@ -20,7 +18,7 @@ class ReportService:
     def __init__(self, settings = None):
         """Initialize with configuration."""
         if settings is None:
-            from ..core.config import get_settings
+            from core.config import get_settings
             settings = get_settings()
             
         self.orchestrator = OrchestratorAgent(

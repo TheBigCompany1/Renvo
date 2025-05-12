@@ -2,8 +2,7 @@
 from typing import Dict, Any
 import json
 import asyncio
-import re # Import regex module
-from .base import BaseAgent
+from agents.base import BaseAgent
 
 class TextAnalysisAgent(BaseAgent):
     """Agent for generating renovation ideas based on property text data."""
