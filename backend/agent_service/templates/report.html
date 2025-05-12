@@ -126,6 +126,27 @@
              margin-bottom: 0;
         }
 
+        /* --- CSS for Description Truncation --- */
+        .description-text {
+            font-size: 0.9em;
+            max-height: 4.8em; /* Approx 3 lines (line-height * lines) */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            position: relative;
+            /* padding-bottom: 1.2em; Optional: space for a 'read more' later */
+        }
+        /* Optional: Add a subtle fade-out effect */
+        .description-text::after {
+            /* content: ''; */ /* Enable if you want fade */
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 50%;
+            height: 1.6em; /* Match line-height */
+            background: linear-gradient(to right, rgba(255, 255, 255, 0), var(--card-bg) 70%);
+        }
+        /* --- End Description Truncation CSS --- */
+
 
         /* Property Summary Card */
         .property-summary {
@@ -237,6 +258,9 @@
             display: block;
             color: var(--primary-color);
             margin-bottom: 3px; /* Space between value and label */
+            /* Ensure long prices don't break layout badly */
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         .stat .label {
             font-size: 0.8em;
@@ -307,6 +331,18 @@
             margin-bottom: 10px;
             font-size: 0.9em;
         }
+         /* Style for Projected Value */
+        .projected-value {
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #e6f6f4; /* Light teal */
+            border-radius: 5px;
+            text-align: center;
+            color: #00695c; /* Darker teal text */
+        }
+
 
         /* Chart Placeholders */
         .chart-container {
@@ -384,6 +420,14 @@
     </style>
 </head>
 <body>
+    {# --- Simplified Jinja variable setup --- #}
+    {# Get the pre-calculated float value from the backend, defaulting to 0 if missing #}
+    {% set base_value = report.property.estimate if report.property.estimate else report.property.price %}
+    {% if base_value is none or base_value == 0.0 %} {# Check if backend provided 0 or None #}
+         {% set base_value = 0 %} {# Ensure it's 0 for calculations #}
+    {% endif %}
+    {# --- End Jinja variable setup --- #}
+
     <div class="container">
         <header class="report-header">
             <h1>Renovation ROI Report</h1>
@@ -425,7 +469,8 @@
                 <div class="property-details">
                     <div class="key-stats">
                         <div class="stat">
-                            <span class="value">{{ report.property.price if report.property.price else 'N/A' }}</span>
+                            {# Display original price string, or N/A if backend sent 0 #}
+                            <span class="value">{{ report.property.get('price_original_str', 'N/A') if report.property.get('price_original_str') else ('${:,.0f}'.format(report.property.price) if report.property.price and report.property.price > 0 else 'N/A') }}</span>
                             <span class="label">List Price</span>
                         </div>
                         <div class="stat">
@@ -458,7 +503,8 @@
                         </div>
                     </div>
                     <div class="estimate-details">
-                        <span><strong>Estimated Value:</strong> {{ "${:,.0f}".format(report.property.estimate|int) if report.property.estimate else 'N/A' }}</span>
+                         {# Use the already calculated float base_value here #}
+                        <span><strong>Estimated Value:</strong> {{ "${:,.0f}".format(base_value) if base_value > 0 else 'N/A' }}</span>
                         <span><strong>Est. Price/SqFt:</strong> {{ "${:,.0f}".format(report.property.estimatePerSqft|int) if report.property.estimatePerSqft else 'N/A' }}</span>
                     </div>
                      <div class="agent-info">
@@ -473,7 +519,8 @@
              {% if report.property.description %}
              <div class="description margin-top-medium">
                  <h3>Property Description</h3>
-                 <p>{{ report.property.description }}</p>
+                 {# Apply the CSS class for truncation #}
+                 <p class="description-text">{{ report.property.description }}</p>
              </div>
              {% endif %}
         </section>
@@ -493,11 +540,11 @@
              </div>
 
             {% if report.detailed_report and report.detailed_report.renovation_ideas %}
-            <h3>Top Renovation Opportunities</h3>
+            <h3>Top Renovation Opportunities (Sorted by ROI)</h3>
             <div class="renovation-ideas">
                 {% for idea in report.detailed_report.renovation_ideas %}
-                <div class="card renovation-card"> <h4>{{ idea.name }}</h4>
-                    <div class="roi-badge">Est. ROI: {{ "%.1f"|format(idea.adjusted_roi) if idea.adjusted_roi is defined else '--' }}%</div>
+                <div class="card renovation-card"> <h4>{{ loop.index }}. {{ idea.name }}</h4> {# Add numbering #}
+                    <div class="roi-badge">Est. ROI: {{ "%.1f"|format(idea.adjusted_roi) if idea.adjusted_roi is defined and idea.adjusted_roi is not none else '--' }}%</div>
                     <p>{{ idea.description }}</p>
 
                     <div class="cost-value-grid">
@@ -514,6 +561,16 @@
                             <span class="value">{{ idea.feasibility if idea.feasibility else 'N/A' }}</span>
                         </div>
                     </div>
+
+                     {# --- Projected Value Calculation --- #}
+                     {% set value_add_medium = idea.estimated_value_add.medium|float if idea.estimated_value_add and idea.estimated_value_add.medium is defined else 0 %}
+                     {% if base_value > 0 and value_add_medium > 0 %}
+                        <div class="projected-value">
+                            Projected Value After Renovation: ≈ ${{ "{:,.0f}".format(base_value + value_add_medium) }}
+                        </div>
+                     {% endif %}
+                     {# --- End Projected Value --- #}
+
 
                     {% if idea.market_demand or idea.local_trends %}
                      <h4>Market Insights</h4>
@@ -662,24 +719,36 @@
         // Check if renovationIdeas is an array and has items
         if (Array.isArray(renovationIdeas) && renovationIdeas.length > 0) {
             roiLabels = renovationIdeas.map(idea => idea.name || 'Unnamed');
-            roiData = renovationIdeas.map(idea => (idea.adjusted_roi !== null && idea.adjusted_roi !== undefined) ? parseFloat(idea.adjusted_roi) : 0);
+             // Ensure ROI is treated as a number, default to -Infinity for sorting if missing/invalid
+            roiData = renovationIdeas.map(idea => {
+                 const roi = idea.adjusted_roi;
+                 return (roi !== null && roi !== undefined && !isNaN(parseFloat(roi))) ? parseFloat(roi) : -Infinity;
+            });
             costData = renovationIdeas.map(idea => (idea.estimated_cost && idea.estimated_cost.medium !== null && idea.estimated_cost.medium !== undefined) ? idea.estimated_cost.medium : 0);
             valueData = renovationIdeas.map(idea => (idea.estimated_value_add && idea.estimated_value_add.medium !== null && idea.estimated_value_add.medium !== undefined) ? idea.estimated_value_add.medium : 0);
+
+             // Filter out ideas where ROI was invalid for charting
+             const validRoiData = roiData.filter(roi => roi !== -Infinity);
+             // If all ROIs were invalid, roiData might be empty or full of -Infinity. Handle this.
+             if (validRoiData.length === 0) {
+                  roiData = []; // Ensure chart doesn't try to render invalid data
+             }
+
         }
 
 
         // ROI Chart
         const roiCtx = document.getElementById('roiChart')?.getContext('2d');
          const roiChartPlaceholder = document.getElementById('roiChartPlaceholder');
-        if (roiCtx && roiData.length > 0) { // Check if we have data
+        if (roiCtx && roiData.length > 0 && roiData.some(d => d !== -Infinity)) { // Check if we have valid data
             if(roiChartPlaceholder) roiChartPlaceholder.style.display = 'none'; // Hide placeholder
             new Chart(roiCtx, {
                 type: 'bar',
                 data: {
-                    labels: roiLabels,
+                    labels: roiLabels, // Labels still correspond to original order before filtering invalid ROI
                     datasets: [{
                         label: 'Estimated ROI (%)',
-                        data: roiData,
+                        data: roiData.map(roi => roi === -Infinity ? 0 : roi), // Map -Infinity back to 0 for display if needed, or handle differently
                         backgroundColor: 'rgba(42, 157, 143, 0.7)', // --primary-color with alpha
                         borderColor: 'rgba(42, 157, 143, 1)',
                         borderWidth: 1
@@ -702,7 +771,8 @@
         // Cost vs Value Chart
         const costValueCtx = document.getElementById('costValueChart')?.getContext('2d');
         const costValueChartPlaceholder = document.getElementById('costValueChartPlaceholder');
-        if (costValueCtx && costData.length > 0) { // Check if we have data
+        // Chart cost/value even if ROI is missing
+        if (costValueCtx && costData.length > 0) {
             if(costValueChartPlaceholder) costValueChartPlaceholder.style.display = 'none'; // Hide placeholder
             new Chart(costValueCtx, {
                 type: 'bar', // Use grouped bar chart
