@@ -1,0 +1,64 @@
+services:
+  # Python AI Service
+  - type: web
+    name: renvo-python
+    runtime: python
+    plan: free
+    rootDir: backend/agent_service
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --timeout 120"
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false # This keeps your secret key secure
+
+  # Node.js Scraper Service
+  - type: web
+    name: renvo-node
+    runtime: node
+    plan: starter
+    healthCheckPath: /api/ping
+    buildCommand: "npm install"
+    startCommand: "node src/index.js"
+    envVars:
+      - key: PYTHON_SERVICE_URL
+        fromService:
+          type: web
+          name: renvo-python
+          property: url # This automatically gets the correct URL
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/google-chrome-stable
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/.cache/puppeteer
+    system:
+      packages:
+        - name: libasound2
+        - name: libatk-bridge2.0-0
+        - name: libatk1.0-0
+        - name: libcups2
+        - name: libdbus-1-3
+        - name: libexpat1
+        - name: libgconf-2-4
+        - name: libgdk-pixbuf2.0-0
+        - name: libglib2.0-0
+        - name: libgtk-3-0
+        - name: libnspr4
+        - name: libnss3
+        - name: libpango-1.0-0
+        - name: libpangocairo-1.0-0
+        - name: libstdc++6
+        - name: libx11-6
+        - name: libx11-xcb1
+        - name: libxcb1
+        - name: libxcomposite1
+        - name: libxcursor1
+        - name: libxdamage1
+        - name: libxext6
+        - name: libxfixes3
+        - name: libxi6
+        - name: libxrandr2
+        - name: libxrender1
+        - name: libxss1
+        - name: libxtst6
+        - name: lsb-release
+        - name: wget
+        - name: xdg-utils

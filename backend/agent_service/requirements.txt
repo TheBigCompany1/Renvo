@@ -17,3 +17,6 @@ httpx
 python-multipart
 jinja2
 mangum
+gunicorn
+flask
+flask-cors
