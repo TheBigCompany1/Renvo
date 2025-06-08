@@ -29,6 +29,7 @@ services:
         value: /usr/bin/google-chrome-stable
       - key: PUPPETEER_CACHE_DIR
         value: /opt/render/.cache/puppeteer
+    # --- THIS BLOCK IS NOW CORRECTLY INDENTED ---
     system:
       packages:
         - name: libasound2
