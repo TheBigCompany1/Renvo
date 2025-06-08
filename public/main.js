@@ -80,5 +80,5 @@ document.addEventListener("DOMContentLoaded", function() {
         }
       }
     }
-  }); 
-});
+  }); // End of event listener
+}); // End of DOMContentLoaded
