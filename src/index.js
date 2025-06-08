@@ -6,8 +6,8 @@ const path = require('path');
 const axios = require('axios');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-// puppeteer.use(StealthPlugin()); // Keep disabled for testing
 const fs = require('fs');
+const cors = require('cors'); // <-- ADDED THIS LINE
 require('dotenv').config();
 
 const app = express();
@@ -18,6 +18,7 @@ const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5
  * MIDDLEWARE
  ****************************************************/
 app.use(express.json());
+app.use(cors()); // <-- AND ADDED THIS LINE
 app.use(express.static(path.join(__dirname, '../public')));
 
 /****************************************************
