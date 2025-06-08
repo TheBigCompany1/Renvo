@@ -1,5 +1,3 @@
-// This is the complete and final code for your main.js file
-
 document.addEventListener("DOMContentLoaded", function() {
   const form = document.getElementById("address-form");
   const input = document.getElementById("address-input");
