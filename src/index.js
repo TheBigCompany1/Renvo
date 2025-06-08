@@ -18,11 +18,17 @@ const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5
  ****************************************************/
 app.use(express.json());
 
-// Manually set CORS headers for all responses
+// Manually set CORS headers and handle preflight requests
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,Authorization');
+
+  // Handle preflight requests by sending a 204 No Content status
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
   next();
 });
 
@@ -35,8 +41,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-// --- NOTE: This /report route serves a static file ---
-// --- The actual report generation is handled by Python ---
 app.get('/report', (req, res) => {
   const reportPath = path.join(__dirname, '../backend/agent_service/templates/report.html');
   if (fs.existsSync(reportPath)) {
@@ -45,14 +49,13 @@ app.get('/report', (req, res) => {
       res.status(404).send('Report template not found at expected Node path.');
   }
 });
-// -------------------------------------------------------------------
 
 app.get('/api/ping', (req, res) => {
   console.log("Received GET /api/ping request");
   res.setHeader('Content-Type', 'text/plain');
   res.status(200).send('pong');
 });
-  
+
 /****************************************************
  * ENDPOINT: /api/analyze-property
  ****************************************************/
@@ -141,7 +144,6 @@ app.post('/api/analyze-property', async (req, res) => {
         try {
             await browser.close();
             browser = null;
-            console.log("Browser closed successfully (early).");
         } catch (closeErr) {
             console.error("Error closing browser early:", closeErr);
             browser = null;
@@ -198,6 +200,7 @@ app.post('/api/analyze-property', async (req, res) => {
       console.log("--- /api/analyze-property request finished ---");
   }
 });
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
