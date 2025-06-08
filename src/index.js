@@ -69,6 +69,7 @@ app.post('/api/analyze-property', async (req, res) => {
 
     console.log("Launching browser with args...");
     browser = await puppeteer.launch({
+        executablePath: '/usr/bin/google-chrome-stable',
         headless: true, // Keep true for server environments
         protocolTimeout: 120000,
         args: [
