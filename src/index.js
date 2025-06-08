@@ -7,6 +7,7 @@ const axios = require('axios');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
+const cors = require('cors'); // We need this again
 require('dotenv').config();
 
 const app = express();
@@ -18,19 +19,17 @@ const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5
  ****************************************************/
 app.use(express.json());
 
-// Manually set CORS headers and handle preflight requests
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,Authorization');
+// --- New, more specific CORS configuration ---
+const corsOptions = {
+  origin: 'https://renvo.ai', // Allow requests from your specific domain
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204 // Send '204 No Content' for preflight requests
+};
 
-  // Handle preflight requests by sending a 204 No Content status
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Ensure all preflight requests are handled
+// -----------------------------------------
 
 app.use(express.static(path.join(__dirname, '../public')));
 
