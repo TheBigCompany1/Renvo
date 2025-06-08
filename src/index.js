@@ -18,7 +18,8 @@ const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5
  * MIDDLEWARE
  ****************************************************/
 app.use(express.json());
-app.use(cors()); // <-- AND ADDED THIS LINE
+app.use(cors()); // This handles general CORS requests
+app.options('/api/analyze-property', cors()); // This explicitly handles the preflight request
 app.use(express.static(path.join(__dirname, '../public')));
 
 /****************************************************
