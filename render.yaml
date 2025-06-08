@@ -9,7 +9,7 @@ services:
     startCommand: "gunicorn app:app --timeout 120"
     envVars:
       - key: OPENAI_API_KEY
-        sync: false # This keeps your secret key secure
+        sync: false
 
   # Node.js Scraper Service
   - type: web
@@ -24,13 +24,11 @@ services:
         fromService:
           type: web
           name: renvo-python
-          property: url # This automatically gets the correct URL
+          property: url
       - key: PUPPETEER_EXECUTABLE_PATH
         value: /usr/bin/google-chrome-stable
       - key: PUPPETEER_CACHE_DIR
         value: /opt/render/.cache/puppeteer
-    # --- THIS BLOCK IS NOW CORRECTED ---
-    # The key has been changed from "system:" to "systemPackages:"
     systemPackages:
       - name: libasound2
       - name: libatk-bridge2.0-0
