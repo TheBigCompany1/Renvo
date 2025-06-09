@@ -36,7 +36,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     try {
       // This now points to your live Node.js service
-      const response = await fetch("https://renvo-node-js.onrender.com/api/analyze-property", {
+      const response = await fetch("https://renvo-node.onrender.com/api/analyze-property", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url })
@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", function() {
       }
 
       // This now points to your live Python service report page
-      const reportUrl = `https://renvo.onrender.com/report?reportId=${data.reportId}`;
+      const reportUrl = `https://renvo-python.onrender.com/report?reportId=${data.reportId}`;
       window.location.href = reportUrl;
 
     } catch (error) { 
