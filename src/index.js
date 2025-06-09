@@ -19,7 +19,6 @@ const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5
  ****************************************************/
 app.use(express.json());
 
-// --- New, more specific CORS configuration ---
 const corsOptions = {
   origin: 'https://renvo.ai',
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -29,7 +28,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-// -----------------------------------------
 
 app.use(express.static(path.join(__dirname, '../public')));
 
