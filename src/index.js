@@ -7,7 +7,7 @@ const axios = require('axios');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
-const cors = require('cors'); // We need this again
+const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
@@ -21,14 +21,14 @@ app.use(express.json());
 
 // --- New, more specific CORS configuration ---
 const corsOptions = {
-  origin: 'https://renvo.ai', // Allow requests from your specific domain
+  origin: 'https://renvo.ai',
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 204 // Send '204 No Content' for preflight requests
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Ensure all preflight requests are handled
+app.options('*', cors(corsOptions));
 // -----------------------------------------
 
 app.use(express.static(path.join(__dirname, '../public')));
@@ -69,6 +69,7 @@ app.post('/api/analyze-property', async (req, res) => {
 
     console.log("Launching browser with args...");
     browser = await puppeteer.launch({
+        executablePath: '/usr/bin/google-chrome-stable', // This line tells Puppeteer where to find Chrome
         headless: true,
         protocolTimeout: 120000,
         args: [
