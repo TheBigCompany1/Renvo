@@ -84,6 +84,7 @@ app.post('/api/analyze-property', async (req, res) => {
     console.log("Launching browser with Docker's native Chrome...");
     browser = await puppeteer.launch({
         executablePath: '/usr/bin/google-chrome-stable',
+        protocolTimeout: 120000,
         headless: true,
         args: [
             '--no-sandbox',
