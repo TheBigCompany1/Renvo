@@ -11,7 +11,8 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// The port needs to be 10000 to match what Render's Docker environment expects
+const PORT = process.env.PORT || 10000; 
 const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5000/api/analyze-property';
 
 /****************************************************
@@ -64,7 +65,7 @@ app.post('/api/analyze-property', async (req, res) => {
         return res.status(400).json({ error: "Please provide a valid Redfin or Zillow URL." });
     }
 
-    console.log("Launching browser with Render's native Chrome...");
+    console.log("Launching browser with Docker's native Chrome...");
     browser = await puppeteer.launch({
         executablePath: '/usr/bin/google-chrome-stable',
         headless: true,
