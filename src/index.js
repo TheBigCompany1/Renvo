@@ -8,6 +8,7 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const cors = require('cors');
+const chromium = require('chrome-aws-lambda');
 require('dotenv').config();
 
 const app = express();
@@ -66,14 +67,9 @@ app.post('/api/analyze-property', async (req, res) => {
 
     console.log("Launching browser with args...");
     browser = await puppeteer.launch({
-        headless: true,
-        protocolTimeout: 120000,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu'
-        ]
+        args: chromium.args,
+        executablePath: await chromium.executablePath,
+        headless: chromium.headless,
     });
     const page = await browser.newPage();
 
