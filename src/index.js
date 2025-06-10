@@ -8,7 +8,6 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const cors = require('cors');
-const chromium = require('@sparticuz/chrome-aws-lambda');
 require('dotenv').config();
 
 const app = express();
@@ -65,17 +64,16 @@ app.post('/api/analyze-property', async (req, res) => {
         return res.status(400).json({ error: "Please provide a valid Redfin or Zillow URL." });
     }
 
-    console.log("Checking chromium package properties...");
-    const execPath = await chromium.executablePath;
-    console.log(`Is executablePath a valid string? ${!!execPath}`);
-    console.log(`Executable Path: ${execPath}`);
-    console.log("...done checking chromium properties.");
-
-    console.log("Launching browser with args...");
+    console.log("Launching browser with Render's native Chrome...");
     browser = await puppeteer.launch({
-        args: chromium.args,
-        executablePath: execPath, // Use the variable we just logged
-        headless: chromium.headless,
+        executablePath: '/usr/bin/google-chrome-stable',
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
+        ]
     });
     const page = await browser.newPage();
 
