@@ -15,8 +15,7 @@ RUN apt-get update && \
     google-chrome-stable --version
 
 # Copy application dependency manifests
-COPY package.json ./
-COPY package-lock.json* ./ 2>/dev/null || true
+COPY package.json package-lock.json ./
 
 # Install production dependencies
 RUN npm install --omit=dev
