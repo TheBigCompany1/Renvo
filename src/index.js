@@ -65,10 +65,16 @@ app.post('/api/analyze-property', async (req, res) => {
         return res.status(400).json({ error: "Please provide a valid Redfin or Zillow URL." });
     }
 
+    console.log("Checking chromium package properties...");
+    const execPath = await chromium.executablePath;
+    console.log(`Is executablePath a valid string? ${!!execPath}`);
+    console.log(`Executable Path: ${execPath}`);
+    console.log("...done checking chromium properties.");
+
     console.log("Launching browser with args...");
     browser = await puppeteer.launch({
         args: chromium.args,
-        executablePath: await chromium.executablePath,
+        executablePath: execPath, // Use the variable we just logged
         headless: chromium.headless,
     });
     const page = await browser.newPage();
