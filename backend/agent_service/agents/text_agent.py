@@ -3,6 +3,7 @@ from typing import Dict, Any
 import json
 import asyncio
 from agents.base import BaseAgent
+import re
 
 class TextAnalysisAgent(BaseAgent):
     """Agent for generating renovation ideas based on property text data."""
