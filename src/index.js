@@ -65,7 +65,6 @@ app.post('/api/analyze-property', async (req, res) => {
     }
 
     console.log("Launching browser with args...");
-    browser = await puppeteer.launch({
         headless: true,
         protocolTimeout: 120000,
         args: [
