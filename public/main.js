@@ -36,7 +36,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     try {
       // This now points to your live Node.js service
-      const response = await fetch("https://renvo-node.onrender.com/api/analyze-property", {
+      const response = await fetch("https://renvo-node-final.onrender.com/api/analyze-property", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url })
