@@ -416,6 +416,25 @@
          /* Utility */
          .margin-top-medium { margin-top: 20px; }
          .margin-bottom-medium { margin-bottom: 20px; }
+        
+            /* Add this to the <style> block in report.html */
+        .new-report-button {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background-color: var(--accent-color);
+            color: white;
+            text-decoration: none;
+            padding: 10px 15px;
+            border-radius: var(--border-radius);
+            font-weight: 600;
+            font-size: 0.9em;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease;
+}
+        .new-report-button:hover {
+            transform: translateY(-2px);
+}
 
     </style>
 </head>
@@ -436,6 +455,7 @@
             <p><small>Data sourced from {{ report.property.source | capitalize if report.property else 'N/A' }}
                  {% if report.property and report.property.timestamp %}
                  on {{ report.property.timestamp[:10] }} {% endif %}. Market analysis based on local trends.</small></p>
+             <a href="/" class="new-report-button">Generate New Report</a>
         </header>
 
         <section class="card">

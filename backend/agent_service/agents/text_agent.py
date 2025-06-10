@@ -9,27 +9,30 @@ class TextAnalysisAgent(BaseAgent):
 
     # Updated Prompt Template
     PROMPT_TEMPLATE = """
-    You are an expert real estate developer and financial strategist. Your primary goal is to identify the highest and best use for a property to maximize its financial potential. Analyze the property details provided and generate a list of transformative, large-scale project recommendations.
+    You are an expert real estate developer and financial strategist. Your primary goal is to identify the highest and best use for a property to maximize its financial potential.
+    
+    First, review all the details of the property provided in the JSON below.
+
+    **PROPERTY DATA TO ANALYZE:**
+    {property_json}
 
     **INSTRUCTIONS FOR RECOMMENDATIONS:**
-    - **Think Big**: Do NOT suggest simple cosmetic upgrades (e.g., "update kitchen," "landscape the yard"). Your ideas must be ambitious.
-    - **Include Ambitious Projects**: Your recommendations MUST include ideas from the following categories:
-        1.  **Major Construction**: Adding an Accessory Dwelling Unit (ADU), building a second story, or a significant square footage expansion.
-        2.  **Change of Use**: Converting the single-family home into a duplex, triplex, or multi-unit condominiums.
-        3.  **Lot Development**: Subdividing the lot for new construction or sale.
-        4.  **Demolish and Rebuild**: Tearing down the existing structure to build a larger, modern spec home.
+    - **Think Big**: Based on the complete property data, generate a list of 3-5 transformative, large-scale project recommendations. Do NOT suggest simple cosmetic upgrades (e.g., "update kitchen," "landscape the yard").
+    - **Include Ambitious Projects**: Your recommendations MUST include ideas from the following categories where appropriate:
+        1.  Major Construction: Adding an Accessory Dwelling Unit (ADU), building a second story, or a significant square footage expansion.
+        2.  Change of Use: Converting the property into a duplex, triplex, or condominiums.
+        3.  Lot Development: Subdividing the lot.
+        4.  Demolish and Rebuild: Tearing down the existing structure to build a modern spec home.
     - **Be Detailed**: For each idea, provide a detailed description and a realistic buyer profile.
 
     **INSTRUCTIONS FOR FINANCIAL ACCURACY:**
-    - For EACH idea, you MUST perform an accurate ROI calculation. Before providing the final number for the "roi" key, you must mentally (do not write it in the output) perform the calculation using this exact formula: ((medium value add - medium cost) / medium cost) * 100.
+    - For EACH idea, you MUST perform an accurate ROI calculation using the formula: ((medium value add - medium cost) / medium cost) * 100.
     - Double-check your math. Ensure the final `roi` value is a standard integer or float.
 
     **CRITICAL OUTPUT FORMAT:**
     - Return ONLY a single, valid JSON object.
-    - **Strictly adhere** to the following JSON structure.
+    - **Strictly adhere** to the following JSON structure from your original prompt.
     - **Numbers (cost, value_add, roi) MUST be standard integers or floats WITHOUT commas.**
-    - All strings (keys and values) MUST be enclosed in double quotes.
-    - Do NOT include any introductory text, closing remarks, or markdown formatting like ```json.
 
     JSON Format:
     {{
@@ -46,9 +49,6 @@ class TextAnalysisAgent(BaseAgent):
             }}
         ]
     }}
-
-    **PROPERTY DATA TO ANALYZE:**
-    {property_json}
     """
 
     # --- Helper function to clean potential JSON issues ---
