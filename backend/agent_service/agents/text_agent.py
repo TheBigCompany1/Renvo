@@ -9,17 +9,23 @@ class TextAnalysisAgent(BaseAgent):
 
     # Updated Prompt Template
     PROMPT_TEMPLATE = """
-    You are a real estate investment expert analyzing properties. Your analysis identifies potential ROI.
-    Given the property details provided: {property_json}
+    You are an expert real estate developer and financial strategist. Your primary goal is to identify the highest and best use for a property to maximize its financial potential. Analyze the property details provided and generate a list of transformative, large-scale project recommendations.
 
-    Generate renovation ideas to increase the property's value. For each idea:
-    - Provide a detailed description, including specific finishes, styles, or amenities (e.g., ADU conversion with quartz countertops, modern fixtures).
-    - Provide a brief demographic/behavioral profile of the ideal buyer (e.g., "young family seeking rental income").
-    - Estimate the cost (low, medium, high) based on location and size.
-    - Estimate the value add (low, medium, high).
-    - Calculate ROI using ((medium value add - medium cost) / medium cost) * 100.
+    **INSTRUCTIONS FOR RECOMMENDATIONS:**
+    - **Think Big**: Do NOT suggest simple cosmetic upgrades (e.g., "update kitchen," "landscape the yard"). Your ideas must be ambitious.
+    - **Include Ambitious Projects**: Your recommendations MUST include ideas from the following categories:
+        1.  **Major Construction**: Adding an Accessory Dwelling Unit (ADU), building a second story, or a significant square footage expansion.
+        2.  **Change of Use**: Converting the single-family home into a duplex, triplex, or multi-unit condominiums.
+        3.  **Lot Development**: Subdividing the lot for new construction or sale.
+        4.  **Demolish and Rebuild**: Tearing down the existing structure to build a larger, modern spec home.
+    - **Be Detailed**: For each idea, provide a detailed description and a realistic buyer profile.
 
-    **CRITICAL: Return ONLY a single, valid JSON object.**
+    **INSTRUCTIONS FOR FINANCIAL ACCURACY:**
+    - For EACH idea, you MUST perform an accurate ROI calculation. Before providing the final number for the "roi" key, you must mentally (do not write it in the output) perform the calculation using this exact formula: ((medium value add - medium cost) / medium cost) * 100.
+    - Double-check your math. Ensure the final `roi` value is a standard integer or float.
+
+    **CRITICAL OUTPUT FORMAT:**
+    - Return ONLY a single, valid JSON object.
     - **Strictly adhere** to the following JSON structure.
     - **Numbers (cost, value_add, roi) MUST be standard integers or floats WITHOUT commas.**
     - All strings (keys and values) MUST be enclosed in double quotes.
@@ -30,17 +36,19 @@ class TextAnalysisAgent(BaseAgent):
         "renovation_ideas": [
             {{
                 "name": "Renovation name",
-                "description": "Detailed description",
-                "estimated_cost": {{"low": 1000, "medium": 2000, "high": 3000}},
-                "estimated_value_add": {{"low": 2000, "medium": 3000, "high": 4000}},
-                "roi": 50, // Example: ((3000 - 2000) / 2000) * 100 = 50
-                "feasibility": "Easy/Moderate/Difficult",
-                "timeline": "1-2 weeks",
-                "buyer_profile": "Example buyer profile"
+                "description": "Detailed description of the large-scale project.",
+                "estimated_cost": {{"low": 50000, "medium": 75000, "high": 100000}},
+                "estimated_value_add": {{"low": 100000, "medium": 150000, "high": 200000}},
+                "roi": 100,
+                "feasibility": "Moderate/Difficult",
+                "timeline": "6-12 months",
+                "buyer_profile": "e.g., A real estate investor looking for rental income, or a developer."
             }}
-            // ... more ideas
         ]
     }}
+
+    **PROPERTY DATA TO ANALYZE:**
+    {property_json}
     """
 
     # --- Helper function to clean potential JSON issues ---

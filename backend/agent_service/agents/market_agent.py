@@ -8,18 +8,20 @@ class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing local market trends to refine renovation recommendations."""
     
     PROMPT_TEMPLATE = """
-    You are a real estate investment expert, whose job it is to analyze prospective properities for your firm. Your analysis will focus on the local real estate market trends for the property at {address} and adjust these renovation ideas:
-    
-    Renovation Ideas: {renovation_json}
-    
-    Your tasks:
-    - Research current market trends for this location
-    - Adjust ROI estimates based on local property values and buyer preferences
-    - Consider the property type and local competition
-    - Provide a brief demographic and behaviroal profile of the ideal buyer for that investment proposal (for example, if an idea is to convert a detached garage to an ADU, the profile can be young family seeking additional rental income)
-    - Recalculate the ROI (now called adjusted_roi) using the same formula: ((estimated_value_add.medium - estimated_cost.medium) / estimated_cost.medium) * 100.
+    You are a real estate investment expert for a development firm. Your analysis will focus on the local real estate market trends for the property at {address} and adjust these ambitious renovation ideas:
 
-    Return a market-adjusted JSON with the following format:
+    Renovation Ideas: {renovation_json}
+
+    **YOUR TASKS:**
+    1.  **Market Research**: Research current market trends, property values, and recent sales for this specific location.
+    2.  **Feasibility Insights**: For each idea, comment on its viability in the current market. Pay special attention to zoning clues, lot size, and demand for new or multi-unit housing in the area. This information should be in the "local_trends" field.
+    3.  **Adjust Financials**: Adjust the `estimated_value_add` based on your research of local property values and buyer preferences.
+    4.  **Accurate ROI Recalculation**: Recalculate the ROI for each idea and place it in the "adjusted_roi" key. Before providing the final number, you must mentally (do not write it in the output) perform the calculation using this exact formula: ((`estimated_value_add.medium` - `estimated_cost.medium`) / `estimated_cost.medium`) * 100. Double-check your math.
+
+    **CRITICAL OUTPUT FORMAT:**
+    Return only the JSON object below without any extra commentary.
+
+    JSON Format:
     {{
         "market_adjusted_ideas": [
             {{
@@ -29,13 +31,16 @@ class MarketAnalysisAgent(BaseAgent):
                 "estimated_value_add": {{"low": 2000, "medium": 3000, "high": 4000}},
                 "adjusted_roi": 50,
                 "market_demand": "High/Medium/Low",
-                "local_trends": "Specific market insights for this renovation",
+                "local_trends": "Specific market insights supporting or challenging this renovation. Mention zoning potential or density trends.",
                 "buyer_profile": "Example buyer profile"
             }}
         ],
-        "market_summary": "Overall analysis of the local market and its impact on renovation value"
+        "market_summary": "Overall analysis of the local market and its impact on large-scale renovation value. Comment on the general feasibility of development in this area."
     }}
-    Return only the JSON object without any extra commentary.
+
+    **PROPERTY AND RENOVATION DATA TO ANALYZE:**
+    Address: {address}
+    Ideas: {renovation_json}
     """
     
     async def process(self, address: str, renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
