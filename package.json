@@ -15,8 +15,8 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "node-fetch": "^2.6.7",
-    "puppeteer-core": "10.4.0",
-    "chrome-aws-lambda": "10.1.0",
+    "@sparticuz/chrome-aws-lambda": "^17.1.0",
+    "puppeteer-core": "17.1.0",
     "puppeteer-extra": "^3.3.4",
     "puppeteer-extra-plugin-stealth": "^2.11.1"
   }
