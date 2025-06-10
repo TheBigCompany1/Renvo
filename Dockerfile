@@ -53,6 +53,14 @@ RUN apt-get update && apt-get install -y \
 RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 RUN apt-get install -y ./google-chrome-stable_current_amd64.deb && rm google-chrome-stable_current_amd64.deb
 
+# === START DEBUGGING ===
+# Verify that the Chrome executable exists and print its version
+RUN echo "DEBUG: Verifying Chrome installation..."
+RUN ls -l /usr/bin/google-chrome-stable
+RUN google-chrome-stable --version
+RUN echo "DEBUG: Chrome verification complete."
+# === END DEBUGGING ===
+
 # Copy application dependency manifests to the container
 COPY package.json package-lock.json ./
 
