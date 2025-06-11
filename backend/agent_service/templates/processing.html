@@ -1,109 +1,122 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Processing Your Report</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generating Your Renovation Report...</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
     <style>
-        /* Add your styling here */
-        .progress-container {
+        :root {
+            --background-color: #f8f9fa;
+            --text-color: #343a40;
+            --accent-color: #007bff;
+            --card-bg: #ffffff;
+            --border-radius: 8px;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
             text-align: center;
-            padding: 50px;
         }
-        .spinner {
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #4CAF50;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
+        .container {
+            background: var(--card-bg);
+            padding: 40px 50px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            max-width: 500px;
+            width: 90%;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        h1 {
+            font-size: 1.8em;
+            margin-bottom: 15px;
+        }
+        .subheading {
+            color: #6c757d;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e9ecef;
+            border-radius: 20px;
+            height: 20px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: var(--accent-color);
+            border-radius: 20px;
+            transition: width 1s ease-in-out;
+            animation: fill-progress 120s linear forwards;
+        }
+        @keyframes fill-progress {
+            from { width: 5%; }
+            to { width: 95%; } /* Stops at 95% to imply final compilation */
+        }
+        #progress-text {
+            font-weight: 600;
+            margin-bottom: 30px;
+            height: 20px; /* Reserve space to prevent layout shift */
+        }
+        .footer-note {
+            font-size: 0.9em;
+            color: #868e96;
         }
     </style>
 </head>
 <body>
-    <div class="progress-container">
-        <h1>Generating Your Renovation ROI Report</h1>
-        <div class="spinner"></div>
-        <h3 id="status-progress">Current Status: {{ progress or 'Initiating analysis...' }}</h3>
-        <p>Please wait while our AI agents analyze your property. This page will check for updates automatically.</p>
-        <p id="report-info" data-report-id="{{ report_id }}">Report ID: {{ report_id }}</p>
-
-        {% if quick_insights and quick_insights.potentialScore %}
-        <div class="quick-insights">
-            <h3>Quick Insights (While You Wait)</h3>
-            <p>Property Potential: {{ quick_insights.potentialScore }}/10</p>
-            <p>Estimated Budget: ${{ "{:,}".format(quick_insights.estimatedBudget) if quick_insights.estimatedBudget is number else 'N/A' }}</p>
-            <p>Potential Value Add: ${{ "{:,}".format(quick_insights.potentialValueAdd) if quick_insights.potentialValueAdd is number else 'N/A' }}</p>
+    <div class="container">
+        <h1>Generating Your Report</h1>
+        <p class="subheading">Our AI is analyzing your property. This may take a moment.</p>
+        
+        <div class="progress-bar-container">
+            <div class="progress-bar"></div>
         </div>
-        {% endif %}
+
+        <p id="progress-text">Initializing analysis...</p>
+
+        <p class="footer-note">The page will refresh automatically when your report is ready.</p>
     </div>
 
     <script>
-        const reportInfoElement = document.getElementById('report-info');
-        const reportId = reportInfoElement ? reportInfoElement.getAttribute('data-report-id') : null;
-        const statusProgressElement = document.getElementById('status-progress');
-        let intervalId = null;
+        // This script will automatically refresh the page every 20 seconds to check for the report.
+        setTimeout(() => {
+            window.location.reload();
+        }, 20000); // 20 seconds
 
-        function checkStatus() {
-            if (!reportId) {
-                console.error("Report ID not found on page.");
-                if (intervalId) clearInterval(intervalId);
-                return;
-            }
+        // This script cycles through status messages to show activity.
+        const statusMessages = [
+            "Analyzing property details...",
+            "Scanning local market data...",
+            "Evaluating renovation potential...",
+            "Analyzing imagery for opportunities...",
+            "Compiling financial models...",
+            "Finalizing recommendations..."
+        ];
 
-            // Use the fetch API to call the new status endpoint
-            fetch(`/api/report-status/${reportId}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log("Status check response:", data);
-                    if (statusProgressElement) {
-                         // Update progress text on the page
-                        statusProgressElement.textContent = `Current Status: ${data.progress || data.status || 'Checking...'}`;
-                    }
+        let messageIndex = 0;
+        const progressTextElement = document.getElementById('progress-text');
 
-                    // Check if the report is completed or failed
-                    if (data.status === 'completed' || data.status === 'failed') {
-                        // Stop polling
-                        if (intervalId) clearInterval(intervalId);
-                        console.log(`Report status is ${data.status}. Reloading page.`);
-                        // Reload the current page (/report?reportId=...)
-                        // Flask will now serve the final report or error page
-                        window.location.reload();
-                    } else {
-                        console.log(`Report status is ${data.status}. Continuing poll.`);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching report status:', error);
-                    if (statusProgressElement) {
-                        statusProgressElement.textContent = `Current Status: Error checking status.`;
-                    }
-                    // Optionally stop polling on error, or keep trying
-                    // if (intervalId) clearInterval(intervalId);
-                });
-        }
-
-        // Start polling every 5 seconds (5000 milliseconds)
-        if (reportId) {
-             console.log(`Starting status polling for report ID: ${reportId}`);
-             intervalId = setInterval(checkStatus, 5000);
-             // Optional: check status immediately on load as well
-             // checkStatus();
-        } else {
-            console.error("Could not start polling: Report ID missing.");
-            if (statusProgressElement) {
-                statusProgressElement.textContent = `Current Status: Error - Report ID missing.`;
+        // Function to update the text
+        function updateProgressText() {
+            if (progressTextElement) {
+                progressTextElement.textContent = statusMessages[messageIndex];
+                messageIndex = (messageIndex + 1) % statusMessages.length;
             }
         }
+
+        // Initially set the text and then update it every 8 seconds
+        updateProgressText();
+        setInterval(updateProgressText, 8000);
     </script>
-
 </body>
 </html>
