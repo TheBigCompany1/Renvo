@@ -1,82 +1,82 @@
 document.addEventListener("DOMContentLoaded", function() {
   const form = document.getElementById("address-form");
   const input = document.getElementById("address-input");
+  const overlay = document.getElementById('progress-overlay');
+  const progressText = document.getElementById('progress-text');
+  let statusInterval;
 
-  if (!form || !input) {
-      console.error("[main.js] Essential HTML elements (form or input) not found!");
-      alert("Error initializing page: Form elements missing.");
+  if (!form || !input || !overlay) {
+      console.error("[main.js] Essential HTML elements not found!");
       return;
   }
 
   form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const url = input.value.trim();
-    if (!url) {
-      alert("Please enter a valid Redfin or Zillow URL");
-      return;
-    }
-
-    // --- Create and show loading overlay ---
-    let overlay = document.createElement("div");
-    overlay.id = "thinking-overlay";
-    overlay.className = "thinking-overlay"; 
-    overlay.innerHTML = `
-      <div class="thinking-spinner"></div>
-      <p>Renovating...</p>
-    `;
-    if (document.body) {
-         document.body.appendChild(overlay);
-    } else {
-        console.error("[main.js] document.body not found when trying to add overlay.");
-        alert("Error setting up loading indicator.");
-        return;
-    }
-
-    let data = null;
-
-    try {
-      // This now points to your live Node.js service
-      const response = await fetch("https://renvo-node-final.onrender.com/api/analyze-property", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
-      });
-
-      if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`API Error: ${response.status} - ${errorText || response.statusText}`);
+      e.preventDefault();
+      const url = input.value.trim();
+      if (!url) {
+          alert("Please enter a valid Redfin URL");
+          return;
       }
 
-      data = await response.json();
+      // --- Show new progress overlay and start status updates ---
+      if (overlay) {
+          overlay.style.display = 'flex';
+      }
+      startStatusUpdates();
 
-      if (!data || !data.reportId) {
-          throw new Error("Server response did not include a valid report ID.");
+      try {
+          const response = await fetch("https://renvo-node-final.onrender.com/api/analyze-property", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url })
+          });
+
+          if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`API Error: ${response.status} - ${errorText || response.statusText}`);
+          }
+
+          const data = await response.json();
+
+          if (!data || !data.reportId) {
+              throw new Error("Server response did not include a valid report ID.");
+          }
+
+          // Redirect to the Python service report page
+          const reportUrl = `https://renvo-python.onrender.com/report?reportId=${data.reportId}`;
+          window.location.href = reportUrl;
+
+      } catch (error) {
+          console.error("[main.js] Error in fetch/redirect process:", error);
+          alert(`An error occurred: ${error.message || 'Unknown fetch/processing error'}`);
+          // Hide overlay on error
+          if (overlay) {
+              overlay.style.display = 'none';
+          }
+          if (statusInterval) {
+              clearInterval(statusInterval);
+          }
+      }
+  });
+
+  function startStatusUpdates() {
+      const messages = [
+          "Connecting to server...",
+          "Launching secure browser...",
+          "Scraping property data...",
+          "Sending data for analysis...",
+          "This may take a minute..."
+      ];
+      let messageIndex = 0;
+
+      function updateText() {
+          if (progressText && messageIndex < messages.length) {
+              progressText.textContent = messages[messageIndex];
+              messageIndex++;
+          }
       }
 
-      localStorage.setItem("reportId", data.reportId);
-
-      // --- Remove overlay before redirecting ---
-      if (overlay && document.body.contains(overlay)) {
-          document.body.removeChild(overlay);
-          overlay = null; 
-      }
-
-      // This now points to your live Python service report page
-      const reportUrl = `https://renvo-python.onrender.com/report?reportId=${data.reportId}`;
-      window.location.href = reportUrl;
-
-    } catch (error) { 
-      console.error("[main.js] Error in fetch/redirect process:", error);
-      alert(`An error occurred: ${error.message || 'Unknown fetch/processing error'}`);
-      
-      // --- Ensure overlay is removed even on error ---
-      if (overlay && document.body.contains(overlay)) {
-        try {
-           document.body.removeChild(overlay);
-        } catch (removeError) {
-            console.error("[main.js] Error removing overlay after primary error:", removeError);
-        }
-      }
-    }
-  }); // End of event listener
-}); // End of DOMContentLoaded
+      updateText();
+      statusInterval = setInterval(updateText, 3000); // Update text every 3 seconds
+  }
+});
