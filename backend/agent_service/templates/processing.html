@@ -55,7 +55,6 @@
             height: 100%;
             background-color: var(--accent-color);
             border-radius: 20px;
-            transition: width 1s ease-in-out;
             animation: fill-progress 120s linear forwards;
         }
         @keyframes fill-progress {
@@ -67,22 +66,43 @@
             margin-bottom: 30px;
             height: 20px; /* Reserve space to prevent layout shift */
         }
+        .quick-insights {
+            border-top: 1px solid #e9ecef;
+            margin-top: 30px;
+            padding-top: 20px;
+            text-align: left;
+        }
+        .quick-insights h3 {
+            text-align: center;
+            margin-bottom: 15px;
+            color: var(--accent-color);
+        }
         .footer-note {
             font-size: 0.9em;
             color: #868e96;
+            margin-top: 30px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Generating Your Report</h1>
-        <p class="subheading">Our AI is analyzing your property. This may take a moment.</p>
+        <p class="subheading">Our AI is analyzing your property. This may take up to 2 minutes.</p>
         
         <div class="progress-bar-container">
             <div class="progress-bar"></div>
         </div>
 
         <p id="progress-text">Initializing analysis...</p>
+
+        {% if quick_insights and quick_insights.potentialScore %}
+        <div class="quick-insights">
+            <h3>Quick Insights (While You Wait)</h3>
+            <p><strong>Property Potential:</strong> {{ quick_insights.potentialScore }}/10</p>
+            <p><strong>Estimated Budget:</strong> ${{ "{:,}".format(quick_insights.estimatedBudget) if quick_insights.estimatedBudget is number else 'N/A' }}</p>
+            <p><strong>Potential Value Add:</strong> ${{ "{:,}".format(quick_insights.potentialValueAdd) if quick_insights.potentialValueAdd is number else 'N/A' }}</p>
+        </div>
+        {% endif %}
 
         <p class="footer-note">The page will refresh automatically when your report is ready.</p>
     </div>
@@ -106,7 +126,6 @@
         let messageIndex = 0;
         const progressTextElement = document.getElementById('progress-text');
 
-        // Function to update the text
         function updateProgressText() {
             if (progressTextElement) {
                 progressTextElement.textContent = statusMessages[messageIndex];
@@ -114,7 +133,6 @@
             }
         }
 
-        // Initially set the text and then update it every 8 seconds
         updateProgressText();
         setInterval(updateProgressText, 8000);
     </script>
