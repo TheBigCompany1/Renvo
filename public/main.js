@@ -59,24 +59,28 @@ document.addEventListener("DOMContentLoaded", function() {
       }
   });
 
-  function startStatusUpdates() {
-      const messages = [
-          "Connecting to server...",
-          "Launching secure browser...",
-          "Scraping property data...",
-          "Sending data for analysis...",
-          "This may take a minute..."
-      ];
-      let messageIndex = 0;
+  // Replace the existing startStatusUpdates function in main.js with this one.
 
-      function updateText() {
-          if (progressText && messageIndex < messages.length) {
-              progressText.textContent = messages[messageIndex];
-              messageIndex++;
-          }
+function startStatusUpdates() {
+  const messages = [
+      "Initializing Renvo AI analysis...",
+      "Analyzing property details & imagery...",
+      "Cross-referencing local market data...",
+      "Simulating renovation project outcomes...",
+      "Calculating financial projections & ROI...",
+      "Compiling your custom report..."
+  ];
+  let messageIndex = 0;
+
+  function updateText() {
+      if (progressText && messageIndex < messages.length) {
+          progressText.textContent = messages[messageIndex];
+          messageIndex++;
       }
-
-      updateText();
-      statusInterval = setInterval(updateText, 3000); // Update text every 3 seconds
   }
+
+  updateText();
+  // We can slow down the text updates slightly to make each step feel more significant
+  statusInterval = setInterval(updateText, 4000); // Update text every 4 seconds
+}
 });
