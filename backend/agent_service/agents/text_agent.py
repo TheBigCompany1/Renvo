@@ -1,11 +1,12 @@
 # agents/text_agent.py
-from typing import Dict, Any
+from typing import Dict, Any, List
 import json
 import asyncio
 import re
 from agents.base import BaseAgent
 from tools.search_tools import search_for_comparable_properties
-from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_core.messages import ToolMessage
+from pydantic import BaseModel, Field
 
 class TextAnalysisAgent(BaseAgent):
     """Agent for generating renovation ideas with sourced cost data using tools."""
@@ -80,22 +81,21 @@ class TextAnalysisAgent(BaseAgent):
                 response_content = ai_msg.content
             else:
                 print(f"[TextAgent] LLM requested to use {len(tool_calls)} tool(s).")
+                # --- START OF CORRECTED PARALLEL HANDLING ---
                 tool_outputs = []
                 for tool_call in tool_calls:
                     tool_name = tool_call.get("name")
                     print(f"[TextAgent] Executing tool: {tool_name} with args: {tool_call.get('args')}")
                     if tool_name == "search_for_comparable_properties":
                         output = search_for_comparable_properties.invoke(tool_call.get('args'))
-                        tool_outputs.append({
-                            "tool_call_id": tool_call['id'],
-                            "output": output,
-                        })
-                
-                ai_msg.tool_calls[0]['output'] = json.dumps(tool_outputs)
-                
+                        tool_outputs.append(ToolMessage(content=str(output), tool_call_id=tool_call['id']))
+
                 print("[TextAgent] Calling LLM again with all tool outputs...")
-                final_response = await asyncio.to_thread(self.llm_with_tools.invoke, [ai_msg])
+                # The history should be [original_ai_message, tool_message_1, tool_message_2, ...]
+                history = [ai_msg] + tool_outputs
+                final_response = await asyncio.to_thread(self.llm_with_tools.invoke, history)
                 response_content = final_response.content
+                # --- END OF CORRECTED PARALLEL HANDLING ---
 
             print("[TextAgent] Received response from LLM.")
             raw_content = response_content.strip()

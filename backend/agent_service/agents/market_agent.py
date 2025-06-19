@@ -6,9 +6,10 @@ import re
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
 from tools.search_tools import search_for_comparable_properties
+from langchain_core.messages import ToolMessage
 
 class MarketAnalysisAgent(BaseAgent):
-    """Agent for analyzing market trends, now handling parallel tool calls."""
+    """Agent for analyzing market trends, now correctly handling parallel tool calls."""
     
     PROMPT_TEMPLATE = """
     You are a real estate investment expert for a development firm. Your analysis will focus on local market trends for the property at {address} and adjust these ambitious renovation ideas:
@@ -82,22 +83,20 @@ class MarketAnalysisAgent(BaseAgent):
                 response_content = ai_msg.content
             else:
                 print(f"[MarketAgent] LLM requested to use {len(tool_calls)} tool(s).")
+                # --- START OF CORRECTED PARALLEL HANDLING ---
                 tool_outputs = []
                 for tool_call in tool_calls:
                     tool_name = tool_call.get("name")
                     print(f"[MarketAgent] Executing tool: {tool_name} with args: {tool_call.get('args')}")
                     if tool_name == "search_for_comparable_properties":
                         output = search_for_comparable_properties.invoke(tool_call.get('args'))
-                        tool_outputs.append({
-                            "tool_call_id": tool_call['id'],
-                            "output": output,
-                        })
-
-                ai_msg.tool_calls[0]['output'] = json.dumps(tool_outputs)
-
+                        tool_outputs.append(ToolMessage(content=str(output), tool_call_id=tool_call['id']))
+                
                 print("[MarketAgent] Calling LLM again with all tool outputs...")
-                final_response = await asyncio.to_thread(self.llm_with_tools.invoke, [ai_msg])
+                history = [ai_msg] + tool_outputs
+                final_response = await asyncio.to_thread(self.llm_with_tools.invoke, history)
                 response_content = final_response.content
+                # --- END OF CORRECTED PARALLEL HANDLING ---
 
             raw_content = response_content.strip()
             print(f"[MarketAgent] Final raw LLM content: {raw_content[:500]}...")
