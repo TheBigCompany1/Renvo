@@ -20,3 +20,6 @@ mangum
 gunicorn
 flask
 flask-cors
+# Added for tool-based web search
+langchain-core
+tavily-python

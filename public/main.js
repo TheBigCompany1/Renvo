@@ -81,6 +81,6 @@ function startStatusUpdates() {
 
   updateText();
   // We can slow down the text updates slightly to make each step feel more significant
-  statusInterval = setInterval(updateText, 4000); // Update text every 4 seconds
+  statusInterval = setInterval(updateText, 10000); // Update text every 10 seconds
 }
 });

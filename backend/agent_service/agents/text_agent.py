@@ -4,36 +4,33 @@ import json
 import asyncio
 from agents.base import BaseAgent
 import re
+# Import the search tool and new Pydantic model for compatible output
+from tools.search_tools import search_for_comparable_properties
+from langchain_core.pydantic_v1 import BaseModel, Field
+
 
 class TextAnalysisAgent(BaseAgent):
-    """Agent for generating renovation ideas based on property text data."""
+    """Agent for generating renovation ideas with sourced cost data using tools."""
 
-    # Updated Prompt Template
+    # This prompt is updated to instruct the AI to use the new tool
+    # and to add the new "cost_source" field to the JSON it produces.
     PROMPT_TEMPLATE = """
-    You are an expert real estate developer and financial strategist. Your primary goal is to identify the highest and best use for a property to maximize its financial potential.
+    You are an expert real estate developer and financial strategist. Your primary goal is to identify the highest and best use for a property.
     
     First, review all the details of the property provided in the JSON below.
 
-    **PROPERTY DATA TO ANALYZE:**
+    PROPERTY DATA TO ANALYZE:
     {property_json}
 
-    **INSTRUCTIONS FOR RECOMMENDATIONS:**
-    - **Think Big**: Based on the complete property data, generate a list of 3-5 transformative, large-scale project recommendations. Do NOT suggest simple cosmetic upgrades (e.g., "update kitchen," "landscape the yard").
-    - **Include Ambitious Projects**: Your recommendations MUST include ideas from the following categories where appropriate:
-        1.  Major Construction: Adding an Accessory Dwelling Unit (ADU), building a second story, or a significant square footage expansion.
-        2.  Change of Use: Converting the property into a duplex, triplex, or condominiums.
-        3.  Lot Development: Subdividing the lot.
-        4.  Demolish and Rebuild: Tearing down the existing structure to build a modern spec home.
-    - **Be Detailed**: For each idea, provide a detailed description and a realistic buyer profile.
+    INSTRUCTIONS:
+    1.  **Generate Big Ideas**: Create 3-5 transformative, large-scale project recommendations (e.g., ADU, duplex conversion, demolish and rebuild).
+    2.  **Research Local Costs**: For EACH idea, you MUST use the `search_for_comparable_properties` tool to find localized construction costs. Example search query: "average cost to build an ADU in Los Angeles County".
+    3.  **Provide Sourced Estimates**: Use the search results to provide an accurate `estimated_cost`. You MUST also add a `cost_source` key citing the source of your cost data (e.g., "Source: Forbes Home, 2025 Cost Report").
+    4.  **Actionable Steps & Risks**: For each idea, create a `roadmap_steps` list (3-5 key actions) and a `potential_risks` list (2-3 potential hurdles).
+    5.  **Ensure Financial Accuracy**: Calculate the ROI precisely using the formula: ((medium value add - medium cost) / medium cost) * 100.
 
-    **INSTRUCTIONS FOR FINANCIAL ACCURACY:**
-    - For EACH idea, you MUST perform an accurate ROI calculation using the formula: ((medium value add - medium cost) / medium cost) * 100.
-    - Double-check your math. Ensure the final `roi` value is a standard integer or float.
-
-    **CRITICAL OUTPUT FORMAT:**
-    - Return ONLY a single, valid JSON object.
-    - **Strictly adhere** to the following JSON structure from your original prompt.
-    - **Numbers (cost, value_add, roi) MUST be standard integers or floats WITHOUT commas.**
+    CRITICAL OUTPUT FORMAT:
+    - Return ONLY a single, valid JSON object that strictly adheres to the format below.
 
     JSON Format:
     {{
@@ -41,104 +38,115 @@ class TextAnalysisAgent(BaseAgent):
             {{
                 "name": "Renovation name",
                 "description": "Detailed description of the large-scale project.",
-                "estimated_cost": {{"low": 50000, "medium": 75000, "high": 100000}},
-                "estimated_value_add": {{"low": 100000, "medium": 150000, "high": 200000}},
+                "estimated_cost": {{"low": 75000, "medium": 100000, "high": 125000}},
+                "cost_source": "Source of the cost data, e.g., 'National Association of Realtors 2025 Report'",
+                "estimated_value_add": {{"low": 150000, "medium": 200000, "high": 250000}},
                 "roi": 100,
                 "feasibility": "Moderate/Difficult",
                 "timeline": "6-12 months",
-                "buyer_profile": "e.g., A real estate investor looking for rental income, or a developer."
+                "buyer_profile": "e.g., A real estate investor or developer.",
+                "roadmap_steps": ["First step.", "Second step.", "Third step."],
+                "potential_risks": ["First risk.", "Second risk."]
             }}
         ]
     }}
     """
+    
+    # --- START OF NEW CODE ---
+    def __init__(self, llm):
+        super().__init__(llm)
+        # Bind the search tool to this agent's LLM instance
+        self.llm_with_tools = self.llm.bind_tools([search_for_comparable_properties])
+    # --- END OF NEW CODE ---
 
-    # --- Helper function to clean potential JSON issues ---
+    # Your existing helper function is preserved
     def _clean_json_string(self, json_string: str) -> str:
         """Attempts to clean common issues in LLM-generated JSON strings."""
-        # Remove commas within numbers (e.g., 80,000 -> 80000)
-        # Looks for a digit, followed by a comma, followed by three digits
         cleaned_string = re.sub(r'(\d),(?=\d{3})', r'\1', json_string)
-        # Add more cleaning steps here if other common errors are found
         return cleaned_string
 
     async def process(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate renovation ideas based on property details."""
         print("[TextAgent] Process started.")
         try:
-            # Limit property data size if necessary (optional)
-            # property_data_subset = {k: v for k, v in property_data.items() if k in ['address', 'price', 'beds', 'baths', 'sqft', 'yearBuilt', 'lotSize', 'homeType', 'description']}
-            # property_json = json.dumps(property_data_subset, indent=2)
-            property_json = json.dumps(property_data, indent=2) # Keep original for now
+            property_json = json.dumps(property_data, indent=2)
 
             prompt = self._create_prompt(
                 self.PROMPT_TEMPLATE,
                 property_json=property_json
             )
-            print("[TextAgent] Sending prompt to LLM...")
+            
+            # --- START OF NEW TOOL-USE LOGIC ---
+            print("[TextAgent] Initial call to LLM with tools...")
+            ai_msg = await asyncio.to_thread(self.llm_with_tools.invoke, prompt)
+            
+            tool_calls = getattr(ai_msg, 'tool_calls', []) or []
+            
+            if tool_calls:
+                print(f"[TextAgent] LLM requested to use {len(tool_calls)} tool(s).")
+                tool_outputs = []
+                # Note: Currently handling one tool call for simplicity, can be expanded
+                tool_to_call = tool_calls[0]
+                tool_output = search_for_comparable_properties.invoke(tool_to_call['args'])
+                
+                ai_msg.tool_calls[0]['output'] = tool_output
 
-            response = await asyncio.to_thread(
-                self.llm.invoke,
-                prompt
-            )
+                print("[TextAgent] Calling LLM again with tool output...")
+                final_response = await asyncio.to_thread(self.llm_with_tools.invoke, [ai_msg])
+                response_content = final_response.content
+            else:
+                print("[TextAgent] No tool call requested by LLM.")
+                response_content = ai_msg.content
+            # --- END OF NEW TOOL-USE LOGIC ---
+
             print("[TextAgent] Received response from LLM.")
-            raw_content = response.content.strip() # Strip leading/trailing whitespace
+            raw_content = response_content.strip()
             print(f"[TextAgent] Raw LLM content (stripped): {raw_content[:500]}...")
 
-            # --- Parsing Logic ---
+            # --- Your existing, robust parsing logic is fully preserved ---
             result = None
             json_str_to_parse = None
             direct_parse_error = None
             extracted_parse_error = None
 
-            # 1. Check if the raw content looks like JSON (starts with { ends with })
             if raw_content.startswith('{') and raw_content.endswith('}'):
                 print("[TextAgent] Raw content looks like direct JSON. Attempting parse...")
                 json_str_to_parse = raw_content
             else:
-                # 2. If not direct JSON, try extracting from markdown ```json ... ```
                 print("[TextAgent] Raw content doesn't look like direct JSON. Trying to extract from markdown.")
                 match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL | re.IGNORECASE)
                 if match:
                     print("[TextAgent] Found JSON within markdown fences.")
-                    json_str_to_parse = match.group(1).strip() # Extract and strip again
+                    json_str_to_parse = match.group(1).strip()
                 else:
                     print("[TextAgent] Could not find JSON within markdown fences.")
-                    # No valid JSON structure found at all
                     return {
                         "renovation_ideas": [],
                         "error": f"LLM did not return valid JSON or markdown JSON. Raw content: {raw_content[:1000]}..."
                     }
 
-            # 3. Attempt to parse the identified JSON string (if any)
             if json_str_to_parse:
                 try:
-                    # *** Add cleaning step before parsing ***
                     cleaned_json_str = self._clean_json_string(json_str_to_parse)
                     if cleaned_json_str != json_str_to_parse:
                         print("[TextAgent] Cleaned JSON string before parsing.")
-
                     result = json.loads(cleaned_json_str)
                     print("[TextAgent] Successfully parsed potentially cleaned JSON string.")
                 except json.JSONDecodeError as e:
                     print(f"[TextAgent] JSON parsing failed: {e}. Raw string was: {json_str_to_parse[:500]}...")
-                    # Store the relevant error message
-                    if direct_parse_error is None and raw_content.startswith('{'): # If we tried direct parse
+                    if direct_parse_error is None and raw_content.startswith('{'):
                          direct_parse_error = e
-                    else: # If we tried parsing extracted content
+                    else:
                          extracted_parse_error = e
-
-
-            # --- Handle Results ---
+            
             if result is not None:
                 print("[TextAgent] Process finished successfully.")
                 if "renovation_ideas" not in result:
-                     result["renovation_ideas"] = [] # Ensure key exists
-                # Add an empty error field if none exists, for consistency
+                     result["renovation_ideas"] = []
                 if "error" not in result:
                     result["error"] = None
                 return result
             else:
-                # Construct error message based on what failed
                 error_msg = "LLM returned invalid JSON. "
                 if direct_parse_error:
                     error_msg += f"Direct parse error: {direct_parse_error}. "
@@ -146,16 +154,10 @@ class TextAnalysisAgent(BaseAgent):
                      error_msg += f"Extracted parse error: {extracted_parse_error}. "
                 error_msg += f"Raw content: {raw_content[:1000]}..."
                 print(f"[TextAgent] Returning error: {error_msg}")
-                return {
-                    "renovation_ideas": [],
-                    "error": error_msg
-                }
+                return { "renovation_ideas": [], "error": error_msg }
 
         except Exception as e:
             import traceback
             print(f"[TextAgent] General error in process: {str(e)}")
             print(f"[TextAgent] Traceback: {traceback.format_exc()}")
-            return {
-                "renovation_ideas": [],
-                "error": f"General TextAgent error: {str(e)}"
-            }
+            return { "renovation_ideas": [], "error": f"General TextAgent error: {str(e)}" }

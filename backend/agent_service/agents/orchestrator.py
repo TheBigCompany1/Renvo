@@ -12,7 +12,7 @@ class OrchestratorAgent:
     def __init__(self, api_key: str, model: str = None):
         if model is None:
             # Use your config variable; make sure your .env file has OPENAI_MODEL set.
-            model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo-0125")
+            model = os.getenv("OPENAI_MODEL", "gpt-4o")
         self.llm = ChatOpenAI(model_name=model, openai_api_key=api_key)
         self.text_agent = TextAnalysisAgent(self.llm)
         self.image_agent = ImageAnalysisAgent(self.llm)
@@ -127,6 +127,7 @@ class OrchestratorAgent:
             ]
         }
     
+# In backend/agent_service/agents/orchestrator.py
     def _compile_full_report(
         self, 
         property_data: Dict[str, Any], 
@@ -136,32 +137,31 @@ class OrchestratorAgent:
     ) -> Dict[str, Any]:
         """Compile the full detailed report from all agent outputs."""
         
-        # Get the final list of renovation ideas
         final_ideas = market_adjusted.get("market_adjusted_ideas", 
                       refined_ideas.get("refined_renovation_ideas",
                       initial_ideas.get("renovation_ideas", [])))
-
-        print(final_ideas)
         
-        # Additional suggestions from image analysis
         additional_suggestions = refined_ideas.get("additional_suggestions", [])
-        
-        # Market insights
         market_summary = market_adjusted.get("market_summary", "")
         
-        # Calculate totals
+        # --- START OF CHANGE ---
+        # Get the new comparable properties data
+        comparable_properties = market_adjusted.get("comparable_properties", [])
+        # --- END OF CHANGE ---
+
         total_budget_low = sum(idea.get("estimated_cost", {}).get("low", 0) for idea in final_ideas)
         total_budget_med = sum(idea.get("estimated_cost", {}).get("medium", 0) for idea in final_ideas)
         total_budget_high = sum(idea.get("estimated_cost", {}).get("high", 0) for idea in final_ideas)
-        
         total_value_low = sum(idea.get("estimated_value_add", {}).get("low", 0) for idea in final_ideas)
         total_value_med = sum(idea.get("estimated_value_add", {}).get("medium", 0) for idea in final_ideas)
         total_value_high = sum(idea.get("estimated_value_add", {}).get("high", 0) for idea in final_ideas)
         
-        # Alex ADDED: Build a nested "detailed_report" block with renovation data
         detailed_report = {
             "renovation_ideas": final_ideas,
             "additional_suggestions": additional_suggestions,
+            # --- START OF CHANGE ---
+            "comparable_properties": comparable_properties, # Add comps to the report
+            # --- END OF CHANGE ---
             "total_budget": {
                 "low": total_budget_low,
                 "medium": total_budget_med,
@@ -174,12 +174,10 @@ class OrchestratorAgent:
             },
             "average_roi": round(total_value_med / total_budget_med * 100, 1) if total_budget_med > 0 else 0
         }
-        # ---------------------------------------------------------------------------
         
-        # Alex ADDED: Return the final report with the scraped property data merged under "property"
         return {
-            "property": property_data,             # Contains the scraped data (address, price, etc.)
-            "detailed_report": detailed_report,      # Contains renovation ideas and metrics
+            "property": property_data,
+            "detailed_report": detailed_report,
             "market_summary": market_summary,
             "quick_insights": market_adjusted.get("quick_insights", {})
         }
