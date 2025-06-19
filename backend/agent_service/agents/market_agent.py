@@ -5,38 +5,46 @@ import asyncio
 import re
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
-
-# Import the new search tool
 from tools.search_tools import search_for_comparable_properties
 
-# A new Pydantic model to define the structure for a single comparable property
-class ComparableProperty(BaseModel):
-    address: str = Field(description="The full address of the comparable property.")
-    sale_price: float = Field(description="The final sale price of the property.")
-    brief_summary: str = Field(description="A brief one-sentence summary of the property (e.g., '3-bed, 2-bath, sold above asking').")
-    url: str = Field(description="The URL link to the property listing or sales record.")
-
 class MarketAnalysisAgent(BaseAgent):
-    """Agent for analyzing market trends and finding comparable properties."""
+    """Agent for analyzing market trends, now handling parallel tool calls."""
     
     PROMPT_TEMPLATE = """
-    You are a real estate investment expert for a development firm. Your analysis will focus on local market trends for the property at {address} and adjust these renovation ideas:
+    You are a real estate investment expert for a development firm. Your analysis will focus on local market trends for the property at {address} and adjust these ambitious renovation ideas:
 
-    Renovation Ideas: {renovation_json}
+    **IDEAS TO ANALYZE:**
+    {renovation_json}
 
     **YOUR TASKS:**
-    1.  **Find Real Comps**: Use the 'search_for_comparable_properties' tool to find 2-3 real, recently sold properties in the same area. This is mandatory for validating your analysis.
-    2.  **Market Research**: Based on the search results, analyze current market trends, property values, and buyer preferences.
-    3.  **Adjust Financials**: Adjust the `estimated_value_add` for each renovation idea based on the concrete data you found.
-    4.  **Accurate ROI Recalculation**: Recalculate the ROI for each idea and place it in the "adjusted_roi" key.
+    1.  **Find Real Comps**: Use the 'search_for_comparable_properties' tool to find 2-3 real, recently sold properties to validate the potential value of the primary property.
+    2.  **Rental Analysis**: For each renovation idea that creates a rentable unit (like an ADU or duplex), you MUST use the search tool to find the average monthly rent for a similar unit in that specific city or neighborhood.
+    3.  **Advanced Financials**: If you found rental data for an idea, you MUST calculate the Capitalization Rate (Cap Rate). Use this formula: Cap Rate = ( (Estimated Monthly Rent * 12) * 0.6 ) / (Medium Estimated Cost). (The 0.6 multiplier accounts for estimated expenses like taxes, insurance, and maintenance).
+    4.  **Adjust Financials**: Adjust the `estimated_value_add` for each idea based on the concrete data you found from comps and market trends.
+    5.  **Accurate ROI Recalculation**: Recalculate the `adjusted_roi` for every idea.
 
     **CRITICAL OUTPUT FORMAT:**
-    Return only a single JSON object. The "comparable_properties" key MUST be populated with data from your search tool.
+    Return only the JSON object below.
+    - The "comparable_properties" key MUST be populated.
+    - For rental projects, the "estimated_monthly_rent" and "capitalization_rate" keys MUST be populated. For non-rental projects, these keys can be omitted or set to null.
 
     JSON Format:
     {{
-        "market_adjusted_ideas": [ ... ],
-        "market_summary": "Overall analysis...",
+        "market_adjusted_ideas": [
+            {{
+                "name": "Renovation name",
+                "description": "Description with market context",
+                "estimated_cost": {{"low": 1000, "medium": 2000, "high": 3000}},
+                "estimated_value_add": {{"low": 2000, "medium": 3000, "high": 4000}},
+                "adjusted_roi": 50,
+                "market_demand": "High/Medium/Low",
+                "local_trends": "Specific market insights supporting or challenging this renovation.",
+                "buyer_profile": "Example buyer profile",
+                "estimated_monthly_rent": 1500,
+                "capitalization_rate": 6.5
+            }}
+        ],
+        "market_summary": "Overall analysis of the local market...",
         "comparable_properties": [
             {{
                 "address": "123 Main St, Santa Monica, CA 90405",
@@ -50,7 +58,6 @@ class MarketAnalysisAgent(BaseAgent):
     
     def __init__(self, llm):
         super().__init__(llm)
-        # Bind the search tool to the LLM for this agent
         self.llm_with_tools = self.llm.bind_tools([search_for_comparable_properties])
 
     async def process(self, address: str, renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
@@ -65,33 +72,39 @@ class MarketAnalysisAgent(BaseAgent):
                 renovation_json=renovation_json
             )
             
-            # --- TOOL-USE WORKFLOW ---
             print("[MarketAgent] Initial call to LLM with tools...")
             ai_msg = await asyncio.to_thread(self.llm_with_tools.invoke, prompt)
             
-            # Check if the AI wants to use a tool
-            if ai_msg.tool_calls:
-                print(f"[MarketAgent] LLM requested to use a tool: {ai_msg.tool_calls[0]['name']}")
-                tool_output = search_for_comparable_properties.invoke(ai_msg.tool_calls[0]['args'])
-                
-                # Call the LLM again, providing the tool's output
-                print("[MarketAgent] Calling LLM again with tool output...")
-                ai_msg.tool_calls[0]['output'] = tool_output
-                final_response = await asyncio.to_thread(self.llm_with_tools.invoke, [ai_msg])
-                response_content = final_response.content
-            else:
-                # If no tool was needed, use the initial response
+            tool_calls = getattr(ai_msg, 'tool_calls', []) or []
+
+            if not tool_calls:
                 print("[MarketAgent] No tool call requested by LLM.")
                 response_content = ai_msg.content
+            else:
+                print(f"[MarketAgent] LLM requested to use {len(tool_calls)} tool(s).")
+                tool_outputs = []
+                for tool_call in tool_calls:
+                    tool_name = tool_call.get("name")
+                    print(f"[MarketAgent] Executing tool: {tool_name} with args: {tool_call.get('args')}")
+                    if tool_name == "search_for_comparable_properties":
+                        output = search_for_comparable_properties.invoke(tool_call.get('args'))
+                        tool_outputs.append({
+                            "tool_call_id": tool_call['id'],
+                            "output": output,
+                        })
 
-            # --- PARSING LOGIC ---
+                ai_msg.tool_calls[0]['output'] = json.dumps(tool_outputs)
+
+                print("[MarketAgent] Calling LLM again with all tool outputs...")
+                final_response = await asyncio.to_thread(self.llm_with_tools.invoke, [ai_msg])
+                response_content = final_response.content
+
             raw_content = response_content.strip()
-            print(f"[MarketAgent] Raw LLM content (stripped): {raw_content[:500]}...")
+            print(f"[MarketAgent] Final raw LLM content: {raw_content[:500]}...")
             
             try:
                 result = json.loads(raw_content)
             except json.JSONDecodeError:
-                print("[MarketAgent] Direct JSON parsing failed. Trying to extract from markdown.")
                 json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL | re.IGNORECASE)
                 if json_match:
                     result = json.loads(json_match.group(1))
@@ -106,7 +119,8 @@ class MarketAnalysisAgent(BaseAgent):
             print(f"[MarketAgent] General error in process: {str(e)}")
             print(f"[MarketAgent] Traceback: {traceback.format_exc()}")
             return {
-                "market_adjusted_ideas": renovation_ideas.get("renovation_ideas", []),
-                "market_summary": "Market analysis could not be completed.",
+                "market_adjusted_ideas": [],
+                "market_summary": "Market analysis could not be completed due to a processing error.",
+                "comparable_properties": [],
                 "error": str(e)
             }
