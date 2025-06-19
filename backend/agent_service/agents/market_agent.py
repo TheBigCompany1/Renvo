@@ -1,15 +1,51 @@
 # backend/agent_service/agents/market_agent.py
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import json
 import asyncio
-import re  # <-- CORRECTED: Added the missing import statement
+import re
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
 from tools.search_tools import search_for_comparable_properties
 from langchain_core.messages import ToolMessage
 
+# --- START: Define the JSON Output Structure ---
+class Cost(BaseModel):
+    low: int
+    medium: int
+    high: int
+
+class ValueAdd(BaseModel):
+    low: int
+    medium: int
+    high: int
+
+class MarketAdjustedIdea(BaseModel):
+    name: str
+    description: str
+    estimated_cost: Cost
+    estimated_value_add: ValueAdd
+    adjusted_roi: float
+    market_demand: str
+    local_trends: str
+    buyer_profile: str
+    estimated_monthly_rent: Optional[int] = Field(None, description="The estimated monthly rent for new units.")
+    capitalization_rate: Optional[float] = Field(None, description="The calculated capitalization rate for rental projects.")
+
+class ComparableProperty(BaseModel):
+    address: str
+    sale_price: float
+    brief_summary: str
+    url: str
+
+class MarketAnalysisOutput(BaseModel):
+    """The final JSON object containing market-adjusted ideas and comps."""
+    market_adjusted_ideas: List[MarketAdjustedIdea]
+    market_summary: str
+    comparable_properties: List[ComparableProperty]
+# --- END: Define the JSON Output Structure ---
+
 class MarketAnalysisAgent(BaseAgent):
-    """Agent for analyzing market trends, now correctly handling parallel tool calls."""
+    """Agent for analyzing market trends with guaranteed JSON output."""
     
     PROMPT_TEMPLATE = """
     You are a real estate investment expert for a development firm. Your analysis will focus on local market trends for the property at {address} and adjust these ambitious renovation ideas:
@@ -20,58 +56,25 @@ class MarketAnalysisAgent(BaseAgent):
     **YOUR TASKS:**
     1.  **Find Real Comps**: Use the 'search_for_comparable_properties' tool to find 2-3 real, recently sold properties to validate the potential value of the primary property.
     2.  **Rental Analysis**: For each renovation idea that creates a rentable unit (like an ADU or duplex), you MUST use the search tool to find the average monthly rent for a similar unit in that specific city or neighborhood.
-    3.  **Advanced Financials**: If you found rental data for an idea, you MUST calculate the Capitalization Rate (Cap Rate). Use this formula: Cap Rate = ( (Estimated Monthly Rent * 12) * 0.6 ) / (Medium Estimated Cost). (The 0.6 multiplier accounts for estimated expenses like taxes, insurance, and maintenance).
+    3.  **Advanced Financials**: If you found rental data for an idea, you MUST calculate the Capitalization Rate (Cap Rate). Use this formula: Cap Rate = ( (Estimated Monthly Rent * 12) * 0.6 ) / (Medium Estimated Cost). (The 0.6 multiplier accounts for estimated expenses).
     4.  **Adjust Financials**: Adjust the `estimated_value_add` for each idea based on the concrete data you found from comps and market trends.
     5.  **Accurate ROI Recalculation**: Recalculate the `adjusted_roi` for every idea.
 
-    **CRITICAL OUTPUT FORMAT:**
-    Return only the JSON object below.
-    - The "comparable_properties" key MUST be populated.
-    - For rental projects, the "estimated_monthly_rent" and "capitalization_rate" keys MUST be populated. For non-rental projects, these keys can be omitted or set to null.
-
-    JSON Format:
-    {{
-        "market_adjusted_ideas": [
-            {{
-                "name": "Renovation name",
-                "description": "Description with market context",
-                "estimated_cost": {{"low": 1000, "medium": 2000, "high": 3000}},
-                "estimated_value_add": {{"low": 2000, "medium": 3000, "high": 4000}},
-                "adjusted_roi": 50,
-                "market_demand": "High/Medium/Low",
-                "local_trends": "Specific market insights supporting or challenging this renovation.",
-                "buyer_profile": "Example buyer profile",
-                "estimated_monthly_rent": 1500,
-                "capitalization_rate": 6.5
-            }}
-        ],
-        "market_summary": "Overall analysis of the local market...",
-        "comparable_properties": [
-            {{
-                "address": "123 Main St, Santa Monica, CA 90405",
-                "sale_price": 3850000,
-                "brief_summary": "3-bed, 2-bath, sold in 10 days.",
-                "url": "https://www.zillow.com/homedetails/..."
-            }}
-        ]
-    }}
+    After using your tools and analyzing the results, you MUST format your final response as a single, valid JSON object conforming to the required schema.
     """
     
     def __init__(self, llm):
         super().__init__(llm)
         self.llm_with_tools = self.llm.bind_tools([search_for_comparable_properties])
+        # This line forces the final output to match the MarketAnalysisOutput schema
+        self.structured_llm = self.llm.with_structured_output(MarketAnalysisOutput)
 
     async def process(self, address: str, renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze market trends and adjust renovation recommendations using tools."""
+        """Analyze market trends with guaranteed JSON output."""
         try:
             print("[MarketAgent] Process started.")
             renovation_json = json.dumps(renovation_ideas, indent=2)
-            
-            prompt = self._create_prompt(
-                self.PROMPT_TEMPLATE,
-                address=address,
-                renovation_json=renovation_json
-            )
+            prompt = self._create_prompt(self.PROMPT_TEMPLATE, address=address, renovation_json=renovation_json)
             
             print("[MarketAgent] Initial call to LLM with tools...")
             ai_msg = await asyncio.to_thread(self.llm_with_tools.invoke, prompt)
@@ -79,37 +82,24 @@ class MarketAnalysisAgent(BaseAgent):
             tool_calls = getattr(ai_msg, 'tool_calls', []) or []
 
             if not tool_calls:
-                print("[MarketAgent] No tool call requested by LLM.")
-                response_content = ai_msg.content
-            else:
-                print(f"[MarketAgent] LLM requested to use {len(tool_calls)} tool(s).")
-                tool_outputs = []
-                for tool_call in tool_calls:
-                    tool_name = tool_call.get("name")
-                    print(f"[MarketAgent] Executing tool: {tool_name} with args: {tool_call.get('args')}")
-                    if tool_name == "search_for_comparable_properties":
-                        output = search_for_comparable_properties.invoke(tool_call.get('args'))
-                        tool_outputs.append(ToolMessage(content=str(output), tool_call_id=tool_call['id']))
-                
-                print("[MarketAgent] Calling LLM again with all tool outputs...")
-                history = [ai_msg] + tool_outputs
-                final_response = await asyncio.to_thread(self.llm_with_tools.invoke, history)
-                response_content = final_response.content
+                print("[MarketAgent] No tool call requested. Forcing structured output on initial prompt.")
+                response = await asyncio.to_thread(self.structured_llm.invoke, prompt)
+                return response.dict()
 
-            raw_content = response_content.strip()
-            print(f"[MarketAgent] Final raw LLM content: {raw_content[:500]}...")
+            print(f"[MarketAgent] LLM requested to use {len(tool_calls)} tool(s).")
+            tool_outputs = []
+            for tool_call in tool_calls:
+                tool_name = tool_call.get("name")
+                print(f"[MarketAgent] Executing tool: {tool_name} with args: {tool_call.get('args')}")
+                output = search_for_comparable_properties.invoke(tool_call.get('args'))
+                tool_outputs.append(ToolMessage(content=str(output), tool_call_id=tool_call['id']))
             
-            try:
-                result = json.loads(raw_content)
-            except json.JSONDecodeError:
-                json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL | re.IGNORECASE)
-                if json_match:
-                    result = json.loads(json_match.group(1))
-                else:
-                    raise ValueError("Could not extract valid JSON from LLM response.")
+            print("[MarketAgent] Calling LLM again with all tool outputs and forcing JSON...")
+            history = [ai_msg] + tool_outputs
+            final_response = await asyncio.to_thread(self.structured_llm.invoke, history)
             
-            print("[MarketAgent] Process finished successfully.")
-            return result
+            print("[MarketAgent] Process finished successfully with structured output.")
+            return final_response.dict()
             
         except Exception as e:
             import traceback
