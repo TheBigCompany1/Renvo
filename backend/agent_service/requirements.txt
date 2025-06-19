@@ -1,25 +1,26 @@
 # requirements.txt
-fastapi>=0.100.0
-uvicorn>=0.22.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-openai>=1.0.0
-langchain>=0.0.267
-langchain-core
-langchain-openai
-langchain-community
-python-dotenv>=1.0.0
-asyncio
-aiohttp
-pylint
-pytest
-httpx
-python-multipart
-jinja2
-mangum
-gunicorn
+
+# Core web framework
 flask
+gunicorn
 flask-cors
-# Added for tool-based web search
+
+# LangChain - Modern packages
+langchain-community
+langchain-openai
 langchain-core
+
+# Pydantic for data validation
+pydantic
+
+# OpenAI client
+openai
+
+# Environment variables
+python-dotenv
+
+# HTTP client
+httpx
+
+# Search Tool
 tavily-python

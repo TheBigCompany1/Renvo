@@ -5,7 +5,7 @@ from agents.base import BaseAgent
 from agents.text_agent import TextAnalysisAgent
 from agents.image_agent import ImageAnalysisAgent
 from agents.market_agent import MarketAnalysisAgent
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 
 class OrchestratorAgent:
     """Coordinates the multi-agent system workflow."""

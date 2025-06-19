@@ -4,7 +4,7 @@ import json
 import asyncio
 import re
 from agents.base import BaseAgent
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 # Import the new search tool
 from tools.search_tools import search_for_comparable_properties
