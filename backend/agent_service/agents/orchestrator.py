@@ -1,6 +1,7 @@
 # agents/orchestrator.py
 from typing import Dict, Any, List, Optional
 import asyncio
+import os
 from agents.base import BaseAgent
 from agents.text_agent import TextAnalysisAgent
 from agents.image_agent import ImageAnalysisAgent
@@ -27,8 +28,6 @@ class OrchestratorAgent:
         quick_insights = self._format_quick_insights(renovation_ideas, property_data)
         return quick_insights
     
-    # In gemini/backend/agent_service/agents/orchestrator.py
-
     async def generate_full_report(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate a comprehensive renovation report using all agents with detailed logging."""
         print("--- generate_full_report started ---")
@@ -127,7 +126,6 @@ class OrchestratorAgent:
             ]
         }
     
-# In backend/agent_service/agents/orchestrator.py
     def _compile_full_report(
         self, 
         property_data: Dict[str, Any], 
@@ -144,10 +142,9 @@ class OrchestratorAgent:
         additional_suggestions = refined_ideas.get("additional_suggestions", [])
         market_summary = market_adjusted.get("market_summary", "")
         
-        # --- START OF CHANGE ---
-        # Get the new comparable properties data
+        # Get the new comparable properties and contractors data
         comparable_properties = market_adjusted.get("comparable_properties", [])
-        # --- END OF CHANGE ---
+        recommended_contractors = market_adjusted.get("recommended_contractors", [])
 
         total_budget_low = sum(idea.get("estimated_cost", {}).get("low", 0) for idea in final_ideas)
         total_budget_med = sum(idea.get("estimated_cost", {}).get("medium", 0) for idea in final_ideas)
@@ -159,9 +156,8 @@ class OrchestratorAgent:
         detailed_report = {
             "renovation_ideas": final_ideas,
             "additional_suggestions": additional_suggestions,
-            # --- START OF CHANGE ---
-            "comparable_properties": comparable_properties, # Add comps to the report
-            # --- END OF CHANGE ---
+            "comparable_properties": comparable_properties,
+            "recommended_contractors": recommended_contractors,
             "total_budget": {
                 "low": total_budget_low,
                 "medium": total_budget_med,

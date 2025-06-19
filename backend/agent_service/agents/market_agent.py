@@ -37,11 +37,18 @@ class ComparableProperty(BaseModel):
     brief_summary: str
     url: str
 
+class Contractor(BaseModel):
+    name: str
+    specialty: str
+    contact_info: str
+    url: Optional[str] = None
+
 class MarketAnalysisOutput(BaseModel):
     """The final JSON object containing market-adjusted ideas and comps."""
     market_adjusted_ideas: List[MarketAdjustedIdea]
     market_summary: str
     comparable_properties: List[ComparableProperty]
+    recommended_contractors: List[Contractor]
 # --- END: Define the JSON Output Structure ---
 
 class MarketAnalysisAgent(BaseAgent):
@@ -59,6 +66,7 @@ class MarketAnalysisAgent(BaseAgent):
     3.  **Advanced Financials**: If you found rental data for an idea, you MUST calculate the Capitalization Rate (Cap Rate). Use this formula: Cap Rate = ( (Estimated Monthly Rent * 12) * 0.6 ) / (Medium Estimated Cost). (The 0.6 multiplier accounts for estimated expenses).
     4.  **Adjust Financials**: Adjust the `estimated_value_add` for each idea based on the concrete data you found from comps and market trends.
     5.  **Accurate ROI Recalculation**: Recalculate the `adjusted_roi` for every idea.
+    6.  **Find Local Professionals**: For the top recommendation, use the search tool to find 2-3 top-rated local architects or general contractors. Provide their name, specialty, and a contact URL or phone number.
 
     After using your tools and analyzing the results, you MUST format your final response as a single, valid JSON object conforming to the required schema.
     """
@@ -109,5 +117,6 @@ class MarketAnalysisAgent(BaseAgent):
                 "market_adjusted_ideas": [],
                 "market_summary": "Market analysis could not be completed due to a processing error.",
                 "comparable_properties": [],
+                "recommended_contractors": [],
                 "error": str(e)
             }

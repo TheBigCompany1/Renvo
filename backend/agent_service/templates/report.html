@@ -32,7 +32,7 @@
         @media (max-width: 992px) { .grid-col-span-2 { grid-column: span 1; } }
         .card { background-color: var(--card-bg); border-radius: var(--border-radius); padding: 20px; box-shadow: var(--shadow); border: 1px solid var(--border-color); display: flex; flex-direction: column; margin-bottom: 30px; }
         .card h2, .card h3 { color: var(--primary-color); margin-bottom: 15px; border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; font-size: 1.3em; font-weight: 600; }
-        .card h3 { font-size: 1.1em; margin-top: 15px; margin-bottom: 10px; border-bottom: 1px solid #eee; }
+        .card h3 { font-size: 1.1em; margin-top: 15px; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
         .card p { margin-bottom: 10px; font-size: 0.9em; }
         .card p:last-child { margin-bottom: 0; }
         .property-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
@@ -66,12 +66,12 @@
         .new-report-button { position: absolute; top: 25px; right: 25px; background-color: var(--accent-color); color: white; text-decoration: none; padding: 10px 15px; border-radius: var(--border-radius); font-weight: 600; font-size: 0.9em; box-shadow: var(--shadow); transition: transform 0.2s ease; }
         .new-report-button:hover { transform: translateY(-2px); }
 
-        /* --- NEW STYLES FOR ACTION PLAN --- */
-        .comparables-section { background-color: #fff; padding: 25px; margin-bottom: 30px; border-radius: var(--border-radius); box-shadow: var(--shadow); }
-        .comparables-section h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 10px; margin-bottom: 20px; font-size: 1.5em; color: var(--primary-color); }
-        .comparables-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        .comparables-table th, .comparables-table td { padding: 12px; border-bottom: 1px solid #dee2e6; text-align: left; }
-        .comparables-table th { background-color: #f8f9fa; font-weight: 600; }
+        /* --- STYLES FOR ACTIONABLE SECTIONS --- */
+        .comparables-section, .contractors-section { background-color: #fff; padding: 25px; margin-bottom: 30px; border-radius: var(--border-radius); box-shadow: var(--shadow); }
+        .comparables-section h3, .contractors-section h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 10px; margin-bottom: 20px; font-size: 1.5em; color: var(--primary-color); }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .data-table th, .data-table td { padding: 12px; border-bottom: 1px solid #dee2e6; text-align: left; }
+        .data-table th { background-color: #f8f9fa; font-weight: 600; }
         .action-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 20px; }
         .action-plan-grid h4 { margin-bottom: 10px; font-size: 1.1em; color: #495057; border-bottom: 1px solid #eee; padding-bottom: 5px; }
         .action-plan-grid ul, .action-plan-grid ol { padding-left: 20px; }
@@ -129,10 +129,15 @@
                         <h4>Financial Analysis</h4>
                             <ul>
                                 <li><strong>Est. Medium Cost:</strong> ${{ "{:,.0f}".format(idea.estimated_cost.medium) }}</li>
-                                {# Add this line below to show the cost source #}
                                 {% if idea.cost_source %}<li style="font-size: 0.8em; color: #6c757d;"><em>Source: {{ idea.cost_source }}</em></li>{% endif %}
                                 <li><strong>Est. Value Add:</strong> ${{ "{:,.0f}".format(idea.estimated_value_add.medium) }}</li>
                                 <li><strong>Est. Net Profit:</strong> ${{ "{:,.0f}".format(idea.estimated_value_add.medium - idea.estimated_cost.medium) }}</li>
+                                {% if idea.estimated_monthly_rent %}
+                                <li><strong>Est. Monthly Rent:</strong> ${{ "{:,.0f}".format(idea.estimated_monthly_rent) }}</li>
+                                {% endif %}
+                                {% if idea.capitalization_rate %}
+                                <li><strong>Capitalization Rate:</strong> {{ "%.2f"|format(idea.capitalization_rate * 100) }}%</li>
+                                {% endif %}
                             </ul>
                     </div>
                     <div class="timeline-feasibility">
@@ -168,7 +173,7 @@
             <h3>Local Market Comparables</h3>
             <p>We've analyzed recently sold properties in the area to provide real-world data for our value projections.</p>
             {% if report.detailed_report.comparable_properties %}
-            <table class="comparables-table">
+            <table class="data-table">
                 <thead>
                     <tr>
                         <th>Address</th>
@@ -180,7 +185,7 @@
                     {% for comp in report.detailed_report.comparable_properties %}
                     <tr>
                         <td><a href="{{ comp.url }}" target="_blank" rel="noopener noreferrer">{{ comp.address }}</a></td>
-                        <td>${ "{:,.0f}".format(comp.sale_price) }</td>
+                        <td>${{ "{:,.0f}".format(comp.sale_price) }}</td>
                         <td>{{ comp.brief_summary }}</td>
                     </tr>
                     {% endfor %}
@@ -191,13 +196,41 @@
             {% endif %}
         </section>
 
-        <section class="card">
-            <h2>Next Steps & Contractor Recommendations</h2>
-            <p>Finding reliable contractors is key...</p>
+        <section class="contractors-section">
+            <h3>Next Steps & Recommended Professionals</h3>
+            <p>Finding reliable contractors and designers is key to a successful project. Based on your top renovation opportunity, we recommend contacting the following local professionals.</p>
+             {% if report.detailed_report.recommended_contractors %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Specialty</th>
+                        <th>Contact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pro in report.detailed_report.recommended_contractors %}
+                    <tr>
+                        <td>
+                            {% if pro.url %}
+                                <a href="{{ pro.url }}" target="_blank" rel="noopener noreferrer">{{ pro.name }}</a>
+                            {% else %}
+                                {{ pro.name }}
+                            {% endif %}
+                        </td>
+                        <td>{{ pro.specialty }}</td>
+                        <td>{{ pro.contact_info }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p><i>Recommended professionals could not be retrieved for this analysis.</i></p>
+            {% endif %}
         </section>
 
         <footer>
-            Disclaimer: ...
+            Disclaimer: This report is generated based on available public data and AI analysis using estimated costs and projected value increases derived from market data. Estimates are for informational purposes only and are not a guarantee of future value or costs. Verify all information and consult with qualified professionals before making financial decisions.
         </footer>
     </div>
 
