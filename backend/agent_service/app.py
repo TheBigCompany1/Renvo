@@ -1,4 +1,4 @@
-# app.py - With ROI Sorting
+# app.py - With ROI Sorting & DEBUG LOGGING
 
 from flask import Flask, request, jsonify, render_template, abort
 from agents.orchestrator import OrchestratorAgent
@@ -8,6 +8,7 @@ import os
 import datetime
 import traceback
 import re # Import re for cleaning price strings
+import json # Import json for pretty printing
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -128,6 +129,14 @@ def report():
     report_data = report_storage.get(report_id)
     report_status = report_data.get("status", "unknown")
     print(f"Report '{report_id}' status: {report_status}")
+    
+    # =================================================================
+    # DEBUGGING LOG: PRINT THE DATA SENT TO THE TEMPLATE
+    # =================================================================
+    print("\n--- DEBUG: Data being sent to report.html template ---")
+    print(json.dumps(report_data, indent=2, default=str)) # Use json.dumps for pretty printing
+    print("--- END DEBUG ---\n")
+    # =================================================================
 
     if report_status == "failed":
          error_message = report_data.get('error', 'Unknown error')

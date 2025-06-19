@@ -66,7 +66,7 @@ class MarketAnalysisAgent(BaseAgent):
     3.  **Advanced Financials**: If you found rental data for an idea, you MUST calculate the Capitalization Rate (Cap Rate). Use this formula: Cap Rate = ( (Estimated Monthly Rent * 12) * 0.6 ) / (Medium Estimated Cost). (The 0.6 multiplier accounts for estimated expenses).
     4.  **Adjust Financials**: Adjust the `estimated_value_add` for each idea based on the concrete data you found from comps and market trends.
     5.  **Accurate ROI Recalculation**: Recalculate the `adjusted_roi` for every idea.
-    6.  **Find Local Professionals**: For the top recommendation, use the search tool to find 2-3 top-rated local architects or general contractors. Provide their name, specialty, and a contact URL or phone number.
+    6.  **Find Local Professionals**: For the top recommendation, use the search tool to find 2-3 top-rated architects or general contractors in the same city or metro area as the property at "{address}". Provide their name, specialty, and a contact URL or phone number.
 
     After using your tools and analyzing the results, you MUST format your final response as a single, valid JSON object conforming to the required schema.
     """

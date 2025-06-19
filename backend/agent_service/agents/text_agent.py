@@ -53,8 +53,8 @@ class TextAnalysisAgent(BaseAgent):
     1.  **Generate Big Ideas**: Create 3-5 transformative, large-scale project recommendations (e.g., ADU, duplex conversion, demolish and rebuild). Do not suggest minor cosmetic upgrades.
     2.  **Research Local Costs**: For EACH idea, you MUST use the `search_for_comparable_properties` tool to find localized construction costs. Example search query: "average cost to build an ADU in Los Angeles County".
     3.  **Provide Sourced Estimates**: Use the search results to provide an accurate `estimated_cost`. You MUST also add a `cost_source` key citing the source of your cost data.
-    4.  **Actionable Steps & Risks**: For each idea, create a `roadmap_steps` list with 3-5 key actions the user should take to start the project (e.g., "Consult an architect specializing in local code," "Secure financing via a HELOC or construction loan.").
-    5.  **Identify Risks**: For each idea, create a `potential_risks` list identifying 2-3 potential hurdles (e.g., "Permitting delays in this city are common," "Budget may increase due to foundation issues in older homes.").
+    4.  **Actionable Steps & Risks**: For each idea, create a `roadmap_steps` list with 3-5 key actions the user should take to start the project (e.g., "Consult an architect specializing in local code," "Secure financing via a HELOC or construction loan."). It is critical that you populate this list for every idea.
+    5.  **Identify Risks**: For each idea, create a `potential_risks` list identifying 2-3 potential hurdles (e.g., "Permitting delays in this city are common," "Budget may increase due to foundation issues in older homes."). It is critical that you populate this list for every idea.
     6.  **Ensure Financial Accuracy**: Calculate the ROI precisely using the formula: ((medium value add - medium cost) / medium cost) * 100.
 
     After using your tools and analyzing the results, you MUST format your final response as a single, valid JSON object conforming to the required schema. Your output MUST NOT contain any other text, greetings, or markdown formatting. It must start with '{{' and end with '}}'.
