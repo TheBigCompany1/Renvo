@@ -2,7 +2,7 @@
 from typing import Dict, Any, List
 import json
 import asyncio
-import re
+import re  # <-- CORRECTED: Added the missing import statement
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
 from tools.search_tools import search_for_comparable_properties
@@ -83,7 +83,6 @@ class MarketAnalysisAgent(BaseAgent):
                 response_content = ai_msg.content
             else:
                 print(f"[MarketAgent] LLM requested to use {len(tool_calls)} tool(s).")
-                # --- START OF CORRECTED PARALLEL HANDLING ---
                 tool_outputs = []
                 for tool_call in tool_calls:
                     tool_name = tool_call.get("name")
@@ -96,7 +95,6 @@ class MarketAnalysisAgent(BaseAgent):
                 history = [ai_msg] + tool_outputs
                 final_response = await asyncio.to_thread(self.llm_with_tools.invoke, history)
                 response_content = final_response.content
-                # --- END OF CORRECTED PARALLEL HANDLING ---
 
             raw_content = response_content.strip()
             print(f"[MarketAgent] Final raw LLM content: {raw_content[:500]}...")

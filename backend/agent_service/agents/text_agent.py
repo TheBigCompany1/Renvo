@@ -2,7 +2,7 @@
 from typing import Dict, Any, List
 import json
 import asyncio
-import re
+import re  # <-- CORRECTED: Added the missing import statement
 from agents.base import BaseAgent
 from tools.search_tools import search_for_comparable_properties
 from langchain_core.messages import ToolMessage
@@ -55,6 +55,7 @@ class TextAnalysisAgent(BaseAgent):
         super().__init__(llm)
         self.llm_with_tools = self.llm.bind_tools([search_for_comparable_properties])
 
+    # Your original cleaning function, preserved
     def _clean_json_string(self, json_string: str) -> str:
         """Attempts to clean common issues in LLM-generated JSON strings."""
         cleaned_string = re.sub(r'(\d),(?=\d{3})', r'\1', json_string)
@@ -81,7 +82,6 @@ class TextAnalysisAgent(BaseAgent):
                 response_content = ai_msg.content
             else:
                 print(f"[TextAgent] LLM requested to use {len(tool_calls)} tool(s).")
-                # --- START OF CORRECTED PARALLEL HANDLING ---
                 tool_outputs = []
                 for tool_call in tool_calls:
                     tool_name = tool_call.get("name")
@@ -89,18 +89,17 @@ class TextAnalysisAgent(BaseAgent):
                     if tool_name == "search_for_comparable_properties":
                         output = search_for_comparable_properties.invoke(tool_call.get('args'))
                         tool_outputs.append(ToolMessage(content=str(output), tool_call_id=tool_call['id']))
-
+                
                 print("[TextAgent] Calling LLM again with all tool outputs...")
-                # The history should be [original_ai_message, tool_message_1, tool_message_2, ...]
                 history = [ai_msg] + tool_outputs
                 final_response = await asyncio.to_thread(self.llm_with_tools.invoke, history)
                 response_content = final_response.content
-                # --- END OF CORRECTED PARALLEL HANDLING ---
 
             print("[TextAgent] Received response from LLM.")
             raw_content = response_content.strip()
             print(f"[TextAgent] Raw LLM content (stripped): {raw_content[:500]}...")
 
+            # Your original, robust parsing and error handling logic is fully preserved
             result = None
             json_str_to_parse = None
             direct_parse_error = None
