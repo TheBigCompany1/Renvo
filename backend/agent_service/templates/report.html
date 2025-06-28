@@ -74,7 +74,7 @@
             <h1>Renovation ROI Report</h1>
             <p><strong>Property:</strong> {{ report.property.address if report.property else 'N/A' }}</p>
             <p><strong>Report ID:</strong> {{ report.report_id }} | <strong>Generated:</strong> {{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else 'N/A' }}</p>
-            <a href="/" class="new-report-button">Generate New Report</a>
+            <a href="https://renvo.ai" class="new-report-button">Generate New Report</a>
         </header>
 
         <section class="card">
@@ -89,7 +89,7 @@
                             </div>
                             {% endfor %}
                         {% else %}
-                             <div class="carousel-item" style="display:flex; align-items:center; justify-content:center;">No Images Available</div>
+                             <div class="carousel-item" style="display:flex; align-items:center; justify-content:center; color: var(--text-muted);">No Images Available</div>
                         {% endif %}
                     </div>
                 </div>
@@ -110,6 +110,22 @@
                         <div class="stat">
                             <span class="value">{{ "{:,.0f}".format(report.property.sqft) if report.property.sqft else 'N/A' }}</span>
                             <span class="label">Sq. Ft.</span>
+                        </div>
+                        <div class="stat">
+                            <span class="value">{{ report.property.yearBuilt if report.property.yearBuilt else 'N/A' }}</span>
+                            <span class="label">Year Built</span>
+                        </div>
+                        <div class="stat">
+                            <span class="value">{{ report.property.lotSize if report.property.lotSize else 'N/A' }}</span>
+                            <span class="label">Lot Size</span>
+                        </div>
+                        <div class="stat">
+                            <span class="value">{{ report.property.homeType if report.property.homeType else 'N/A' }}</span>
+                            <span class="label">Type</span>
+                        </div>
+                        <div class="stat">
+                            <span class="value">{{ report.property.daysOnMarket if report.property.daysOnMarket is not none else 'N/A' }}</span>
+                            <span class="label">Days on Market</span>
                         </div>
                     </div>
                 </div>
@@ -137,7 +153,7 @@
                 <div class="card renovation-card">
                     <div class="renovation-header">
                         <h3>{{ loop.index }}. {{ idea.name }}</h3>
-                        <span class="roi-badge">Est. ROI: {{ idea.get('adjusted_roi') | round(1) }}%</span>
+                        <span class="roi-badge">Est. ROI: {{ idea.get('adjusted_roi', idea.get('roi')) | round(1) }}%</span>
                     </div>
                     <p class="renovation-description">{{ idea.description }}</p>
 
@@ -161,15 +177,15 @@
                         <div class="timeline-feasibility">
                             <h4>Project Details</h4>
                             <ul>
-                                <li><strong>Feasibility:</strong> {{ idea.feasibility }}</li>
-                                <li><strong>Est. Timeline:</strong> {{ idea.timeline }}</li>
-                                <li><strong>Ideal Buyer:</strong> {{ idea.buyer_profile }}</li>
+                                <li><strong>Feasibility:</strong> {{ idea.feasibility or 'N/A' }}</li>
+                                <li><strong>Est. Timeline:</strong> {{ idea.timeline or 'N/A' }}</li>
+                                <li><strong>Ideal Buyer:</strong> {{ idea.buyer_profile or 'N/A' }}</li>
                             </ul>
                         </div>
                         <div class="roadmap">
                             <h4>Project Roadmap</h4>
                             <ol>
-                                {% for step in idea.get('roadmap_steps', []) %}
+                                {% for step in idea.roadmap_steps %}
                                 <li>{{ step }}</li>
                                 {% else %}
                                 <li>Roadmap steps not generated.</li>
@@ -179,7 +195,7 @@
                         <div class="risks">
                             <h4>Potential Risks</h4>
                             <ul>
-                                {% for risk in idea.get('potential_risks', []) %}
+                                {% for risk in idea.potential_risks %}
                                 <li>{{ risk }}</li>
                                 {% else %}
                                 <li>Potential risks not generated.</li>
@@ -264,29 +280,14 @@
             let renovationIdeas = [];
     
             try {
-                // This is the line the linter dislikes. We wrap it in a try-catch
-                // block and assign it to a temporary variable first.
                 const rawData = {{ report.detailed_report.renovation_ideas | tojson | safe if report.detailed_report and report.detailed_report.renovation_ideas else '[]' }};
                 
-                // Ensure the parsed data is an array before assigning it
                 if (Array.isArray(rawData)) {
                     renovationIdeas = rawData;
                 }
             } catch (e) {
                 console.error("Could not parse renovation ideas data from backend:", e);
-                // If parsing fails, renovationIdeas remains an empty array,
-                // which prevents further errors in the chart logic.
             }
-    
-            // --- Image Carousel Logic (No Changes) ---
-            const carousel = document.querySelector('.image-carousel-container');
-            if (carousel) {
-               // (Your existing carousel logic remains here)
-            }
-    
-            // --- Chart Initialization (Now safer) ---
-            // The rest of your chart code can now safely use the `renovationIdeas` variable,
-            // knowing it will always be an array.
     
             // ROI Chart
             const roiCtx = document.getElementById('roiChart')?.getContext('2d');
@@ -297,7 +298,7 @@
                         labels: renovationIdeas.map(idea => idea.name),
                         datasets: [{
                             label: 'Estimated ROI (%)',
-                            data: renovationIdeas.map(idea => idea.adjusted_roi),
+                            data: renovationIdeas.map(idea => idea.adjusted_roi || idea.roi),
                             backgroundColor: 'rgba(244, 162, 97, 0.7)',
                         }]
                     },

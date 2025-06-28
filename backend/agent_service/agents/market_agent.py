@@ -20,16 +20,27 @@ class ValueAdd(BaseModel):
     high: int
 
 class MarketAdjustedIdea(BaseModel):
-    name: str
-    description: str
-    estimated_cost: Cost
-    estimated_value_add: ValueAdd
-    adjusted_roi: float
-    market_demand: str
-    local_trends: str
-    buyer_profile: str
-    estimated_monthly_rent: Optional[int] = Field(None, description="The estimated monthly rent for new units.")
-    capitalization_rate: Optional[float] = Field(None, description="The calculated capitalization rate for rental projects.")
+    # --- This is the key change to prevent data loss ---
+    name: str = Field(description="The name of the renovation idea, preserved from the initial analysis.")
+    description: str = Field(description="The detailed description of the project, preserved from the initial analysis.")
+    estimated_cost: Cost = Field(description="The cost estimates, preserved from the initial analysis.")
+    cost_source: str = Field(description="The cost source, preserved from the initial analysis.")
+    estimated_value_add: ValueAdd # This will be adjusted by the market agent
+    roi: float = Field(description="The original ROI calculation, preserved for reference.")
+    feasibility: str = Field(description="The feasibility assessment, preserved from the initial analysis.")
+    timeline: str = Field(description="The project timeline, preserved from the initial analysis.")
+    buyer_profile: str = Field(description="The ideal buyer profile, preserved and potentially refined by market analysis.")
+    roadmap_steps: List[str] = Field(description="The project roadmap, preserved from the initial analysis.")
+    potential_risks: List[str] = Field(description="The potential risks, preserved from the initial analysis.")
+    # --- End of preserved fields ---
+    
+    # --- Fields to be added or modified by this agent ---
+    adjusted_roi: float = Field(description="The ROI recalculated based on market-adjusted value add.")
+    market_demand: str = Field(description="The current market demand for this type of project.")
+    local_trends: str = Field(description="Specific local market trends relevant to the project.")
+    estimated_monthly_rent: Optional[int] = Field(None, description="The estimated monthly rent for new units, if applicable.")
+    capitalization_rate: Optional[float] = Field(None, description="The calculated capitalization rate for rental projects, if applicable.")
+
 
 class ComparableProperty(BaseModel):
     address: str
@@ -44,7 +55,7 @@ class Contractor(BaseModel):
     url: Optional[str] = None
 
 class MarketAnalysisOutput(BaseModel):
-    """The final JSON object containing market-adjusted ideas and comps."""
+    """The final JSON object containing market-adjusted ideas, comps, and contractors."""
     market_adjusted_ideas: List[MarketAdjustedIdea]
     market_summary: str
     comparable_properties: List[ComparableProperty]
@@ -55,26 +66,26 @@ class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing market trends with guaranteed JSON output."""
     
     PROMPT_TEMPLATE = """
-    You are a real estate investment expert for a development firm. Your analysis will focus on local market trends for the property at {address} and adjust these ambitious renovation ideas:
+    You are a real estate investment expert. Your task is to analyze renovation ideas based on local market data for the property at {address}.
 
     **IDEAS TO ANALYZE:**
     {renovation_json}
 
     **YOUR TASKS:**
-    1.  **Find Real Comps**: Use the 'search_for_comparable_properties' tool to find 2-3 real, recently sold properties to validate the potential value of the primary property.
-    2.  **Rental Analysis**: For each renovation idea that creates a rentable unit (like an ADU or duplex), you MUST use the search tool to find the average monthly rent for a similar unit in that specific city or neighborhood.
-    3.  **Advanced Financials**: If you found rental data for an idea, you MUST calculate the Capitalization Rate (Cap Rate). Use this formula: Cap Rate = ( (Estimated Monthly Rent * 12) * 0.6 ) / (Medium Estimated Cost). (The 0.6 multiplier accounts for estimated expenses).
-    4.  **Adjust Financials**: Adjust the `estimated_value_add` for each idea based on the concrete data you found from comps and market trends.
-    5.  **Accurate ROI Recalculation**: Recalculate the `adjusted_roi` for every idea.
-    6.  **Find Local Professionals**: For the top recommendation, use the search tool to find 2-3 top-rated architects or general contractors in the same city or metro area as the property at "{address}". Provide their name, specialty, and a contact URL or phone number.
+    1.  **Preserve Original Data**: First, ensure that all original fields from the ideas above (`name`, `description`, `estimated_cost`, `cost_source`, `roi`, `feasibility`, `timeline`, `buyer_profile`, `roadmap_steps`, `potential_risks`) are preserved in your final output.
+    2.  **Find Real Comps**: Use the 'search_for_comparable_properties' tool to find 2-3 real, recently sold properties to validate potential value.
+    3.  **Rental Analysis**: For any idea creating a rentable unit (ADU, duplex), use the search tool to find the average monthly rent in that specific city or neighborhood.
+    4.  **Advanced Financials**: If you found rental data, calculate the Capitalization Rate (Cap Rate) using the formula: `Cap Rate = ((Monthly Rent * 12) * 0.6) / Medium Estimated Cost`.
+    5.  **Adjust Financials**: Adjust the `estimated_value_add` based on your research of local comps.
+    6.  **Recalculate ROI**: Recalculate the ROI and place it in the `adjusted_roi` key. Use the formula: `((Adjusted Medium Value Add - Medium Cost) / Medium Cost) * 100`.
+    7.  **Find Local Professionals**: For the top recommendation, use the search tool to find 2-3 top-rated architects or general contractors in the same city as the property at "{address}".
 
-    After using your tools and analyzing the results, you MUST format your final response as a single, valid JSON object conforming to the required schema.
+    After your analysis, you MUST format your final response as a single, valid JSON object conforming to the required schema.
     """
     
     def __init__(self, llm):
         super().__init__(llm)
         self.llm_with_tools = self.llm.bind_tools([search_for_comparable_properties])
-        # This line forces the final output to match the MarketAnalysisOutput schema
         self.structured_llm = self.llm.with_structured_output(MarketAnalysisOutput)
 
     async def process(self, address: str, renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
