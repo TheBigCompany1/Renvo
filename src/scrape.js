@@ -174,7 +174,6 @@ function extractRedfinData() {
        }
        console.log(`[Scrape.js] Description from HTML: ${data.description ? 'Found' : 'Not Found'}`);
 
-
       // Key Details Table (Year, Lot, Type, DOM, Price/SqFt, Parking) - RELIABLE FALLBACK
        document.querySelectorAll('.KeyDetailsTable .keyDetails-row').forEach(row => {
           const valueElement = row.querySelector('.keyDetails-value');
@@ -192,6 +191,20 @@ function extractRedfinData() {
           }
       });
        console.log(`[Scrape.js] After HTML Key Details - Year: ${data.yearBuilt}, Lot: ${data.lotSize}, Type: ${data.homeType}, DOM: ${data.daysOnMarket}, Price/SqFt: ${data.estimatePerSqft}, Parking: ${data.parkingFeatures.details}`);
+      
+       // --- START: NEW Price Per SqFt Scraping (with Logging) ---
+       console.log("[Scrape.js] 4b. Scraping Price Per SqFt...");
+       const pricePerSqFtSelector = '.price-per-sqft .value';
+       const pricePerSqFtElement = document.querySelector(pricePerSqFtSelector);
+       if (pricePerSqFtElement) {
+           const rawValue = pricePerSqFtElement.textContent;
+           console.log(`[Scrape.js LOG] Found raw Price/SqFt value: '${rawValue}'`);
+           data.estimatePerSqft = safeParseInt(rawValue);
+           console.log(`[Scrape.js LOG] Parsed Price/SqFt: ${data.estimatePerSqft}`);
+       } else {
+           console.log("[Scrape.js LOG] Price/SqFt element not found.");
+       }
+       // --- END: NEW Price Per SqFt Scraping ---
 
        // Agent/Brokerage HTML Fallback (Also reliable)
        if (!data.listingAgent) data.listingAgent = document.querySelector('.listing-agent-item .agent-basic-details--heading span')?.textContent?.trim();
@@ -214,6 +227,34 @@ function extractRedfinData() {
       // --- Skipping complex HTML fallbacks for History/Features/Schools for v10 ---
        console.log("[Scrape.js] Skipping complex HTML fallbacks for v10 stability.");
 
+       // --- START: NEW Price History Scraping (with Enhanced Logging) ---
+      console.log("[Scrape.js] 4a. Scraping Price History...");
+      const historyTable = document.querySelector('[data-rf-test-id="property-history-table"]');
+      if (historyTable) {
+          const historyRows = historyTable.querySelectorAll('tbody tr');
+          console.log(`[Scrape.js LOG] Found ${historyRows.length} rows in the price history table.`);
+          historyRows.forEach((row, index) => {
+              const cells = row.querySelectorAll('td');
+              if (cells.length >= 3) {
+                  const eventData = {
+                      date: cells[0]?.textContent.trim(),
+                      event: cells[1]?.textContent.trim(),
+                      price: safeParseInt(cells[2]?.textContent.trim())
+                  };
+                  // Log the data from each row
+                  console.log(`[Scrape.js LOG] Row ${index + 1}: Date='${eventData.date}', Event='${eventData.event}', Price=${eventData.price}`);
+                  
+                  // Only add rows that have a valid date and price
+                  if (eventData.date && eventData.price) {
+                      data.priceHistory.push(eventData);
+                  }
+              }
+          });
+          console.log(`[Scrape.js LOG] Successfully added ${data.priceHistory.length} valid events to priceHistory.`);
+      } else {
+          console.log("[Scrape.js LOG] Price history table not found.");
+      }
+      // --- END: NEW Price History Scraping ---
 
       // --- 5. Final Data Cleaning ---
       console.log("[Scrape.js] 5. Final Cleaning...");
