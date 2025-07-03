@@ -192,17 +192,22 @@ function extractRedfinData() {
       });
        console.log(`[Scrape.js] After HTML Key Details - Year: ${data.yearBuilt}, Lot: ${data.lotSize}, Type: ${data.homeType}, DOM: ${data.daysOnMarket}, Price/SqFt: ${data.estimatePerSqft}, Parking: ${data.parkingFeatures.details}`);
       
-       // --- START: NEW Price Per SqFt Scraping (with Logging) ---
+       // --- START: NEW Price Per SqFt Scraping ---
        console.log("[Scrape.js] 4b. Scraping Price Per SqFt...");
-       const pricePerSqFtSelector = '.price-per-sqft .value';
-       const pricePerSqFtElement = document.querySelector(pricePerSqFtSelector);
-       if (pricePerSqFtElement) {
-           const rawValue = pricePerSqFtElement.textContent;
-           console.log(`[Scrape.js LOG] Found raw Price/SqFt value: '${rawValue}'`);
-           data.estimatePerSqft = safeParseInt(rawValue);
-           console.log(`[Scrape.js LOG] Parsed Price/SqFt: ${data.estimatePerSqft}`);
+       const statsPanel = document.querySelector('.stats-panel');
+       if (statsPanel) {
+           const statsRows = statsPanel.querySelectorAll('.stats-row');
+           statsRows.forEach(row => {
+               const label = row.querySelector('.stats-label')?.textContent;
+               if (label && label.toLowerCase().includes('price per sq ft')) {
+                   const value = row.querySelector('.stats-value')?.textContent;
+                   console.log(`[Scrape.js LOG] Found raw Price/SqFt value: '${value}'`);
+                   data.estimatePerSqft = safeParseInt(value);
+                   console.log(`[Scrape.js LOG] Parsed Price/SqFt: ${data.estimatePerSqft}`);
+               }
+           });
        } else {
-           console.log("[Scrape.js LOG] Price/SqFt element not found.");
+           console.log("[Scrape.js LOG] Stats panel for Price/SqFt not found.");
        }
        // --- END: NEW Price Per SqFt Scraping ---
 
@@ -227,9 +232,9 @@ function extractRedfinData() {
       // --- Skipping complex HTML fallbacks for History/Features/Schools for v10 ---
        console.log("[Scrape.js] Skipping complex HTML fallbacks for v10 stability.");
 
-       // --- START: NEW Price History Scraping (with Enhanced Logging) ---
+       // --- START: NEW Price History Scraping ---
       console.log("[Scrape.js] 4a. Scraping Price History...");
-      const historyTable = document.querySelector('[data-rf-test-id="property-history-table"]');
+      const historyTable = document.querySelector('.PropertyHistory--content');
       if (historyTable) {
           const historyRows = historyTable.querySelectorAll('tbody tr');
           console.log(`[Scrape.js LOG] Found ${historyRows.length} rows in the price history table.`);
@@ -241,10 +246,7 @@ function extractRedfinData() {
                       event: cells[1]?.textContent.trim(),
                       price: safeParseInt(cells[2]?.textContent.trim())
                   };
-                  // Log the data from each row
-                  console.log(`[Scrape.js LOG] Row ${index + 1}: Date='${eventData.date}', Event='${eventData.event}', Price=${eventData.price}`);
-                  
-                  // Only add rows that have a valid date and price
+                  console.log(`[Scrape.js LOG] History Row ${index + 1}: Date='${eventData.date}', Event='${eventData.event}', Price=${eventData.price}`);
                   if (eventData.date && eventData.price) {
                       data.priceHistory.push(eventData);
                   }
