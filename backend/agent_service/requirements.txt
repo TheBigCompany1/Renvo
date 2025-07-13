@@ -9,6 +9,7 @@ flask-cors
 langchain-community
 langchain-openai
 langchain-core
+langchain-google-genai
 
 # Pydantic for data validation
 pydantic
