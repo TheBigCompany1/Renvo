@@ -23,4 +23,4 @@ python-dotenv
 httpx
 
 # Search Tool
-tavily-python
+google-generativeai

@@ -5,8 +5,9 @@ import asyncio
 import re
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
-from tools.search_tools import search_for_comparable_properties
 from langchain_core.messages import ToolMessage
+import google.generativeai as genai
+from core.config import get_settings
 
 # --- START: Define the JSON Output Structure ---
 class Cost(BaseModel):
@@ -20,22 +21,21 @@ class ValueAdd(BaseModel):
     high: int
 
 class MarketAdjustedIdea(BaseModel):
-    # --- This is the key change to prevent data loss ---
     name: str = Field(description="The name of the renovation idea, preserved from the initial analysis.")
     description: str = Field(description="The detailed description of the project, preserved from the initial analysis.")
     estimated_cost: Cost = Field(description="The cost estimates, preserved from the initial analysis.")
     cost_source: str = Field(description="The cost source, preserved from the initial analysis.")
-    estimated_value_add: ValueAdd # This will be adjusted by the market agent
+    estimated_value_add: ValueAdd
     roi: float = Field(description="The original ROI calculation, preserved for reference.")
     feasibility: str = Field(description="The feasibility assessment, preserved from the initial analysis.")
     timeline: str = Field(description="The project timeline, preserved from the initial analysis.")
     buyer_profile: str = Field(description="The ideal buyer profile, preserved and potentially refined by market analysis.")
     roadmap_steps: List[str] = Field(description="The project roadmap, preserved from the initial analysis.")
     potential_risks: List[str] = Field(description="The potential risks, preserved from the initial analysis.")
-    # --- End of preserved fields ---
     
     # --- Fields to be added or modified by this agent ---
-    adjusted_roi: float = Field(description="The ROI recalculated based on market-adjusted value add.")
+    after_repair_value: float = Field(description="The estimated After Repair Value (ARV) of the property after the renovation, based on price per square foot analysis.")
+    adjusted_roi: float = Field(description="The ROI recalculated based on the ARV.")
     market_demand: str = Field(description="The current market demand for this type of project.")
     local_trends: str = Field(description="Specific local market trends relevant to the project.")
     estimated_monthly_rent: Optional[int] = Field(None, description="The estimated monthly rent for new units, if applicable.")
@@ -45,6 +45,7 @@ class MarketAdjustedIdea(BaseModel):
 class ComparableProperty(BaseModel):
     address: str
     sale_price: float
+    price_per_sqft: float = Field(description="The calculated price per square foot for this comparable property.")
     brief_summary: str
     url: str
 
@@ -66,59 +67,72 @@ class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing market trends with guaranteed JSON output."""
     
     PROMPT_TEMPLATE = """
-    You are a real estate investment expert. Your task is to analyze renovation ideas based on local market data for the property at {address}.
+    You are a senior real estate investment analyst. Your task is to perform a detailed market and financial analysis for the property at {address} with a square footage of {sqft}.
 
     **IDEAS TO ANALYZE:**
     {renovation_json}
 
-    **YOUR TASKS:**
-    1.  **Preserve Original Data**: First, ensure that all original fields from the ideas above (`name`, `description`, `estimated_cost`, `cost_source`, `roi`, `feasibility`, `timeline`, `buyer_profile`, `roadmap_steps`, `potential_risks`) are preserved in your final output.
-    2.  **Find Real Comps**: Use the 'search_for_comparable_properties' tool to find 2-3 real, recently sold properties to validate potential value.
-    3.  **Rental Analysis**: For any idea creating a rentable unit (ADU, duplex), use the search tool to find the average monthly rent in that specific city or neighborhood.
-    4.  **Advanced Financials**: If you found rental data, calculate the Capitalization Rate (Cap Rate) using the formula: `Cap Rate = ((Monthly Rent * 12) * 0.6) / Medium Estimated Cost`.
-    5.  **Adjust Financials**: Adjust the `estimated_value_add` based on your research of local comps.
-    6.  **Recalculate ROI**: Recalculate the ROI and place it in the `adjusted_roi` key. Use the formula: `((Adjusted Medium Value Add - Medium Cost) / Medium Cost) * 100`.
-    7.  **Find Local Professionals**: For the top recommendation, use the search tool to find 2-3 top-rated architects or general contractors in the same city as the property at "{address}".
+    **YOUR TASKS - A TWO-STEP PROCESS:**
+
+    **STEP 1: COMPARABLE PROPERTY ANALYSIS (COMPS)**
+    1.  **Find Comps**: Use the 'Google Search' tool to find 2-3 recently sold properties that are truly comparable to the subject property.
+    2.  **Comp Criteria**: Your search must be specific. Find properties in the same neighborhood or zip code that have sold in the last 12 months and are similar in bed/bath count, square footage, and amenities.
+    3.  **Price Per Square Foot**: For EACH comp you find, you MUST calculate and include its `price_per_sqft` (sale price / square footage).
+    4.  **Calculate Average**: Determine the average price per square foot from all the comps you found.
+
+    **STEP 2: FINANCIAL PROJECTIONS FOR EACH RENOVATION IDEA**
+    5.  **Preserve Original Data**: First, ensure that all original fields from the ideas (`name`, `description`, `estimated_cost`, etc.) are preserved in your final output.
+    6.  **Calculate After Repair Value (ARV)**: For each renovation idea, calculate the potential `after_repair_value` (ARV). The formula is: `ARV = (Average Price Per Square Foot from Step 4) * (Subject Property's Square Footage)`.
+    7.  **Adjust Financials**: The `estimated_value_add` should now be calculated as `ARV - (Original Property Price)`.
+    8.  **Recalculate ROI**: Recalculate the ROI based on this new data and place it in the `adjusted_roi` key. The formula is: `((ARV - Original Property Price - Medium Cost) / Medium Cost) * 100`.
+    9.  **Rental Analysis**: For any idea creating a rentable unit (ADU, duplex), find the average monthly rent in that city. If you find rental data, calculate the Capitalization Rate (Cap Rate) using the formula: `Cap Rate = ((Monthly Rent * 12) * 0.6) / Medium Estimated Cost`.
+    10. **Find Local Professionals**: For the top recommendation, use the search tool to find 2-3 top-rated architects or general contractors in the same city as the property.
 
     After your analysis, you MUST format your final response as a single, valid JSON object conforming to the required schema.
     """
     
     def __init__(self, llm):
         super().__init__(llm)
-        self.llm_with_tools = self.llm.bind_tools([search_for_comparable_properties])
-        self.structured_llm = self.llm.with_structured_output(MarketAnalysisOutput)
+        settings = get_settings()
+        genai.configure(api_key=settings.gemini_api_key)
+        self.genai_model = genai.GenerativeModel('gemini-pro')
 
-    async def process(self, address: str, renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
+    async def process(self, property_data: Dict[str, Any], renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze market trends with guaranteed JSON output."""
         try:
             print("[MarketAgent] Process started.")
             renovation_json = json.dumps(renovation_ideas, indent=2)
-            prompt = self._create_prompt(self.PROMPT_TEMPLATE, address=address, renovation_json=renovation_json)
+            address = property_data.get('address', 'Unknown Address')
+            sqft = property_data.get('sqft', 0)
+
+            # Ensure sqft is a number, defaulting to 0 if not available, to prevent errors.
+            try:
+                sqft = float(sqft)
+            except (ValueError, TypeError):
+                sqft = 0 
+                print(f"[MarketAgent] Warning: Could not parse sqft value. Defaulting to 0.")
+
+
+            prompt = self._create_prompt(
+                self.PROMPT_TEMPLATE,
+                address=address,
+                sqft=sqft,
+                renovation_json=renovation_json
+            )
             
             print("[MarketAgent] Initial call to LLM with tools...")
-            ai_msg = await asyncio.to_thread(self.llm_with_tools.invoke, prompt)
-            
-            tool_calls = getattr(ai_msg, 'tool_calls', []) or []
-
-            if not tool_calls:
-                print("[MarketAgent] No tool call requested. Forcing structured output on initial prompt.")
-                response = await asyncio.to_thread(self.structured_llm.invoke, prompt)
-                return response.dict()
-
-            print(f"[MarketAgent] LLM requested to use {len(tool_calls)} tool(s).")
-            tool_outputs = []
-            for tool_call in tool_calls:
-                tool_name = tool_call.get("name")
-                print(f"[MarketAgent] Executing tool: {tool_name} with args: {tool_call.get('args')}")
-                output = search_for_comparable_properties.invoke(tool_call.get('args'))
-                tool_outputs.append(ToolMessage(content=str(output), tool_call_id=tool_call['id']))
-            
-            print("[MarketAgent] Calling LLM again with all tool outputs and forcing JSON...")
-            history = [ai_msg] + tool_outputs
-            final_response = await asyncio.to_thread(self.structured_llm.invoke, history)
+            response = self.genai_model.generate_content(
+                prompt,
+                tools=[{
+                    "Google Search": {
+                        "enable": True
+                    }
+                }]
+            )
             
             print("[MarketAgent] Process finished successfully with structured output.")
-            return final_response.dict()
+            cleaned_response = response.text.replace("```json", "").replace("```", "")
+            return json.loads(cleaned_response)
             
         except Exception as e:
             import traceback

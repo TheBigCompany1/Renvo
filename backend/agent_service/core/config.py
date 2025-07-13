@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     app_name: str = "Renvo API"
     openai_api_key: str = os.getenv("OPENAI_API_KEY")
     openai_model: str = os.getenv("OPENAI_MODEL")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY")
     
     # Database settings (for future use)
     database_url: str = os.getenv("DATABASE_URL", "")
