@@ -3,10 +3,12 @@ from typing import Dict, Any, List, Optional
 import json
 import asyncio
 import re
+import traceback
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
-from langchain_core.messages import ToolMessage
 import google.generativeai as genai
+# This is the corrected import based on your finding
+from google.generativeai.types import Tool, GoogleSearchRetrieval
 from core.config import get_settings
 
 # --- START: Define the JSON Output Structure ---
@@ -32,7 +34,7 @@ class MarketAdjustedIdea(BaseModel):
     buyer_profile: str = Field(description="The ideal buyer profile, preserved and potentially refined by market analysis.")
     roadmap_steps: List[str] = Field(description="The project roadmap, preserved from the initial analysis.")
     potential_risks: List[str] = Field(description="The potential risks, preserved from the initial analysis.")
-    
+
     after_repair_value: float = Field(description="The estimated After Repair Value (ARV) of the property after the renovation, based on price per square foot analysis.")
     adjusted_roi: float = Field(description="The ROI recalculated based on the ARV.")
     market_demand: str = Field(description="The current market demand for this type of project.")
@@ -64,7 +66,7 @@ class MarketAnalysisOutput(BaseModel):
 
 class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing market trends with guaranteed JSON output."""
-    
+
     PROMPT_TEMPLATE = """
     You are a senior real estate investment analyst. Your task is to perform a detailed market and financial analysis for the property at {address} with a square footage of {sqft}. The original purchase price is ${price}.
 
@@ -89,7 +91,7 @@ class MarketAnalysisAgent(BaseAgent):
 
     After your analysis, you MUST format your final response as a single, valid JSON object conforming to the required schema.
     """
-    
+
     def __init__(self, llm):
         super().__init__(llm)
         settings = get_settings()
@@ -106,9 +108,9 @@ class MarketAnalysisAgent(BaseAgent):
             price = property_data.get('price', 0)
 
             try: sqft = float(sqft)
-            except (ValueError, TypeError): sqft = 0 
+            except (ValueError, TypeError): sqft = 0
             try: price = float(price)
-            except (ValueError, TypeError): price = 0 
+            except (ValueError, TypeError): price = 0
 
             prompt = self._create_prompt(
                 self.PROMPT_TEMPLATE,
@@ -117,12 +119,13 @@ class MarketAnalysisAgent(BaseAgent):
                 price=price,
                 renovation_json=renovation_json
             )
-            
+
             print("[MarketAgent] Initial call to LLM with tools...")
-            # *** THE FIX: Using the correct tool key "Google Search" ***
+            
+            # This is the correct syntax you found.
             response = self.genai_model.generate_content(
                 prompt,
-                tools=[{"Google Search": {}}]
+                tools=[Tool(google_search_retrieval=GoogleSearchRetrieval())]
             )
             
             print("[MarketAgent] Process finished successfully with structured output.")
@@ -130,7 +133,6 @@ class MarketAnalysisAgent(BaseAgent):
             return json.loads(cleaned_response)
             
         except Exception as e:
-            import traceback
             print(f"[MarketAgent] General error in process: {str(e)}")
             print(f"[MarketAgent] Traceback: {traceback.format_exc()}")
             return {

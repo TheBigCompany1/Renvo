@@ -3,10 +3,12 @@ from typing import Dict, Any, List
 import json
 import asyncio
 import re
+import traceback
 from agents.base import BaseAgent
-from langchain_core.messages import ToolMessage
 from pydantic import BaseModel, Field
 import google.generativeai as genai
+# This is the corrected import based on your finding
+from google.generativeai.types import Tool, GoogleSearchRetrieval
 from core.config import get_settings
 
 # --- DEFINES THE GUARANTEED JSON OUTPUT STRUCTURE ---
@@ -60,7 +62,7 @@ class TextAnalysisAgent(BaseAgent):
 
     After using your tools and analyzing the results, you MUST format your final response as a single, valid JSON object conforming to the required schema. Your output MUST NOT contain any other text, greetings, or markdown formatting. It must start with '{{' and end with '}}'.
     """
-    
+
     def __init__(self, llm):
         super().__init__(llm)
         settings = get_settings()
@@ -74,19 +76,20 @@ class TextAnalysisAgent(BaseAgent):
         try:
             property_json = json.dumps(property_data, indent=2)
             prompt = self._create_prompt(self.PROMPT_TEMPLATE, property_json=property_json)
-            
+
             print("[TextAgent] Initial call to LLM with tools...")
-            # *** THE FIX: Using the correct tool key "Google Search" ***
+            
+            # This is the correct syntax using the tool you found.
             response = self.genai_model.generate_content(
                 prompt,
-                tools=[{"Google Search": {}}]
+                tools=[Tool(google_search_retrieval=GoogleSearchRetrieval())]
             )
+
             print("[TextAgent] Process finished successfully with structured output.")
             cleaned_response = response.text.replace("```json", "").replace("```", "")
             return json.loads(cleaned_response)
 
         except Exception as e:
-            import traceback
             print(f"[TextAgent] General error in process: {str(e)}")
             print(f"[TextAgent] Traceback: {traceback.format_exc()}")
             return {"renovation_ideas": [], "error": f"General TextAgent error: {str(e)}"}
