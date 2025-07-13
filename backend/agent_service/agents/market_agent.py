@@ -33,7 +33,6 @@ class MarketAdjustedIdea(BaseModel):
     roadmap_steps: List[str] = Field(description="The project roadmap, preserved from the initial analysis.")
     potential_risks: List[str] = Field(description="The potential risks, preserved from the initial analysis.")
     
-    # --- Fields to be added or modified by this agent ---
     after_repair_value: float = Field(description="The estimated After Repair Value (ARV) of the property after the renovation, based on price per square foot analysis.")
     adjusted_roi: float = Field(description="The ROI recalculated based on the ARV.")
     market_demand: str = Field(description="The current market demand for this type of project.")
@@ -95,8 +94,8 @@ class MarketAnalysisAgent(BaseAgent):
         super().__init__(llm)
         settings = get_settings()
         genai.configure(api_key=settings.gemini_api_key)
-        self.genai_model = genai.GenerativeModel('gemini-pro',
-                                                  tools=["Google Search"]) # Corrected tool initialization
+        # **THE FIX**: We remove the 'tools' argument from here.
+        self.genai_model = genai.GenerativeModel('gemini-pro')
 
     async def process(self, property_data: Dict[str, Any], renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze market trends with guaranteed JSON output."""
@@ -107,7 +106,6 @@ class MarketAnalysisAgent(BaseAgent):
             sqft = property_data.get('sqft', 0)
             price = property_data.get('price', 0)
 
-            # Ensure sqft and price are numbers to prevent errors.
             try: sqft = float(sqft)
             except (ValueError, TypeError): sqft = 0 
             try: price = float(price)
@@ -122,7 +120,11 @@ class MarketAnalysisAgent(BaseAgent):
             )
             
             print("[MarketAgent] Initial call to LLM with tools...")
-            response = self.genai_model.generate_content(prompt)
+            # **THE FIX**: We put the correctly formatted 'tools' argument here.
+            response = self.genai_model.generate_content(
+                prompt,
+                tools=[{"Google Search": {}}]
+            )
             
             print("[MarketAgent] Process finished successfully with structured output.")
             cleaned_response = response.text.replace("```json", "").replace("```", "")

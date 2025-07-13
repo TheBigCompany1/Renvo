@@ -65,8 +65,8 @@ class TextAnalysisAgent(BaseAgent):
         super().__init__(llm)
         settings = get_settings()
         genai.configure(api_key=settings.gemini_api_key)
-        self.genai_model = genai.GenerativeModel('gemini-pro',
-                                                  tools=["Google Search"]) # Corrected tool initialization
+        # **THE FIX**: We remove the 'tools' argument from here.
+        self.genai_model = genai.GenerativeModel('gemini-pro')
 
 
     async def process(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -77,7 +77,11 @@ class TextAnalysisAgent(BaseAgent):
             prompt = self._create_prompt(self.PROMPT_TEMPLATE, property_json=property_json)
             
             print("[TextAgent] Initial call to LLM with tools...")
-            response = self.genai_model.generate_content(prompt)
+            # **THE FIX**: We put the correctly formatted 'tools' argument here.
+            response = self.genai_model.generate_content(
+                prompt,
+                tools=[{"Google Search": {}}]
+            )
             print("[TextAgent] Process finished successfully with structured output.")
             cleaned_response = response.text.replace("```json", "").replace("```", "")
             return json.loads(cleaned_response)
