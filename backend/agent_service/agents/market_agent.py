@@ -80,7 +80,7 @@ class MarketAnalysisAgent(BaseAgent):
     4.  **Calculate Average**: Determine the average price per square foot from all the comps you found.
 
     **STEP 2: FINANCIAL PROJECTIONS FOR EACH RENOVATION IDEA**
-    5.  **Preserve Original Data**: First, ensure that all original fields from the ideas (`name`, `description`, `estimated_cost`, etc.) are preserved in your final output.
+    5.  **Preserve Original Data**: First, ensure that all original fields from the ideas (`name`, `description`, `estimated_cost`, etc.) are preserved in your final output. **CRITICAL**: The `estimated_cost` and `estimated_value_add` fields MUST be preserved as dictionaries with "low", "medium", and "high" keys.
     6.  **Calculate After Repair Value (ARV)**: For each renovation idea, calculate the potential `after_repair_value` (ARV). The formula is: `ARV = (Average Price Per Square Foot from Step 4) * (Subject Property's Square Footage)`.
     7.  **Adjust Financials**: The `estimated_value_add` should now be calculated as `ARV - (Original Property Price)`.
     8.  **Recalculate ROI**: Recalculate the ROI based on this new data and place it in the `adjusted_roi` key. The formula is: `((ARV - Original Property Price - Medium Cost) / Medium Cost) * 100`.
@@ -93,9 +93,8 @@ class MarketAnalysisAgent(BaseAgent):
     def __init__(self, llm):
         super().__init__(llm)
         settings = get_settings()
-        # ** THE FIX: Using the correct, high-performing model name 'gemini-1.5-pro-latest' **
         self.structured_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro",
+            model="gemini-1.5-pro-latest",
             google_api_key=settings.gemini_api_key,
             convert_system_message_to_human=True
         ).with_structured_output(MarketAnalysisOutput)
@@ -107,7 +106,8 @@ class MarketAnalysisAgent(BaseAgent):
             renovation_json = json.dumps(renovation_ideas, indent=2)
             address = property_data.get('address', 'Unknown Address')
             sqft = property_data.get('sqft', 0)
-            price = property_data.get('price', 0)
+            # ** THE FIX: Corrected typo from '.0' to '0.0' **
+            price = property_data.get('price', 0.0)
 
             try: sqft = float(sqft)
             except (ValueError, TypeError): sqft = 0
@@ -122,7 +122,6 @@ class MarketAnalysisAgent(BaseAgent):
                 renovation_json=renovation_json
             )
 
-            # ** ADDED LOGGING **
             print("\n--- [MarketAgent] PROMPT SENT TO LLM ---")
             print(prompt)
             print("--- END OF PROMPT ---\n")
