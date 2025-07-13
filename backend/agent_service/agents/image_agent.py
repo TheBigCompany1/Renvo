@@ -2,14 +2,13 @@
 from typing import Dict, Any, List
 import json
 import asyncio
-import re # <-- ADDED: Import re at the top level
+import re
 from agents.base import BaseAgent
-from langchain_core.messages import HumanMessage # <-- ADDED: Required for multi-modal messages
+from langchain_core.messages import HumanMessage
 
 class ImageAnalysisAgent(BaseAgent):
     """Agent for evaluating renovation ideas based on property images."""
     
-    # The PROMPT_TEMPLATE remains the same.
     PROMPT_TEMPLATE = """
     Review the following renovation suggestions based on these property images:
     
@@ -45,25 +44,24 @@ class ImageAnalysisAgent(BaseAgent):
     }}
     """
     
-    async def process(self, renovation_ideas: Dict[str, Any], image_urls: List[str]) -> Dict[str, Any]:
-        """Evaluate renovation ideas based on property images."""
+    # *** THE FIX: The function signature is updated to correctly expect a List. ***
+    async def process(self, image_urls: List[str], renovation_ideas: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Evaluate renovation ideas based on property images, now with robust error handling."""
         try:
             print("[ImageAgent] Process started.")
+            
+            # *** THE FIX: This is the crucial safety check. ***
+            # If we receive no ideas from the previous step, we stop gracefully instead of crashing.
+            if not renovation_ideas:
+                print("[ImageAgent] No initial ideas received. Skipping image analysis.")
+                return {"refined_renovation_ideas": [], "additional_suggestions": []}
+
             renovation_json = json.dumps(renovation_ideas, indent=2)
             
-            # --- START OF UPDATED LOGIC ---
-
-            # 1. Create the text part of the prompt.
-            #    We no longer include the image_urls as text here.
+            # --- We are keeping YOUR working logic below this line ---
             prompt_text = self.PROMPT_TEMPLATE.format(renovation_json=renovation_json)
+            content_parts = [{"type": "text", "text": prompt_text}]
             
-            # 2. Create a list to hold all parts of our multi-modal message.
-            content_parts = []
-            
-            # 3. Add the text part first.
-            content_parts.append({"type": "text", "text": prompt_text})
-            
-            # 4. Add each image URL in the special format the API requires.
             print(f"[ImageAgent] Preparing {len(image_urls)} image(s) for vision analysis.")
             for url in image_urls:
                 content_parts.append({
@@ -71,20 +69,15 @@ class ImageAnalysisAgent(BaseAgent):
                     "image_url": {"url": url},
                 })
                 
-            # 5. Create the final message payload using HumanMessage.
             message = HumanMessage(content=content_parts)
 
-            # --- END OF UPDATED LOGIC ---
-
             print("[ImageAgent] Sending multi-modal prompt to LLM...")
-            # Use asyncio to make the LLM call non-blocking, passing the new message object
             response = await asyncio.to_thread(
                 self.llm.invoke,
-                [message] # The message must be passed inside a list
+                [message]
             )
             print("[ImageAgent] Received response from LLM.")
             
-            # The rest of your JSON parsing logic is preserved to prevent regressions.
             raw_content = response.content.strip()
             print(f"[ImageAgent] Raw LLM content (stripped): {raw_content[:500]}...")
             
@@ -105,8 +98,9 @@ class ImageAnalysisAgent(BaseAgent):
             import traceback
             print(f"[ImageAgent] General error in process: {str(e)}")
             print(f"[ImageAgent] Traceback: {traceback.format_exc()}")
+            # *** THE FIX: This now safely returns an empty list for ideas. ***
             return {
-                "refined_renovation_ideas": renovation_ideas.get("renovation_ideas", []),
+                "refined_renovation_ideas": [], 
                 "additional_suggestions": [],
                 "error": f"ImageAnalysisAgent error: {str(e)}"
             }

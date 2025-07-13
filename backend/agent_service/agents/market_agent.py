@@ -94,7 +94,6 @@ class MarketAnalysisAgent(BaseAgent):
         super().__init__(llm)
         settings = get_settings()
         genai.configure(api_key=settings.gemini_api_key)
-        # **THE FIX**: We remove the 'tools' argument from here.
         self.genai_model = genai.GenerativeModel('gemini-pro')
 
     async def process(self, property_data: Dict[str, Any], renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
@@ -120,7 +119,7 @@ class MarketAnalysisAgent(BaseAgent):
             )
             
             print("[MarketAgent] Initial call to LLM with tools...")
-            # **THE FIX**: We put the correctly formatted 'tools' argument here.
+            # *** THE FIX: Using the correct tool key "Google Search" ***
             response = self.genai_model.generate_content(
                 prompt,
                 tools=[{"Google Search": {}}]
