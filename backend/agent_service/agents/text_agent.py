@@ -7,8 +7,8 @@ import traceback
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
 import google.generativeai as genai
-# This is the corrected import based on your finding
-from google.generativeai.types import Tool, GoogleSearchRetrieval
+# This is the correct import.
+from google.generativeai.types import Tool, GoogleSearch
 from core.config import get_settings
 
 # --- DEFINES THE GUARANTEED JSON OUTPUT STRUCTURE ---
@@ -79,10 +79,10 @@ class TextAnalysisAgent(BaseAgent):
 
             print("[TextAgent] Initial call to LLM with tools...")
             
-            # This is the correct syntax using the tool you found.
+            # This is the correct syntax.
             response = self.genai_model.generate_content(
                 prompt,
-                tools=[Tool(google_search_retrieval=GoogleSearchRetrieval())]
+                tools=[Tool(google_search=GoogleSearch())]
             )
 
             print("[TextAgent] Process finished successfully with structured output.")
