@@ -67,7 +67,7 @@ class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing market trends with guaranteed JSON output."""
     
     PROMPT_TEMPLATE = """
-    You are a senior real estate investment analyst. Your task is to perform a detailed market and financial analysis for the property at {address} with a square footage of {sqft}.
+    You are a senior real estate investment analyst. Your task is to perform a detailed market and financial analysis for the property at {address} with a square footage of {sqft}. The original purchase price is ${price}.
 
     **IDEAS TO ANALYZE:**
     {renovation_json}
@@ -95,7 +95,8 @@ class MarketAnalysisAgent(BaseAgent):
         super().__init__(llm)
         settings = get_settings()
         genai.configure(api_key=settings.gemini_api_key)
-        self.genai_model = genai.GenerativeModel('gemini-pro')
+        self.genai_model = genai.GenerativeModel('gemini-pro',
+                                                  tools=["Google Search"]) # Corrected tool initialization
 
     async def process(self, property_data: Dict[str, Any], renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze market trends with guaranteed JSON output."""
@@ -104,31 +105,24 @@ class MarketAnalysisAgent(BaseAgent):
             renovation_json = json.dumps(renovation_ideas, indent=2)
             address = property_data.get('address', 'Unknown Address')
             sqft = property_data.get('sqft', 0)
+            price = property_data.get('price', 0)
 
-            # Ensure sqft is a number, defaulting to 0 if not available, to prevent errors.
-            try:
-                sqft = float(sqft)
-            except (ValueError, TypeError):
-                sqft = 0 
-                print(f"[MarketAgent] Warning: Could not parse sqft value. Defaulting to 0.")
-
+            # Ensure sqft and price are numbers to prevent errors.
+            try: sqft = float(sqft)
+            except (ValueError, TypeError): sqft = 0 
+            try: price = float(price)
+            except (ValueError, TypeError): price = 0 
 
             prompt = self._create_prompt(
                 self.PROMPT_TEMPLATE,
                 address=address,
                 sqft=sqft,
+                price=price,
                 renovation_json=renovation_json
             )
             
             print("[MarketAgent] Initial call to LLM with tools...")
-            response = self.genai_model.generate_content(
-                prompt,
-                tools=[{
-                    "Google Search": {
-                        "enable": True
-                    }
-                }]
-            )
+            response = self.genai_model.generate_content(prompt)
             
             print("[MarketAgent] Process finished successfully with structured output.")
             cleaned_response = response.text.replace("```json", "").replace("```", "")

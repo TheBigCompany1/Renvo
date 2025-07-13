@@ -1,116 +1,67 @@
-# agents/orchestrator.py
-from typing import Dict, Any, List, Optional
+# backend/agent_service/agents/orchestrator.py
 import asyncio
-import os
-from agents.base import BaseAgent
+from typing import Dict, Any, List
 from agents.text_agent import TextAnalysisAgent
 from agents.image_agent import ImageAnalysisAgent
 from agents.market_agent import MarketAnalysisAgent
 from langchain_openai import ChatOpenAI
+import traceback
 
 class OrchestratorAgent:
-    """Coordinates the multi-agent system workflow."""
-    def __init__(self, api_key: str, model: str = None):
-        if model is None:
-            # Use your config variable; make sure your .env file has OPENAI_MODEL set.
-            model = os.getenv("OPENAI_MODEL", "gpt-4o")
-        self.llm = ChatOpenAI(model_name=model, openai_api_key=api_key)
-        self.text_agent = TextAnalysisAgent(self.llm)
-        self.image_agent = ImageAnalysisAgent(self.llm)
-        self.market_agent = MarketAnalysisAgent(self.llm)
-    
-    async def generate_quick_insights(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate quick insights for the Chrome extension."""
-        # Use only the text agent for quick insights
-        renovation_ideas = await self.text_agent.process(property_data)
-        
-        # Extract top ideas and format for quick display
-        quick_insights = self._format_quick_insights(renovation_ideas, property_data)
-        return quick_insights
-    
-    async def generate_full_report(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate a comprehensive renovation report using all agents with detailed logging."""
-        print("--- generate_full_report started ---")
-        full_report = {}
-        try:
-            # Step 1: Generate initial renovation ideas
-            print("[Orchestrator] Calling TextAnalysisAgent...")
-            initial_ideas = await self.text_agent.process(property_data)
-            print(f"[Orchestrator] TextAnalysisAgent completed. Result keys: {initial_ideas.keys()}")
-            if "error" in initial_ideas:
-                 print(f"[Orchestrator] TextAnalysisAgent Error: {initial_ideas['error']}")
+    """Orchestrates the workflow between Text, Image, and Market Analysis agents."""
 
-            # Step 2: If images are available, refine ideas using image analysis
-            image_urls = property_data.get("images", [])
-            print(f"[Orchestrator] Image URLs found: {len(image_urls)}")
-            if image_urls:
-                print("[Orchestrator] Calling ImageAnalysisAgent...")
-                refined_ideas = await self.image_agent.process(initial_ideas, image_urls)
-                print(f"[Orchestrator] ImageAnalysisAgent completed. Result keys: {refined_ideas.keys()}")
-                if "error" in refined_ideas:
-                     print(f"[Orchestrator] ImageAnalysisAgent Error: {refined_ideas['error']}")
-            else:
-                print("[Orchestrator] Skipping ImageAnalysisAgent (no images).")
-                # If no images, 'refined_ideas' are the initial ones for the next step
-                refined_ideas = initial_ideas
-                 # Ensure refined_ideas structure for market agent if skipping image agent
-                if "renovation_ideas" in refined_ideas and "refined_renovation_ideas" not in refined_ideas:
-                     refined_ideas["refined_renovation_ideas"] = refined_ideas["renovation_ideas"]
+    def __init__(self, api_key: str, model: str):
+        """Initializes all specialist agents."""
+        self.llm = ChatOpenAI(model=model, openai_api_key=api_key, temperature=0)
+        self.text_agent = TextAnalysisAgent(llm=self.llm)
+        self.image_agent = ImageAnalysisAgent(llm=self.llm)
+        self.market_agent = MarketAnalysisAgent(llm=self.llm)
 
+    def _calculate_aggregate_financials(self, ideas: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Calculates total budget, value, and average ROI from a list of ideas."""
+        if not ideas:
+            return {
+                "total_budget": {"low": 0, "medium": 0, "high": 0},
+                "potential_value_increase": {"low": 0, "medium": 0, "high": 0},
+                "average_roi": 0
+            }
 
-            # Step 3: Adjust recommendations based on market analysis
-            address = property_data.get("address", "")
-            print(f"[Orchestrator] Address for Market Analysis: {address}")
-            if address:
-                print("[Orchestrator] Calling MarketAnalysisAgent...")
-                 # Pass the 'refined_ideas' structure
-                market_adjusted = await self.market_agent.process(address, refined_ideas)
-                print(f"[Orchestrator] MarketAnalysisAgent completed. Result keys: {market_adjusted.keys()}")
-                if "error" in market_adjusted:
-                     print(f"[Orchestrator] MarketAnalysisAgent Error: {market_adjusted['error']}")
-            else:
-                print("[Orchestrator] Skipping MarketAnalysisAgent (no address).")
-                 # If no address, 'market_adjusted' ideas are the refined ones
-                market_adjusted = refined_ideas
-                 # Ensure market_adjusted structure for compilation if skipping market agent
-                if "refined_renovation_ideas" in market_adjusted and "market_adjusted_ideas" not in market_adjusted:
-                     market_adjusted["market_adjusted_ideas"] = market_adjusted["refined_renovation_ideas"]
+        total_low_cost = sum(idea.get("estimated_cost", {}).get("low", 0) for idea in ideas)
+        total_medium_cost = sum(idea.get("estimated_cost", {}).get("medium", 0) for idea in ideas)
+        total_high_cost = sum(idea.get("estimated_cost", {}).get("high", 0) for idea in ideas)
 
-            # Step 4: Compile the full report
-            print("[Orchestrator] Compiling final report...")
-            full_report = self._compile_full_report(
-                property_data,
-                initial_ideas,
-                refined_ideas,
-                market_adjusted
-            )
-            print("[Orchestrator] Final report compiled.")
+        total_low_value = sum(idea.get("estimated_value_add", {}).get("low", 0) for idea in ideas)
+        total_medium_value = sum(idea.get("estimated_value_add", {}).get("medium", 0) for idea in ideas)
+        total_high_value = sum(idea.get("estimated_value_add", {}).get("high", 0) for idea in ideas)
 
-        except Exception as e:
-            import traceback
-            print(f"[Orchestrator] ERROR during generate_full_report: {str(e)}")
-            print(f"[Orchestrator] Traceback: {traceback.format_exc()}")
-            # Return a minimal structure in case of error
-            full_report = {"error": str(e), "property": property_data} # Include property data for context
+        rois = [idea.get('adjusted_roi', idea.get('roi', 0)) for idea in ideas]
+        average_roi = sum(rois) / len(rois) if rois else 0
 
-        print("--- generate_full_report finished ---")
-        return full_report
-    
-    def _format_quick_insights(self, renovation_ideas: Dict[str, Any], property_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Format renovation ideas into quick insights for the extension."""
-        ideas = renovation_ideas.get("renovation_ideas", [])
-        
-        # Sort ideas by ROI
-        sorted_ideas = sorted(ideas, key=lambda x: x.get("roi", 0), reverse=True)
-        top_ideas = sorted_ideas[:3]  # Take top 3 ideas
-        
-        # Calculate total budget and potential value
+        return {
+            "total_budget": {"low": total_low_cost, "medium": total_medium_cost, "high": total_high_cost},
+            "potential_value_increase": {"low": total_low_value, "medium": total_medium_value, "high": total_high_value},
+            "average_roi": round(average_roi, 2)
+        }
+
+    def _format_quick_insights(self, final_ideas: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Formats the top 3 ideas into quick insights for the UI."""
+        if not final_ideas:
+            return {}
+
+        # Sort ideas by adjusted_roi if available, otherwise fall back to original roi
+        sorted_ideas = sorted(
+            final_ideas, 
+            key=lambda x: x.get('adjusted_roi', x.get('roi', 0)), 
+            reverse=True
+        )
+        top_ideas = sorted_ideas[:3]
+
         total_budget = sum(idea.get("estimated_cost", {}).get("medium", 0) for idea in top_ideas)
         total_value = sum(idea.get("estimated_value_add", {}).get("medium", 0) for idea in top_ideas)
         
-        # Calculate potential score (1-10)
+        # This score is a simple heuristic. Can be refined later.
         potential_score = min(10, round((total_value / total_budget) * 3, 1)) if total_budget > 0 else 5
-        
+
         return {
             "potentialScore": potential_score,
             "estimatedBudget": total_budget,
@@ -120,60 +71,73 @@ class OrchestratorAgent:
                     "name": idea.get("name", ""),
                     "estimatedCost": idea.get("estimated_cost", {}).get("medium", 0),
                     "estimatedValueAdd": idea.get("estimated_value_add", {}).get("medium", 0),
-                    "estimatedRoi": idea.get("roi", 0)
+                    "estimatedRoi": idea.get('adjusted_roi', idea.get("roi", 0))
                 } 
                 for idea in top_ideas
             ]
         }
-    
-    def _compile_full_report(
-        self, 
-        property_data: Dict[str, Any], 
-        initial_ideas: Dict[str, Any],
-        refined_ideas: Dict[str, Any],
-        market_adjusted: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Compile the full detailed report from all agent outputs."""
-        
-        final_ideas = market_adjusted.get("market_adjusted_ideas", 
-                      refined_ideas.get("refined_renovation_ideas",
-                      initial_ideas.get("renovation_ideas", [])))
-        
-        additional_suggestions = refined_ideas.get("additional_suggestions", [])
-        market_summary = market_adjusted.get("market_summary", "")
-        
-        # Get the new comparable properties and contractors data
-        comparable_properties = market_adjusted.get("comparable_properties", [])
-        recommended_contractors = market_adjusted.get("recommended_contractors", [])
 
-        total_budget_low = sum(idea.get("estimated_cost", {}).get("low", 0) for idea in final_ideas)
-        total_budget_med = sum(idea.get("estimated_cost", {}).get("medium", 0) for idea in final_ideas)
-        total_budget_high = sum(idea.get("estimated_cost", {}).get("high", 0) for idea in final_ideas)
-        total_value_low = sum(idea.get("estimated_value_add", {}).get("low", 0) for idea in final_ideas)
-        total_value_med = sum(idea.get("estimated_value_add", {}).get("medium", 0) for idea in final_ideas)
-        total_value_high = sum(idea.get("estimated_value_add", {}).get("high", 0) for idea in final_ideas)
-        
-        detailed_report = {
-            "renovation_ideas": final_ideas,
-            "additional_suggestions": additional_suggestions,
-            "comparable_properties": comparable_properties,
-            "recommended_contractors": recommended_contractors,
-            "total_budget": {
-                "low": total_budget_low,
-                "medium": total_budget_med,
-                "high": total_budget_high
-            },
-            "potential_value_increase": {
-                "low": total_value_low,
-                "medium": total_value_med,
-                "high": total_value_high
-            },
-            "average_roi": round(total_value_med / total_budget_med * 100, 1) if total_budget_med > 0 else 0
-        }
-        
-        return {
-            "property": property_data,
-            "detailed_report": detailed_report,
-            "market_summary": market_summary,
-            "quick_insights": market_adjusted.get("quick_insights", {})
-        }
+
+    async def generate_full_report(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Runs the full analysis pipeline and compiles the final report."""
+        print("--- generate_full_report started ---")
+        full_report = {"property": property_data}
+        text_analysis_result = {}
+        image_analysis_result = {}
+        market_analysis_result = {}
+
+        try:
+            # 1. Text Analysis
+            print("[Orchestrator] Calling TextAnalysisAgent...")
+            text_analysis_result = await self.text_agent.process(property_data)
+            print(f"[Orchestrator] TextAnalysisAgent completed. Result keys: {text_analysis_result.keys()}")
+            if text_analysis_result.get("error"):
+                print(f"[Orchestrator] TextAnalysisAgent Error: {text_analysis_result.get('error')}")
+
+            # 2. Image Analysis
+            image_urls = property_data.get("images", [])
+            initial_ideas = text_analysis_result.get("renovation_ideas", [])
+            print(f"[Orchestrator] Image URLs found: {len(image_urls)}")
+            if image_urls:
+                print("[Orchestrator] Calling ImageAnalysisAgent...")
+                image_analysis_result = await self.image_agent.process(image_urls, initial_ideas)
+                print(f"[Orchestrator] ImageAnalysisAgent completed. Result keys: {image_analysis_result.keys()}")
+
+            # Use refined ideas from image agent if available, otherwise use text agent's ideas
+            ideas_for_market_analysis = image_analysis_result.get("refined_renovation_ideas", initial_ideas)
+
+            # 3. Market Analysis
+            print(f"[Orchestrator] Calling MarketAnalysisAgent...")
+            market_analysis_result = await self.market_agent.process(property_data, {"renovation_ideas": ideas_for_market_analysis})
+            print(f"[Orchestrator] MarketAnalysisAgent completed. Result keys: {market_analysis_result.keys()}")
+            if market_analysis_result.get("error"):
+                 print(f"[Orchestrator] MarketAnalysisAgent Error: {market_analysis_result.get('error')}")
+
+            # 4. Compile Final Report
+            print("[Orchestrator] Compiling final report...")
+            final_ideas = market_analysis_result.get("market_adjusted_ideas", ideas_for_market_analysis)
+            aggregate_financials = self._calculate_aggregate_financials(final_ideas)
+
+            full_report["detailed_report"] = {
+                "renovation_ideas": final_ideas,
+                "additional_suggestions": image_analysis_result.get("additional_suggestions", []),
+                "comparable_properties": market_analysis_result.get("comparable_properties", []),
+                "recommended_contractors": market_analysis_result.get("recommended_contractors", []),
+                **aggregate_financials
+            }
+            full_report["market_summary"] = market_analysis_result.get("market_summary", "Market summary could not be generated.")
+            
+            # This is the preserved logic to generate the quick insights for the UI
+            full_report["quick_insights"] = self._format_quick_insights(final_ideas)
+            
+            print("[Orchestrator] Final report compiled.")
+
+
+        except Exception as e:
+            print(f"--- [Orchestrator] A CRITICAL error occurred in generate_full_report: {e} ---")
+            print(traceback.format_exc())
+            full_report["error"] = str(e)
+            full_report["quick_insights"] = {} # Ensure key exists even on error
+
+        print("--- generate_full_report finished ---")
+        return full_report
