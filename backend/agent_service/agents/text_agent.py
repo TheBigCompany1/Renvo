@@ -6,13 +6,11 @@ import re
 import traceback
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
-# This is the correct, stable library to use
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.pydantic_v1 import BaseModel as LangchainBaseModel, Field as LangchainField
 from core.config import get_settings
 
 # --- DEFINES THE GUARANTEED JSON OUTPUT STRUCTURE ---
-# Using LangChain's Pydantic models for compatibility
 class Cost(LangchainBaseModel):
     low: int = LangchainField(description="The low-end estimated cost.")
     medium: int = LangchainField(description="The medium estimated cost.")
@@ -67,19 +65,12 @@ class TextAnalysisAgent(BaseAgent):
     def __init__(self, llm):
         super().__init__(llm)
         settings = get_settings()
-        # This is the correct way to initialize the model with LangChain
+        # ** THE FIX: Using the correct, high-performing model name 'gemini-1.5-pro-latest' **
         self.structured_llm = ChatGoogleGenerativeAI(
-            model="gemini-pro", 
+            model="gemini-2.5-pro", 
             google_api_key=settings.gemini_api_key,
             convert_system_message_to_human=True
         ).with_structured_output(RenovationIdeasOutput)
-
-        # This model is for invoking the tool
-        self.tool_llm = ChatGoogleGenerativeAI(
-            model="gemini-pro",
-            google_api_key=settings.gemini_api_key,
-            convert_system_message_to_human=True
-        ).bind_tools([{"type": "google_search"}])
 
 
     async def process(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -89,8 +80,12 @@ class TextAnalysisAgent(BaseAgent):
             property_json = json.dumps(property_data, indent=2)
             prompt = self._create_prompt(self.PROMPT_TEMPLATE, property_json=property_json)
 
-            print("[TextAgent] Initial call to LLM with tools...")
-            # This is the standard, reliable LangChain method
+            # ** ADDED LOGGING **
+            print("\n--- [TextAgent] PROMPT SENT TO LLM ---")
+            print(prompt)
+            print("--- END OF PROMPT ---\n")
+
+            print("[TextAgent] Initial call to LLM...")
             response = await self.structured_llm.ainvoke(prompt)
             
             print("[TextAgent] Process finished successfully with structured output.")

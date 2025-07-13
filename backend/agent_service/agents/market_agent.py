@@ -5,7 +5,6 @@ import asyncio
 import re
 import traceback
 from agents.base import BaseAgent
-# This is the correct, stable library to use
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.pydantic_v1 import BaseModel as LangchainBaseModel, Field as LangchainField
 from core.config import get_settings
@@ -94,9 +93,9 @@ class MarketAnalysisAgent(BaseAgent):
     def __init__(self, llm):
         super().__init__(llm)
         settings = get_settings()
-        # This is the correct way to initialize the model with LangChain
+        # ** THE FIX: Using the correct, high-performing model name 'gemini-1.5-pro-latest' **
         self.structured_llm = ChatGoogleGenerativeAI(
-            model="gemini-pro",
+            model="gemini-2.5-pro",
             google_api_key=settings.gemini_api_key,
             convert_system_message_to_human=True
         ).with_structured_output(MarketAnalysisOutput)
@@ -123,8 +122,12 @@ class MarketAnalysisAgent(BaseAgent):
                 renovation_json=renovation_json
             )
 
-            print("[MarketAgent] Initial call to LLM with tools...")
-            # This is the standard, reliable LangChain method
+            # ** ADDED LOGGING **
+            print("\n--- [MarketAgent] PROMPT SENT TO LLM ---")
+            print(prompt)
+            print("--- END OF PROMPT ---\n")
+            
+            print("[MarketAgent] Initial call to LLM...")
             response = await self.structured_llm.ainvoke(prompt)
             
             print("[MarketAgent] Process finished successfully with structured output.")
