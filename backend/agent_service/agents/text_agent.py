@@ -67,7 +67,7 @@ class TextAnalysisAgent(BaseAgent):
         settings = get_settings()
         # ** THE FIX: Using the correct, high-performing model name 'gemini-1.5-pro-latest' **
         self.structured_llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro-latest", 
+            model="gemini-2.5-pro", 
             google_api_key=settings.gemini_api_key,
             convert_system_message_to_human=True
         ).with_structured_output(RenovationIdeasOutput)

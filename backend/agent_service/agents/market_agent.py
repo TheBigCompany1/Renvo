@@ -1,12 +1,13 @@
+# backend/agent_service/agents/market_agent.py
 from typing import Dict, Any, List, Optional
 import json
-import asyncio
 import traceback
 from agents.base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.pydantic_v1 import BaseModel as LangchainBaseModel, Field as LangchainField
 from core.config import get_settings
 
+# --- START: Define the JSON Output Structure ---
 class Cost(LangchainBaseModel):
     low: int
     medium: int
@@ -35,6 +36,8 @@ class MarketAdjustedIdea(LangchainBaseModel):
     local_trends: str = LangchainField(description="Specific local market trends relevant to the project.")
     estimated_monthly_rent: Optional[int] = LangchainField(None, description="The estimated monthly rent for new units, if applicable.")
     capitalization_rate: Optional[float] = LangchainField(None, description="The calculated capitalization rate for rental projects, if applicable.")
+    new_total_sqft: int = LangchainField(description="The new total square footage of the property after the renovation.")
+    new_price_per_sqft: float = LangchainField(description="The new price per square foot of the property after the renovation.")
 
 class ComparableProperty(LangchainBaseModel):
     address: str
@@ -54,38 +57,45 @@ class MarketAnalysisOutput(LangchainBaseModel):
     market_summary: str
     comparable_properties: List[ComparableProperty]
     recommended_contractors: List[Contractor]
+# --- END: Define the JSON Output Structure ---
+
+def force_dict(value):
+    if isinstance(value, dict):
+        return value
+    if hasattr(value, 'dict'):
+        return value.dict()
+    return {"low": 0, "medium": 0, "high": 0}
 
 class MarketAnalysisAgent(BaseAgent):
     PROMPT_TEMPLATE = """
-    You are a senior real estate investment analyst. Your task is to perform a detailed market and financial analysis for the property at {address} with a square footage of {sqft}. The original purchase price is ${price}.
+    You are a meticulous senior real estate investment analyst. Your task is to perform a detailed market and financial analysis for the property at {address} with a square footage of {sqft}. The original purchase price is ${price}.
 
     **IDEAS TO ANALYZE:**
     {renovation_json}
 
     **YOUR TASKS - A TWO-STEP PROCESS:**
 
-    **STEP 1: COMPARABLE PROPERTY ANALYSIS (COMPS)**
-    1.  **Find Comps**: Use the 'google_search' tool to find 2-3 real, recently sold properties that are truly comparable to the subject property.
-    2.  **Comp Criteria**: Your search must be specific. Find properties in the same neighborhood or zip code that have sold in the last 12 months and are similar in bed/bath count, square footage, and amenities.
+    **STEP 1: HYPER-LOCAL COMPARABLE PROPERTY ANALYSIS (COMPS)**
+    1.  **Find Comps**: Use the 'google_search' tool to find 2-3 recently sold properties.
+    2.  **Strict Comp Criteria**: You MUST prioritize properties in the **exact same zip code** as the subject property ({address}). Only if you find zero results should you expand to adjacent neighborhoods. The comps must be similar in bed/bath count, square footage, and amenities.
     3.  **Price Per Square Foot**: For EACH comp you find, you MUST calculate and include its `price_per_sqft`.
-    4.  **Calculate Average**: Determine the average price per square foot from all the comps you found.
+    4.  **Calculate Average**: Determine the average price per square foot from all the valid comps you found.
 
     **STEP 2: FINANCIAL PROJECTIONS FOR EACH RENOVATION IDEA**
-    5.  **Preserve and Populate ALL Fields**: For each idea, you MUST populate EVERY field defined in the `MarketAdjustedIdea` schema.
-    6.  **Calculate After Repair Value (ARV)**: ARV = (Avg price/sqft) * (Subject sqft).
-    7.  **Adjust Financials**: estimated_value_add = ARV - Original Price.
-    8.  **Recalculate ROI**: ((ARV - Original Price - Medium Cost) / Medium Cost) * 100.
-    9.  **Rental Analysis**: For rental units, estimate rent and cap rate. Else, null.
-    10. **Find Local Contractors**: For top idea, find 2-3 pros.
+    5.  **Preserve and Populate ALL Fields**: For each idea, you MUST populate EVERY field defined in the `MarketAdjustedIdea` schema. This includes preserving all original data (`name`, `description`, `roadmap_steps`, `potential_risks`, etc.) and adding all new analysis fields. DO NOT OMIT ANY FIELDS.
+    6.  **Square Footage Analysis**: For each renovation idea, calculate the `new_total_sqft`. Then, calculate the `new_price_per_sqft` by dividing the `after_repair_value` by the `new_total_sqft`.
+    7.  **Calculate After Repair Value (ARV)**: Calculate the `after_repair_value` using the formula: `ARV = (Average Price Per Square Foot from Step 4) * (New Total Square Footage)`.
+    8.  **Recalculate ROI**: Recalculate the ROI and place it in the `adjusted_roi` field. The formula is: `((ARV - Original Property Price - Medium Cost) / Medium Cost) * 100`.
+    9.  **Find Local Professionals**: For the top recommendation, find 2-3 local contractors.
 
-    **FINAL INSTRUCTION**: Ensure a single valid JSON object that matches the schema.
+    **FINAL INSTRUCTION**: Before finishing, double-check your entire response to ensure it is a single, valid JSON object that perfectly matches the `MarketAnalysisOutput` schema, including all required fields for every object in the lists.
     """
 
     def __init__(self, llm):
         super().__init__(llm)
         settings = get_settings()
         self.structured_llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro-latest",
+            model="gemini-2.5-pro",
             google_api_key=settings.gemini_api_key,
             convert_system_message_to_human=True
         ).with_structured_output(MarketAnalysisOutput)
@@ -118,24 +128,21 @@ class MarketAnalysisAgent(BaseAgent):
             print("[MarketAgent] Initial call to LLM...")
             response = await self.structured_llm.ainvoke(prompt)
 
-            response_dict = response.dict()
-
+            raw_ideas = response.dict().get("market_adjusted_ideas", [])
             clean_ideas = []
-            for idea in response_dict.get("market_adjusted_ideas", []):
-                if idea.get("estimated_cost") and not isinstance(idea["estimated_cost"], dict):
-                    idea["estimated_cost"] = Cost(**idea["estimated_cost"]).dict()
-                if idea.get("estimated_value_add") and not isinstance(idea["estimated_value_add"], dict):
-                    idea["estimated_value_add"] = ValueAdd(**idea["estimated_value_add"]).dict()
+            for idea in raw_ideas:
+                idea["estimated_cost"] = force_dict(idea.get("estimated_cost"))
+                idea["estimated_value_add"] = force_dict(idea.get("estimated_value_add"))
                 clean_ideas.append(idea)
 
             response_data = {
                 "market_adjusted_ideas": clean_ideas,
-                "market_summary": response_dict.get("market_summary", ""),
-                "comparable_properties": response_dict.get("comparable_properties", []),
-                "recommended_contractors": response_dict.get("recommended_contractors", [])
+                "market_summary": response.dict().get("market_summary", ""),
+                "comparable_properties": response.dict().get("comparable_properties", []),
+                "recommended_contractors": response.dict().get("recommended_contractors", [])
             }
 
-            print("[MarketAgent] Process finished successfully with structured output.")
+            print("[MarketAgent] Process finished successfully.")
             return response_data
 
         except Exception as e:
