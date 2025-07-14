@@ -1,7 +1,6 @@
 from typing import Dict, Any, List, Optional
 import json
 import asyncio
-import re
 import traceback
 from agents.base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -119,19 +118,21 @@ class MarketAnalysisAgent(BaseAgent):
             print("[MarketAgent] Initial call to LLM...")
             response = await self.structured_llm.ainvoke(prompt)
 
+            response_dict = response.dict()
+
             clean_ideas = []
-            for idea in response.dict().get("market_adjusted_ideas", []):
-                if idea.get("estimated_cost") is None:
-                    idea["estimated_cost"] = {"low": 0, "medium": 0, "high": 0}
-                if idea.get("estimated_value_add") is None:
-                    idea["estimated_value_add"] = {"low": 0, "medium": 0, "high": 0}
+            for idea in response_dict.get("market_adjusted_ideas", []):
+                if idea.get("estimated_cost") and not isinstance(idea["estimated_cost"], dict):
+                    idea["estimated_cost"] = Cost(**idea["estimated_cost"]).dict()
+                if idea.get("estimated_value_add") and not isinstance(idea["estimated_value_add"], dict):
+                    idea["estimated_value_add"] = ValueAdd(**idea["estimated_value_add"]).dict()
                 clean_ideas.append(idea)
 
             response_data = {
                 "market_adjusted_ideas": clean_ideas,
-                "market_summary": response.dict().get("market_summary", ""),
-                "comparable_properties": response.dict().get("comparable_properties", []),
-                "recommended_contractors": response.dict().get("recommended_contractors", [])
+                "market_summary": response_dict.get("market_summary", ""),
+                "comparable_properties": response_dict.get("comparable_properties", []),
+                "recommended_contractors": response_dict.get("recommended_contractors", [])
             }
 
             print("[MarketAgent] Process finished successfully with structured output.")
