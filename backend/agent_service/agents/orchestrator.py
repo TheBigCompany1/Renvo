@@ -1,10 +1,10 @@
 # backend/agent_service/agents/orchestrator.py
 import asyncio
 from typing import Dict, Any, List
-from agents.text_agent import TextAnalysisAgent
-from agents.image_agent import ImageAnalysisAgent
-from agents.market_agent import MarketAnalysisAgent
-from langchain_openai import ChatOpenAI
+from .text_agent import TextAnalysisAgent
+from .image_agent import ImageAnalysisAgent
+from .market_agent import MarketAnalysisAgent
+from langchain_community.chat_models import ChatOpenAI
 import traceback
 
 class OrchestratorAgent:
@@ -48,18 +48,15 @@ class OrchestratorAgent:
         if not final_ideas:
             return {}
 
-        # Sort ideas by adjusted_roi if available, otherwise fall back to original roi
         sorted_ideas = sorted(
-            final_ideas, 
-            key=lambda x: x.get('adjusted_roi', x.get('roi', 0)), 
+            final_ideas,
+            key=lambda x: x.get('adjusted_roi', x.get('roi', 0)),
             reverse=True
         )
         top_ideas = sorted_ideas[:3]
 
         total_budget = sum(idea.get("estimated_cost", {}).get("medium", 0) for idea in top_ideas)
         total_value = sum(idea.get("estimated_value_add", {}).get("medium", 0) for idea in top_ideas)
-        
-        # This score is a simple heuristic. Can be refined later.
         potential_score = min(10, round((total_value / total_budget) * 3, 1)) if total_budget > 0 else 5
 
         return {
@@ -72,11 +69,10 @@ class OrchestratorAgent:
                     "estimatedCost": idea.get("estimated_cost", {}).get("medium", 0),
                     "estimatedValueAdd": idea.get("estimated_value_add", {}).get("medium", 0),
                     "estimatedRoi": idea.get('adjusted_roi', idea.get("roi", 0))
-                } 
+                }
                 for idea in top_ideas
             ]
         }
-
 
     async def generate_full_report(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
         """Runs the full analysis pipeline and compiles the final report."""
@@ -103,7 +99,6 @@ class OrchestratorAgent:
                 image_analysis_result = await self.image_agent.process(image_urls, initial_ideas)
                 print(f"[Orchestrator] ImageAnalysisAgent completed. Result keys: {image_analysis_result.keys()}")
 
-            # Use refined ideas from image agent if available, otherwise use text agent's ideas
             ideas_for_market_analysis = image_analysis_result.get("refined_renovation_ideas", initial_ideas)
 
             # 3. Market Analysis
@@ -111,7 +106,7 @@ class OrchestratorAgent:
             market_analysis_result = await self.market_agent.process(property_data, {"renovation_ideas": ideas_for_market_analysis})
             print(f"[Orchestrator] MarketAnalysisAgent completed. Result keys: {market_analysis_result.keys()}")
             if market_analysis_result.get("error"):
-                 print(f"[Orchestrator] MarketAnalysisAgent Error: {market_analysis_result.get('error')}")
+                print(f"[Orchestrator] MarketAnalysisAgent Error: {market_analysis_result.get('error')}")
 
             # 4. Compile Final Report
             print("[Orchestrator] Compiling final report...")
@@ -126,18 +121,15 @@ class OrchestratorAgent:
                 **aggregate_financials
             }
             full_report["market_summary"] = market_analysis_result.get("market_summary", "Market summary could not be generated.")
-            
-            # This is the preserved logic to generate the quick insights for the UI
             full_report["quick_insights"] = self._format_quick_insights(final_ideas)
-            
-            print("[Orchestrator] Final report compiled.")
 
+            print("[Orchestrator] Final report compiled.")
 
         except Exception as e:
             print(f"--- [Orchestrator] A CRITICAL error occurred in generate_full_report: {e} ---")
             print(traceback.format_exc())
             full_report["error"] = str(e)
-            full_report["quick_insights"] = {} # Ensure key exists even on error
+            full_report["quick_insights"] = {}
 
         print("--- generate_full_report finished ---")
         return full_report

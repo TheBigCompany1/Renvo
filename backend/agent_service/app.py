@@ -7,8 +7,8 @@ import uuid
 import os
 import datetime
 import traceback
-import re # Import re for cleaning price strings
-import json # Import json for pretty printing
+import re  # Import re for cleaning price strings
+import json  # Import json for pretty printing
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -28,7 +28,7 @@ report_storage = {}
 def safe_float_from_price(price_str):
     if price_str is None:
         return 0.0
-    if isinstance(price_str, (int, float)): # Already a number
+    if isinstance(price_str, (int, float)):  # Already a number
         return float(price_str)
     try:
         # Remove '$', ',', handle potential spaces
@@ -55,7 +55,7 @@ def analyze_property():
         k: v for k, v in property_data.items() if k not in ['description', 'images']
     })
     if 'images' in property_data:
-        print(f"Received {len(property_data.get('images',[]))} image(s).")
+        print(f"Received {len(property_data.get('images', []))} image(s).")
 
     report_id = str(uuid.uuid4())
     print(f"Generated report ID: {report_id}")
@@ -76,18 +76,17 @@ def analyze_property():
         report_property_data['estimate'] = safe_float_from_price(report_property_data.get('estimate'))
         report_property_data['price'] = safe_float_from_price(report_property_data.get('price'))
 
-
         report_storage[report_id] = {
              "report_id": report_id,
-             "status": "completed", # Mark as completed directly
-             "property": report_property_data, # Store cleaned property data
+             "status": "completed",  # Mark as completed directly
+             "property": report_property_data,  # Store cleaned property data
              "created_at": datetime.datetime.now(),
              "updated_at": datetime.datetime.now(),
              "detailed_report": full_report.get("detailed_report"),
              # market_summary might be inside detailed_report now, adjust if needed
              "market_summary": full_report.get("market_summary") or full_report.get("detailed_report", {}).get("market_summary"),
              "quick_insights": full_report.get("quick_insights", {}),
-             "error": full_report.get("error") # Store error if orchestrator returned one
+             "error": full_report.get("error")  # Store error if orchestrator returned one
         }
         print(f"[{report_id}] Stored 'completed' report.")
 
@@ -124,43 +123,38 @@ def report():
 
     if not report_id or report_id not in report_storage:
         print(f"Report '{report_id}' not found in storage.")
-        abort(404) # Use abort for standard Flask error handling
+        abort(404)  # Use abort for standard Flask error handling
 
     report_data = report_storage.get(report_id)
     report_status = report_data.get("status", "unknown")
     print(f"Report '{report_id}' status: {report_status}")
-    
+
     # =================================================================
     # DEBUGGING LOG: PRINT THE DATA SENT TO THE TEMPLATE
     # =================================================================
     print("\n--- DEBUG: Data being sent to report.html template ---")
-    print(json.dumps(report_data, indent=2, default=str)) # Use json.dumps for pretty printing
+    print(json.dumps(report_data, indent=2, default=str))  # Use json.dumps for pretty printing
     print("--- END DEBUG ---\n")
     # =================================================================
 
     if report_status == "failed":
          error_message = report_data.get('error', 'Unknown error')
          print(f"Rendering error page/message for {report_id}: {error_message}")
-         # Optionally render an error template: return render_template("error.html", error=error_message), 500
          return f"Report generation failed for ID {report_id}. Error: {error_message}", 500
     elif report_status == "completed":
-        # --- Add Sorting Logic Here ---
         try:
             if report_data.get("detailed_report") and report_data["detailed_report"].get("renovation_ideas"):
                 ideas_list = report_data["detailed_report"]["renovation_ideas"]
-                # Sort by 'adjusted_roi' descending. Treat missing/None ROI as lowest (-infinity).
                 ideas_list.sort(
                     key=lambda idea: float(idea.get('adjusted_roi', '-inf')),
                     reverse=True
                 )
                 print(f"Sorted {len(ideas_list)} renovation ideas by ROI for report {report_id}.")
             else:
-                 print(f"No renovation ideas found to sort for report {report_id}.")
+                print(f"No renovation ideas found to sort for report {report_id}.")
         except Exception as sort_err:
-             # Log error but don't fail the whole report rendering if sorting fails
              print(f"ERROR sorting renovation ideas for {report_id}: {sort_err}")
              print(traceback.format_exc())
-        # --- End Sorting Logic ---
 
         print(f"Rendering report.html for {report_id}")
         return render_template("report.html", report=report_data)
