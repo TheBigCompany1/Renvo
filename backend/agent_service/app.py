@@ -15,17 +15,15 @@ load_dotenv()
 
 app = Flask(__name__, template_folder="templates")
 
-# --- Agent Initialization ---
-API_KEY = os.getenv("OPENAI_API_KEY")
-if not API_KEY:
-    print("ERROR: OPENAI_API_KEY environment variable not set.")
-orchestrator = OrchestratorAgent(api_key=API_KEY, model="gpt-4o")
-
 # --- In-memory Storage ---
 report_storage = {}
 
 # --- Helper Functions ---
 def safe_float_from_price(price_str):
+    """
+    Cleans a price string by removing currency symbols and commas.
+    Returns a float, or 0.0 if cleaning fails.
+    """
     if price_str is None:
         return 0.0
     if isinstance(price_str, (int, float)):
@@ -40,8 +38,18 @@ def safe_float_from_price(price_str):
 def run_orchestrator_in_background(report_id, property_data):
     """
     Runs the entire async orchestration in a dedicated event loop in a new thread.
-    This prevents the main Flask thread from closing the loop prematurely.
     """
+    # --- FIX: Instantiate the orchestrator INSIDE the thread ---
+    # This ensures the agent and its underlying clients (like grpc)
+    # are created and used within the same event loop, preventing conflicts.
+    API_KEY = os.getenv("OPENAI_API_KEY")
+    if not API_KEY:
+        print(f"[{report_id}] ERROR: OPENAI_API_KEY not found in background thread.")
+        report_storage[report_id].update({"status": "failed", "error": "API Key not configured."})
+        return
+        
+    orchestrator = OrchestratorAgent(api_key=API_KEY, model="gpt-4o")
+    
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -120,7 +128,6 @@ def analyze_property():
     print(f"[{report_id}] Sending immediate response to Node.js:", response_payload)
     return jsonify(response_payload)
 
-# --- FIX: New endpoint to get the status of a report ---
 @app.route("/api/report/status", methods=["GET"])
 def get_report_status():
     """
@@ -157,7 +164,6 @@ def report():
     print(json.dumps(report_data, indent=2, default=str))
     print("--- END DEBUG ---\n")
 
-    # The template will now handle all statuses, including 'processing'
     if report_status == "completed":
         try:
             if report_data.get("detailed_report") and report_data["detailed_report"].get("renovation_ideas"):
