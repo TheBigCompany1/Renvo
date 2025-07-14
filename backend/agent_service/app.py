@@ -6,6 +6,7 @@ import datetime
 import traceback
 import re
 import json
+import threading
 
 from dotenv import load_dotenv
 from agents.orchestrator import OrchestratorAgent
@@ -18,7 +19,6 @@ app = Flask(__name__, template_folder="templates")
 API_KEY = os.getenv("OPENAI_API_KEY")
 if not API_KEY:
     print("ERROR: OPENAI_API_KEY environment variable not set.")
-# It's better to initialize the orchestrator once, not per request
 orchestrator = OrchestratorAgent(api_key=API_KEY, model="gpt-4o")
 
 # --- In-memory Storage ---
@@ -26,10 +26,6 @@ report_storage = {}
 
 # --- Helper Functions ---
 def safe_float_from_price(price_str):
-    """
-    Cleans a price string by removing currency symbols and commas.
-    Returns a float, or 0.0 if cleaning fails.
-    """
     if price_str is None:
         return 0.0
     if isinstance(price_str, (int, float)):
@@ -41,12 +37,51 @@ def safe_float_from_price(price_str):
         print(f"Warning: Could not convert price string '{price_str}' to float.")
         return 0.0
 
+def run_orchestrator_in_background(report_id, property_data):
+    """
+    Runs the entire async orchestration in a dedicated event loop in a new thread.
+    This prevents the main Flask thread from closing the loop prematurely.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        print(f"[{report_id}] Background thread started with new event loop.")
+        full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
+        print(f"[{report_id}] Background orchestration finished.")
+        
+        report_property_data = full_report.get("property", property_data)
+
+        report_storage[report_id].update({
+             "status": "completed",
+             "property": report_property_data,
+             "updated_at": datetime.datetime.now(),
+             "detailed_report": full_report.get("detailed_report"),
+             "market_summary": full_report.get("market_summary") or full_report.get("detailed_report", {}).get("market_summary"),
+             "quick_insights": full_report.get("quick_insights", {}),
+             "error": full_report.get("error")
+        })
+        print(f"[{report_id}] Stored 'completed' report from background thread.")
+
+    except Exception as e:
+        print(f"[{report_id}] EXCEPTION during background orchestration: {str(e)}")
+        print(f"[{report_id}] Traceback: {traceback.format_exc()}")
+        report_storage[report_id].update({
+            "status": "failed", 
+            "error": str(e),
+            "updated_at": datetime.datetime.now()
+        })
+        print(f"[{report_id}] Stored 'failed' report from background thread.")
+    finally:
+        loop.close()
+        print(f"[{report_id}] Background thread event loop closed.")
+
+
 # --- API Endpoints ---
 @app.route("/api/analyze-property", methods=["POST"])
 def analyze_property():
     """
-    Receives property data, cleans it, runs the orchestrator, stores the result,
-    and returns a reportId.
+    Receives property data, cleans it, starts the orchestrator in a background thread,
+    and immediately returns a reportId.
     """
     data = request.get_json()
     url = data.get("url") or (data.get("property_data") or {}).get("url")
@@ -61,64 +96,31 @@ def analyze_property():
     if 'images' in property_data:
         print(f"Received {len(property_data.get('images', []))} image(s).")
 
-    # =================================================================
-    # --- FIX: Clean the data BEFORE passing it to the orchestrator ---
-    # =================================================================
-    # This ensures all agents receive clean, usable numeric data.
     property_data['price'] = safe_float_from_price(property_data.get('price'))
     property_data['estimate'] = safe_float_from_price(property_data.get('estimate'))
     print(f"Cleaned price: {property_data['price']}, Cleaned estimate: {property_data['estimate']}")
-    # =================================================================
 
     report_id = str(uuid.uuid4())
     print(f"Generated report ID: {report_id}")
-    full_report = None
-    processing_error = None
 
-    # --- Run Orchestrator Synchronously ---
-    print(f"[{report_id}] Starting SYNCHRONOUS report generation...")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        # Pass the pre-cleaned property_data to the orchestrator
-        full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
-        print(f"[{report_id}] Synchronous orchestration finished.")
-
-        # The data in full_report.property should already be clean.
-        report_property_data = full_report.get("property", property_data)
-
-        report_storage[report_id] = {
-             "report_id": report_id,
-             "status": "completed",
-             "property": report_property_data,
-             "created_at": datetime.datetime.now(),
-             "updated_at": datetime.datetime.now(),
-             "detailed_report": full_report.get("detailed_report"),
-             "market_summary": full_report.get("market_summary") or full_report.get("detailed_report", {}).get("market_summary"),
-             "quick_insights": full_report.get("quick_insights", {}),
-             "error": full_report.get("error")
-        }
-        print(f"[{report_id}] Stored 'completed' report.")
-
-    except Exception as e:
-        print(f"[{report_id}] EXCEPTION during SYNCHRONOUS orchestration: {str(e)}")
-        print(f"[{report_id}] Traceback: {traceback.format_exc()}")
-        processing_error = str(e)
-        report_storage[report_id] = {
-            "report_id": report_id, "status": "failed", "error": processing_error,
-            "property": property_data, "created_at": datetime.datetime.now()
-        }
-        print(f"[{report_id}] Stored 'failed' report.")
-    finally:
-        loop.close()
-        print(f"[{report_id}] Finished synchronous processing block.")
-    # --- End Synchronous Execution ---
-
-    response_payload = {
-        "reportId": report_id,
-        "quick_insights": report_storage.get(report_id, {}).get("quick_insights", {})
+    # Create the initial "processing" record in storage
+    report_storage[report_id] = {
+        "report_id": report_id,
+        "status": "processing",
+        "property": property_data,
+        "created_at": datetime.datetime.now(),
+        "updated_at": datetime.datetime.now(),
+        "error": None
     }
-    print(f"[{report_id}] Sending response payload to Node.js:", response_payload)
+    
+    # --- FIX: Run the orchestrator in a separate thread ---
+    # This prevents the main Flask request from blocking and manages the event loop correctly.
+    thread = threading.Thread(target=run_orchestrator_in_background, args=(report_id, property_data))
+    thread.start()
+    print(f"[{report_id}] Orchestration started in a background thread.")
+
+    response_payload = { "reportId": report_id }
+    print(f"[{report_id}] Sending immediate response to Node.js:", response_payload)
     return jsonify(response_payload)
 
 
@@ -146,10 +148,17 @@ def report():
          error_message = report_data.get('error', 'Unknown error')
          print(f"Rendering error page/message for {report_id}: {error_message}")
          return f"Report generation failed for ID {report_id}. Error: {error_message}", 500
-    elif report_status == "completed":
+    
+    if report_status == "processing":
+        print(f"Rendering processing page for {report_id}")
+        # You might want a dedicated processing.html template
+        return render_template("report.html", report=report_data)
+
+    if report_status == "completed":
         try:
             if report_data.get("detailed_report") and report_data["detailed_report"].get("renovation_ideas"):
                 ideas_list = report_data["detailed_report"]["renovation_ideas"]
+                # Ensure adjusted_roi is a number before sorting
                 ideas_list.sort(
                     key=lambda idea: float(idea.get('adjusted_roi', '-inf')),
                     reverse=True
@@ -163,9 +172,10 @@ def report():
 
         print(f"Rendering report.html for {report_id}")
         return render_template("report.html", report=report_data)
-    else:
-         print(f"Unexpected status '{report_status}' for {report_id} in sync flow.")
-         abort(500, description=f"Report has unexpected status: {report_status}")
+    
+    # Fallback for any other status
+    print(f"Unexpected status '{report_status}' for {report_id}.")
+    abort(500, description=f"Report has unexpected status: {report_status}")
 
 
 if __name__ == "__main__":
