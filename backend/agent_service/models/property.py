@@ -13,7 +13,8 @@ class TaxHistoryEntry(BaseModel):
     taxAmount: Optional[int] = None
     assessment: Optional[int] = None
 
-class Property(BaseModel):
+class PropertyDetails(BaseModel):
+    """Data model for the core property details. Renamed from Property to PropertyDetails."""
     # --- Existing & Previously Added Fields ---
     address: Optional[str] = None
     price: Optional[Union[int, str]] = None # Allow int or formatted string
