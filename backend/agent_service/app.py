@@ -103,7 +103,6 @@ def analyze_property():
     report_id = str(uuid.uuid4())
     print(f"Generated report ID: {report_id}")
 
-    # Create the initial "processing" record in storage
     report_storage[report_id] = {
         "report_id": report_id,
         "status": "processing",
@@ -113,8 +112,6 @@ def analyze_property():
         "error": None
     }
     
-    # --- FIX: Run the orchestrator in a separate thread ---
-    # This prevents the main Flask request from blocking and manages the event loop correctly.
     thread = threading.Thread(target=run_orchestrator_in_background, args=(report_id, property_data))
     thread.start()
     print(f"[{report_id}] Orchestration started in a background thread.")
@@ -123,11 +120,27 @@ def analyze_property():
     print(f"[{report_id}] Sending immediate response to Node.js:", response_payload)
     return jsonify(response_payload)
 
+# --- FIX: New endpoint to get the status of a report ---
+@app.route("/api/report/status", methods=["GET"])
+def get_report_status():
+    """
+    A lightweight endpoint for the frontend to poll for the report status.
+    """
+    report_id = request.args.get("reportId")
+    if not report_id or report_id not in report_storage:
+        return jsonify({"status": "not_found"}), 404
+    
+    report = report_storage[report_id]
+    return jsonify({
+        "status": report.get("status"),
+        "error": report.get("error")
+    })
 
 @app.route("/report", methods=["GET"])
 def report():
     """
-    Retrieves report data, sorts renovation ideas by ROI, and renders the template.
+    Retrieves report data and renders the template.
+    The template itself will handle polling for updates if status is 'processing'.
     """
     report_id = request.args.get("reportId")
     print(f"GET /report request for ID: {report_id}")
@@ -144,38 +157,21 @@ def report():
     print(json.dumps(report_data, indent=2, default=str))
     print("--- END DEBUG ---\n")
 
-    if report_status == "failed":
-         error_message = report_data.get('error', 'Unknown error')
-         print(f"Rendering error page/message for {report_id}: {error_message}")
-         return f"Report generation failed for ID {report_id}. Error: {error_message}", 500
-    
-    if report_status == "processing":
-        print(f"Rendering processing page for {report_id}")
-        # You might want a dedicated processing.html template
-        return render_template("report.html", report=report_data)
-
+    # The template will now handle all statuses, including 'processing'
     if report_status == "completed":
         try:
             if report_data.get("detailed_report") and report_data["detailed_report"].get("renovation_ideas"):
                 ideas_list = report_data["detailed_report"]["renovation_ideas"]
-                # Ensure adjusted_roi is a number before sorting
                 ideas_list.sort(
                     key=lambda idea: float(idea.get('adjusted_roi', '-inf')),
                     reverse=True
                 )
                 print(f"Sorted {len(ideas_list)} renovation ideas by ROI for report {report_id}.")
-            else:
-                print(f"No renovation ideas found to sort for report {report_id}.")
         except Exception as sort_err:
              print(f"ERROR sorting renovation ideas for {report_id}: {sort_err}")
-             print(traceback.format_exc())
 
-        print(f"Rendering report.html for {report_id}")
-        return render_template("report.html", report=report_data)
-    
-    # Fallback for any other status
-    print(f"Unexpected status '{report_status}' for {report_id}.")
-    abort(500, description=f"Report has unexpected status: {report_status}")
+    print(f"Rendering report.html for {report_id} with status '{report_status}'")
+    return render_template("report.html", report=report_data)
 
 
 if __name__ == "__main__":
