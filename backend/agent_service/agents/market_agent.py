@@ -65,6 +65,7 @@ class MarketAnalysisOutput(LangchainBaseModel):
 class MarketAnalysisAgent(BaseAgent):
     """Agent for analyzing market trends with guaranteed JSON output."""
 
+    # ** THE FIX: The prompt is now much more explicit about required fields. **
     PROMPT_TEMPLATE = """
     You are a senior real estate investment analyst. Your task is to perform a detailed market and financial analysis for the property at {address} with a square footage of {sqft}. The original purchase price is ${price}.
 
@@ -74,20 +75,20 @@ class MarketAnalysisAgent(BaseAgent):
     **YOUR TASKS - A TWO-STEP PROCESS:**
 
     **STEP 1: COMPARABLE PROPERTY ANALYSIS (COMPS)**
-    1.  **Find Comps**: Use the 'google_search' tool to find 2-3 recently sold properties that are truly comparable to the subject property.
+    1.  **Find Comps**: Use the 'google_search' tool to find 2-3 real, recently sold properties that are truly comparable to the subject property.
     2.  **Comp Criteria**: Your search must be specific. Find properties in the same neighborhood or zip code that have sold in the last 12 months and are similar in bed/bath count, square footage, and amenities.
-    3.  **Price Per Square Foot**: For EACH comp you find, you MUST calculate and include its `price_per_sqft` (sale price / square footage).
+    3.  **Price Per Square Foot**: For EACH comp you find, you MUST calculate and include its `price_per_sqft`.
     4.  **Calculate Average**: Determine the average price per square foot from all the comps you found.
 
     **STEP 2: FINANCIAL PROJECTIONS FOR EACH RENOVATION IDEA**
-    5.  **Preserve Original Data**: First, ensure that all original fields from the ideas (`name`, `description`, `estimated_cost`, etc.) are preserved in your final output. **CRITICAL**: The `estimated_cost` and `estimated_value_add` fields MUST be preserved as dictionaries with "low", "medium", and "high" keys.
-    6.  **Calculate After Repair Value (ARV)**: For each renovation idea, calculate the potential `after_repair_value` (ARV). The formula is: `ARV = (Average Price Per Square Foot from Step 4) * (Subject Property's Square Footage)`.
-    7.  **Adjust Financials**: The `estimated_value_add` should now be calculated as `ARV - (Original Property Price)`.
-    8.  **Recalculate ROI**: Recalculate the ROI based on this new data and place it in the `adjusted_roi` key. The formula is: `((ARV - Original Property Price - Medium Cost) / Medium Cost) * 100`.
-    9.  **Rental Analysis**: For any idea creating a rentable unit (ADU, duplex), find the average monthly rent in that city. If you find rental data, calculate the Capitalization Rate (Cap Rate) using the formula: `Cap Rate = ((Monthly Rent * 12) * 0.6) / Medium Estimated Cost`.
-    10. **Find Local Professionals**: For the top recommendation, use the search tool to find 2-3 top-rated architects or general contractors in the same city as the property.
+    5.  **Preserve and Populate ALL Fields**: For each idea, you MUST populate EVERY field defined in the `MarketAdjustedIdea` schema. This includes preserving all original data (`name`, `description`, `roi`, etc.) and adding all new analysis fields (`after_repair_value`, `adjusted_roi`, `market_demand`, `local_trends`, etc.). DO NOT OMIT ANY FIELDS.
+    6.  **Calculate After Repair Value (ARV)**: Calculate the `after_repair_value` using the formula: `ARV = (Average Price Per Square Foot from Step 4) * (Subject Property's Square Footage)`.
+    7.  **Adjust Financials**: The `estimated_value_add` should be a dictionary calculated as `ARV - (Original Property Price)`.
+    8.  **Recalculate ROI**: Recalculate the ROI and place it in the `adjusted_roi` field. The formula is: `((ARV - Original Property Price - Medium Cost) / Medium Cost) * 100`.
+    9.  **Rental Analysis**: For any idea creating a rentable unit (e.g., ADU), find the average monthly rent and calculate the `capitalization_rate`. If not applicable, set these fields to null.
+    10. **Find Local Professionals**: For the top recommendation, find 2-3 local contractors.
 
-    After your analysis, you MUST format your final response as a single, valid JSON object conforming to the required schema.
+    **FINAL INSTRUCTION**: Before finishing, double-check your entire response to ensure it is a single, valid JSON object that perfectly matches the `MarketAnalysisOutput` schema, including all required fields for every object in the lists.
     """
 
     def __init__(self, llm):
@@ -106,7 +107,6 @@ class MarketAnalysisAgent(BaseAgent):
             renovation_json = json.dumps(renovation_ideas, indent=2)
             address = property_data.get('address', 'Unknown Address')
             sqft = property_data.get('sqft', 0)
-            # ** THE FIX: Corrected typo from '.0' to '0.0' **
             price = property_data.get('price', 0.0)
 
             try: sqft = float(sqft)
