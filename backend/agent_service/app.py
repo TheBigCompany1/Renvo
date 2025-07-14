@@ -1,48 +1,52 @@
-# app.py - With ROI Sorting & DEBUG LOGGING
-
 from flask import Flask, request, jsonify, render_template, abort
-from agents.orchestrator import OrchestratorAgent
 import asyncio
 import uuid
 import os
 import datetime
 import traceback
-import re  # Import re for cleaning price strings
-import json  # Import json for pretty printing
+import re
+import json
 
 from dotenv import load_dotenv
+from agents.orchestrator import OrchestratorAgent
+
 load_dotenv()
 
 app = Flask(__name__, template_folder="templates")
 
+# --- Agent Initialization ---
 API_KEY = os.getenv("OPENAI_API_KEY")
 if not API_KEY:
     print("ERROR: OPENAI_API_KEY environment variable not set.")
+# It's better to initialize the orchestrator once, not per request
 orchestrator = OrchestratorAgent(api_key=API_KEY, model="gpt-4o")
 
-# In-memory storage remains
+# --- In-memory Storage ---
 report_storage = {}
 
-
-# Helper function to safely get float from potential string like '$1,234.56' or None
+# --- Helper Functions ---
 def safe_float_from_price(price_str):
+    """
+    Cleans a price string by removing currency symbols and commas.
+    Returns a float, or 0.0 if cleaning fails.
+    """
     if price_str is None:
         return 0.0
-    if isinstance(price_str, (int, float)):  # Already a number
+    if isinstance(price_str, (int, float)):
         return float(price_str)
     try:
-        # Remove '$', ',', handle potential spaces
         cleaned_str = re.sub(r'[$,\s]', '', str(price_str))
         return float(cleaned_str)
     except (ValueError, TypeError):
         print(f"Warning: Could not convert price string '{price_str}' to float.")
         return 0.0
 
-
+# --- API Endpoints ---
 @app.route("/api/analyze-property", methods=["POST"])
 def analyze_property():
     """
-    Receives property data, runs orchestrator SYNCHRONOUSLY, stores result, returns reportId.
+    Receives property data, cleans it, runs the orchestrator, stores the result,
+    and returns a reportId.
     """
     data = request.get_json()
     url = data.get("url") or (data.get("property_data") or {}).get("url")
@@ -57,6 +61,15 @@ def analyze_property():
     if 'images' in property_data:
         print(f"Received {len(property_data.get('images', []))} image(s).")
 
+    # =================================================================
+    # --- FIX: Clean the data BEFORE passing it to the orchestrator ---
+    # =================================================================
+    # This ensures all agents receive clean, usable numeric data.
+    property_data['price'] = safe_float_from_price(property_data.get('price'))
+    property_data['estimate'] = safe_float_from_price(property_data.get('estimate'))
+    print(f"Cleaned price: {property_data['price']}, Cleaned estimate: {property_data['estimate']}")
+    # =================================================================
+
     report_id = str(uuid.uuid4())
     print(f"Generated report ID: {report_id}")
     full_report = None
@@ -67,26 +80,23 @@ def analyze_property():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
+        # Pass the pre-cleaned property_data to the orchestrator
         full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
         print(f"[{report_id}] Synchronous orchestration finished.")
 
-        # Prepare data for storage - use helper to clean price/estimate early
+        # The data in full_report.property should already be clean.
         report_property_data = full_report.get("property", property_data)
-        # Ensure estimate and price are stored as floats if possible for easier use later
-        report_property_data['estimate'] = safe_float_from_price(report_property_data.get('estimate'))
-        report_property_data['price'] = safe_float_from_price(report_property_data.get('price'))
 
         report_storage[report_id] = {
              "report_id": report_id,
-             "status": "completed",  # Mark as completed directly
-             "property": report_property_data,  # Store cleaned property data
+             "status": "completed",
+             "property": report_property_data,
              "created_at": datetime.datetime.now(),
              "updated_at": datetime.datetime.now(),
              "detailed_report": full_report.get("detailed_report"),
-             # market_summary might be inside detailed_report now, adjust if needed
              "market_summary": full_report.get("market_summary") or full_report.get("detailed_report", {}).get("market_summary"),
              "quick_insights": full_report.get("quick_insights", {}),
-             "error": full_report.get("error")  # Store error if orchestrator returned one
+             "error": full_report.get("error")
         }
         print(f"[{report_id}] Stored 'completed' report.")
 
@@ -94,7 +104,6 @@ def analyze_property():
         print(f"[{report_id}] EXCEPTION during SYNCHRONOUS orchestration: {str(e)}")
         print(f"[{report_id}] Traceback: {traceback.format_exc()}")
         processing_error = str(e)
-        # Store failed state
         report_storage[report_id] = {
             "report_id": report_id, "status": "failed", "error": processing_error,
             "property": property_data, "created_at": datetime.datetime.now()
@@ -123,19 +132,15 @@ def report():
 
     if not report_id or report_id not in report_storage:
         print(f"Report '{report_id}' not found in storage.")
-        abort(404)  # Use abort for standard Flask error handling
+        abort(404)
 
     report_data = report_storage.get(report_id)
     report_status = report_data.get("status", "unknown")
     print(f"Report '{report_id}' status: {report_status}")
 
-    # =================================================================
-    # DEBUGGING LOG: PRINT THE DATA SENT TO THE TEMPLATE
-    # =================================================================
     print("\n--- DEBUG: Data being sent to report.html template ---")
-    print(json.dumps(report_data, indent=2, default=str))  # Use json.dumps for pretty printing
+    print(json.dumps(report_data, indent=2, default=str))
     print("--- END DEBUG ---\n")
-    # =================================================================
 
     if report_status == "failed":
          error_message = report_data.get('error', 'Unknown error')

@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Optional
 import json
 import traceback
+import re # Import the regular expression module
 from .base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
@@ -99,7 +100,24 @@ class MarketAnalysisAgent(BaseAgent):
             renovation_json = json.dumps(renovation_ideas, indent=2)
             address = property_data.get('address', 'Unknown Address')
             sqft = float(property_data.get('sqft', 0) or 0)
-            price = float(property_data.get('price', 0) or 0)
+            
+            # =========== FIX START ===========
+            # This block handles various formats for the 'price' field.
+            # It cleans the string of currency symbols and commas before conversion.
+            price_str = property_data.get('price')
+            price = 0.0
+            if isinstance(price_str, (int, float)):
+                price = float(price_str)
+            elif isinstance(price_str, str):
+                try:
+                    # Remove '$', ',', and spaces before converting to float
+                    cleaned_str = re.sub(r'[$,\s]', '', price_str)
+                    price = float(cleaned_str)
+                except (ValueError, TypeError):
+                    # Log a warning if conversion fails, and default to 0.0
+                    print(f"[MarketAgent] Warning: Could not convert price string '{price_str}' to float.")
+                    price = 0.0
+            # =========== FIX END ===========
 
             prompt = self._create_prompt(
                 self.PROMPT_TEMPLATE,
