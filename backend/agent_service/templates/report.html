@@ -4,73 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Renovation ROI Report - {{ report.property.address if report.property else 'Analyzing...' }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --primary-color: #2a9d8f; /* Teal */
-            --secondary-color: #e9c46a; /* Yellow */
-            --accent-color: #f4a261; /* Orange */
-            --bg-color: #f8f9fa;
-            --card-bg: #ffffff;
-            --text-color: #343a40;
-            --text-muted: #6c757d;
-            --border-color: #dee2e6;
-            --border-radius: 8px;
-            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            --header-height: 60px;
-            --light-gray: #f1f1f1;
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa;
         }
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: var(--text-color); background-color: var(--bg-color); padding-top: 20px; }
-        .container { max-width: 1200px; margin: 20px auto; padding: 0 15px; }
-        .report-header { background-color: var(--primary-color); color: white; padding: 25px; border-radius: var(--border-radius); margin-bottom: 30px; box-shadow: var(--shadow); position: relative; }
-        .report-header h1 { margin: 0 0 10px 0; font-size: 1.8em; font-weight: 600; }
-        .report-header p { margin: 0 0 5px 0; font-size: 0.9em; opacity: 0.9; }
-        .report-header p:last-child { margin-bottom: 0; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin-bottom: 30px; }
-        .grid-col-span-2 { grid-column: span 2; }
-        @media (max-width: 992px) { .grid-col-span-2 { grid-column: span 1; } }
-        .card { background-color: var(--card-bg); border-radius: var(--border-radius); padding: 20px; box-shadow: var(--shadow); border: 1px solid var(--border-color); display: flex; flex-direction: column; margin-bottom: 30px; }
-        .card h2, .card h3 { color: var(--primary-color); margin-bottom: 15px; border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; font-size: 1.3em; font-weight: 600; }
-        .card h3 { font-size: 1.1em; margin-top: 15px; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-        .card p { margin-bottom: 10px; font-size: 0.9em; }
-        .card p:last-child { margin-bottom: 0; }
-        .property-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
-        @media (max-width: 768px) { .property-summary { grid-template-columns: 1fr; } }
-        .image-carousel-container { position: relative; overflow: hidden; border-radius: var(--border-radius); box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 1px solid var(--border-color); min-height: 250px; background-color: var(--light-gray); margin-bottom: 20px; }
-        .carousel-inner { display: flex; transition: transform 0.5s ease; }
-        .carousel-item { min-width: 100%; flex-shrink: 0; }
-        .carousel-item img { width: 100%; height: auto; display: block; max-height: 400px; object-fit: cover; }
-        .key-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .stat { background-color: var(--bg-color); padding: 10px; border-radius: 5px; text-align: center; border: 1px solid var(--border-color); }
-        .stat .value { font-size: 1.2em; font-weight: 600; display: block; color: var(--primary-color); margin-bottom: 3px; word-wrap: break-word; overflow-wrap: break-word; }
-        .stat .label { font-size: 0.8em; color: var(--text-muted); display: block; }
-        .description-text { font-size: 0.9em; }
-        .renovation-card { border-left: 5px solid var(--secondary-color); background-color: var(--card-bg); border-radius: var(--border-radius); padding: 20px; box-shadow: var(--shadow); border: 1px solid var(--border-color); margin-bottom: 20px; }
-        .renovation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .renovation-header h3 { border: none; margin: 0; padding: 0; font-size: 1.3em; }
-        .roi-badge { background-color: var(--accent-color); color: white; padding: 5px 12px; border-radius: 15px; font-weight: bold; font-size: 0.9em; }
-        .chart-container { position: relative; height: 350px; width: 100%; background-color: var(--card-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; color: var(--text-muted); border-radius: var(--border-radius); padding: 15px; box-shadow: var(--shadow); }
-        .chart-container canvas { max-width: 100%; max-height: 100%; }
-        footer { text-align: center; margin-top: 40px; padding: 20px; font-size: 0.85em; color: var(--text-muted); border-top: 1px solid var(--border-color); line-height: 1.5; }
-        .margin-top-medium { margin-top: 20px; }
-        .new-report-button { position: absolute; top: 25px; right: 25px; background-color: var(--accent-color); color: white; text-decoration: none; padding: 10px 15px; border-radius: var(--border-radius); font-weight: 600; font-size: 0.9em; box-shadow: var(--shadow); transition: transform 0.2s ease; }
-        .new-report-button:hover { transform: translateY(-2px); }
-        .comparables-section, .contractors-section { background-color: #fff; padding: 25px; margin-bottom: 30px; border-radius: var(--border-radius); box-shadow: var(--shadow); }
-        .comparables-section h3, .contractors-section h3 { border-bottom: 2px solid var(--accent-color); padding-bottom: 10px; margin-bottom: 20px; font-size: 1.5em; color: var(--primary-color); }
-        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        .data-table th, .data-table td { padding: 12px; border-bottom: 1px solid #dee2e6; text-align: left; }
-        .data-table th { background-color: #f8f9fa; font-weight: 600; }
-        .action-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 20px; }
-        .action-plan-grid h4 { margin-bottom: 10px; font-size: 1.1em; color: #495057; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-        .action-plan-grid ul, .action-plan-grid ol { padding-left: 20px; }
-        .action-plan-grid li { margin-bottom: 8px; line-height: 1.6; font-size: 0.9em;}
-        @media (max-width: 768px) { .action-plan-grid { grid-template-columns: 1fr; } }
-
-        /* Loading Spinner */
+        .report-header { background-color: #2a9d8f; }
+        .new-report-button { background-color: #f4a261; }
+        .renovation-card { border-left: 5px solid #e9c46a; }
+        .roi-badge { background-color: #f4a261; }
+        .stat-box .value { color: #2a9d8f; }
+        .investment-thesis { border-left: 5px solid #2a9d8f; }
+        .pro-link {
+            display: block;
+            background-color: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            color: #343a40;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            border: 1px solid #dee2e6;
+        }
+        .pro-link:hover {
+            background-color: #e9ecef;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
         .loader {
-            border: 8px solid #f3f3f3; /* Light grey */
-            border-top: 8px solid var(--primary-color); /* Blue */
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #2a9d8f;
             border-radius: 50%;
             width: 80px;
             height: 80px;
@@ -83,102 +47,161 @@
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <!-- This is the main content of your report -->
-        <div id="report-content">
-            <header class="report-header">
-                <h1>Renovation ROI Report</h1>
-                <p><strong>Property:</strong> {{ report.property.address if report.property else 'N/A' }}</p>
-                <p><strong>Report ID:</strong> {{ report.report_id }} | <strong>Generated:</strong> {{ report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else 'N/A' }}</p>
-                <a href="https://renvo.ai" class="new-report-button">Generate New Report</a>
+<body class="bg-gray-50">
+    <div id="app-container" class="container mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
+
+        <!-- Main Report Content (hidden by default, shown by JS) -->
+        <div id="report-content" style="display: none;">
+            <!-- Header -->
+            <header class="report-header text-white p-6 rounded-lg shadow-lg mb-8 relative">
+                <h1 class="text-3xl font-bold mb-2">Renovation ROI Report</h1>
+                <p><strong>Property:</strong> {{ report.property.address }}</p>
+                <p class="text-sm opacity-90"><strong>Report ID:</strong> {{ report.report_id }} | <strong>Generated:</strong> {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                <a href="https://renvo.ai" class="new-report-button absolute top-6 right-6 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-opacity-90 transition-transform duration-200 hover:scale-105">Generate New Report</a>
             </header>
 
-            <section class="card">
-                <h2>Property Overview</h2>
-                <div class="property-summary">
-                    <div class="image-carousel-container">
-                        <div class="carousel-inner">
-                            {% if report.property and report.property.images %}
-                                {% for image_url in report.property.images %}
-                                <div class="carousel-item">
-                                    <img src="{{ image_url }}" alt="Property Image">
-                                </div>
-                                {% endfor %}
-                            {% else %}
-                                 <div class="carousel-item" style="display:flex; align-items:center; justify-content:center; color: var(--text-muted);">No Images Available</div>
-                            {% endif %}
-                        </div>
+            <!-- Property Overview -->
+            <section class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-6">Property Overview</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-2 sm:grid-cols-2 gap-4">
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">${{ "{:,.0f}".format(report.property.price) }}</div><div class="label text-xs uppercase text-gray-500">List Price</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ report.property.beds }}</div><div class="label text-xs uppercase text-gray-500">Beds</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ report.property.baths }}</div><div class="label text-xs uppercase text-gray-500">Baths</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ "{:,.0f}".format(report.property.sqft) }}</div><div class="label text-xs uppercase text-gray-500">Sq. Ft.</div></div>
                     </div>
-                    <div class="property-details">
-                        <div class="key-stats">
-                            <div class="stat">
-                                <span class="value">{{ "${:,.0f}".format(report.property.price) if report.property.price else 'N/A' }}</span>
-                                <span class="label">List Price</span>
-                            </div>
-                            <div class="stat">
-                                <span class="value">{{ report.property.beds if report.property.beds is not none else 'N/A' }}</span>
-                                <span class="label">Beds</span>
-                            </div>
-                            <div class="stat">
-                                <span class="value">{{ report.property.baths if report.property.baths is not none else 'N/A' }}</span>
-                                <span class="label">Baths</span>
-                            </div>
-                            <div class="stat">
-                                <span class="value">{{ "{:,.0f}".format(report.property.sqft) if report.property.sqft else 'N/A' }}</span>
-                                <span class="label">Sq. Ft.</span>
-                            </div>
-                            <div class="stat">
-                                <span class="value">{{ report.property.yearBuilt if report.property.yearBuilt else 'N/A' }}</span>
-                                <span class="label">Year Built</span>
-                            </div>
-                            <div class="stat">
-                                <span class="value">{{ report.property.lotSize if report.property.lotSize else 'N/A' }}</span>
-                                <span class="label">Lot Size</span>
-                            </div>
-                        </div>
+                    <div>
+                         <img src="{{ report.property.images[0] if report.property.images else 'https://placehold.co/600x400/e2e8f0/e2e8f0?text=No+Image' }}" alt="Property Image" class="rounded-lg shadow-md w-full h-auto object-cover mb-4">
                     </div>
                 </div>
-                 <div class="description margin-top-medium">
-                     <h3>Property Description</h3>
-                     <p class="description-text">{{ report.property.description or "No description available." }}</p>
-                 </div>
-            </section>
-
-            <section>
-                <h2 class="card-header" style="background:none; border:none; padding:0; margin-bottom:20px;">Renovation Analysis & ROI</h2>
-                <div class="grid margin-bottom-medium">
-                    <div class="chart-container">
-                        <canvas id="roiChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="costValueChart"></canvas>
-                    </div>
+                <!-- Property Description Added -->
+                {% if report.property.description %}
+                <div class="mt-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">Property Description</h3>
+                    <p class="text-gray-600 text-sm">{{ report.property.description }}</p>
                 </div>
-
-                <h3>Top Renovation Opportunities</h3>
-                {% if report.detailed_report and report.detailed_report.renovation_ideas %}
-                    {% for idea in report.detailed_report.renovation_ideas %}
-                    <div class="card renovation-card">
-                        <div class="renovation-header">
-                            <h3>{{ loop.index }}. {{ idea.name }}</h3>
-                            <span class="roi-badge">Est. ROI: {{ idea.get('adjusted_roi', idea.get('roi')) | round(1) }}%</span>
-                        </div>
-                        <p class="renovation-description">{{ idea.description }}</p>
-                        <div class="action-plan-grid">
-                            <!-- Financials, Timeline, Roadmap, Risks sections -->
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="card"><p>No renovation ideas were generated for this property.</p></div>
                 {% endif %}
             </section>
-            
-            <!-- Other sections like Comparables and Contractors -->
 
-            <footer>
-                Disclaimer: This report is generated based on available public data and AI analysis.
+            <!-- Investment Thesis -->
+            {% if report.detailed_report and report.detailed_report.renovation_ideas %}
+            <section class="bg-white p-6 rounded-lg shadow-lg mb-8 investment-thesis">
+                <h2 class="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-4">Investment Thesis</h2>
+                <div class="flex flex-col md:flex-row gap-6 items-center">
+                    <div class="md:w-2/3">
+                        <p class="text-gray-700">The top recommendation is to **{{ report.detailed_report.renovation_ideas[0].name }}**. This project scores as an **Excellent Opportunity** due to its high potential ROI of {{ report.detailed_report.renovation_ideas[0].adjusted_roi | round(1) }}% and strong market demand. Our analysis of comparable properties confirms a significant value add, making this the most strategic investment for this property.</p>
+                    </div>
+                    <div class="md:w-1/3 text-center">
+                        <div class="text-lg font-bold text-gray-800">Opportunity Score</div>
+                        <div class="relative w-32 h-16 mx-auto">
+                            <svg viewBox="0 0 100 50" class="w-full h-full"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#e9ecef" stroke-width="12" /><path d="M 10 50 A 40 40 0 0 1 80 14" fill="none" stroke="#2a9d8f" stroke-width="12" /></svg>
+                            <div class="absolute bottom-0 w-full text-xl font-bold" style="color: #2a9d8f;">Excellent</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Renovation Analysis & ROI Charts -->
+            <section class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-6">Renovation Analysis & ROI</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="chart-container"><canvas id="roiChart"></canvas></div>
+                    <div class="chart-container"><canvas id="costValueChart"></canvas></div>
+                </div>
+            </section>
+
+            <!-- Renovation Opportunities -->
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Top Renovation Opportunities</h2>
+            
+            {% if report.detailed_report and report.detailed_report.renovation_ideas %}
+                {% for idea in report.detailed_report.renovation_ideas %}
+                <section class="bg-white p-6 rounded-lg shadow-lg mb-8 renovation-card">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-xl font-bold text-gray-800">{{ loop.index }}. {{ idea.name }}</h3>
+                        <div class="roi-badge text-white font-bold py-2 px-5 rounded-full text-lg">{{ idea.adjusted_roi | round(1) }}% ROI</div>
+                    </div>
+                    <p class="text-gray-600 mb-6">{{ idea.description }}</p>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">${{ "{:,.0f}".format(idea.estimated_cost.medium) }}</div><div class="label text-xs uppercase text-gray-500">Est. Cost</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">${{ "{:,.0f}".format(idea.estimated_value_add.medium) }}</div><div class="label text-xs uppercase text-gray-500">Value Add</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ idea.timeline }}</div><div class="label text-xs uppercase text-gray-500">Timeline</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ idea.feasibility }}</div><div class="label text-xs uppercase text-gray-500">Feasibility</div></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-8">
+                        <div>
+                            <h4 class="font-semibold text-gray-700 border-b pb-2 mb-3">Project Roadmap</h4>
+                            <ol class="list-decimal list-inside text-gray-600 space-y-2 text-sm">
+                                {% for step in idea.roadmap_steps %}
+                                <li>{{ step }}</li>
+                                {% else %}
+                                <li>No roadmap steps provided.</li>
+                                {% endfor %}
+                            </ol>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 border-b pb-2 mb-3">Potential Risks</h4>
+                            <ul class="list-disc list-inside text-gray-600 space-y-2 text-sm">
+                                {% for risk in idea.potential_risks %}
+                                <li>{{ risk }}</li>
+                                {% else %}
+                                <li>No risks identified.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 border-b pb-2 mb-3">Recommended Pros</h4>
+                            <div class="space-y-2">
+                                {% if report.detailed_report.recommended_contractors %}
+                                    {% for pro in report.detailed_report.recommended_contractors %}
+                                    <a href="{{ pro.url if pro.url else '#' }}" target="_blank" class="pro-link">{{ pro.name }} ({{pro.specialty}})</a>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-sm text-gray-500">No contractors found.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                {% endfor %}
+            {% else %}
+                <div class="bg-white p-6 rounded-lg shadow-lg mb-8 renovation-card">
+                    <p>No renovation opportunities were generated for this property.</p>
+                </div>
+            {% endif %}
+            
+            <!-- Comparables Table -->
+            {% if report.detailed_report and report.detailed_report.comparable_properties %}
+            <section class="bg-white p-6 rounded-lg shadow-lg">
+                <h3 class="text-xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-4">Local Market Comparables</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th scope="col" class="py-3 px-6">Address</th>
+                                <th scope="col" class="py-3 px-6">Sale Price</th>
+                                <th scope="col" class="py-3 px-6">Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for comp in report.detailed_report.comparable_properties %}
+                            <tr class="bg-white border-b">
+                                <td class="py-4 px-6 font-medium text-gray-900"><a href="{{ comp.url }}" target="_blank" class="text-blue-600 hover:underline">{{ comp.address }}</a></td>
+                                <td class="py-4 px-6">${{ "{:,.0f}".format(comp.sale_price) }}</td>
+                                <td class="py-4 px-6">{{ comp.brief_summary }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Disclaimer -->
+            <footer class="text-center mt-10 py-6 border-t text-xs text-gray-500">
+                Disclaimer: This report is generated based on available public data and AI analysis. Estimates are for informational purposes only. Verify all information with qualified professionals before making financial decisions.
             </footer>
         </div>
 
@@ -197,32 +220,36 @@
         </div>
     </div>
 
+    <!-- *** FIX: Data is now safely injected into a JSON script tag *** -->
+    <script id="report-data" type="application/json">
+        {{ report | tojson | safe }}
+    </script>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // --- Configuration ---
-            const POLLING_INTERVAL_MS = 3000; // Check status every 3 seconds
+            const POLLING_INTERVAL_MS = 3000;
             let pollingInterval;
 
-            // --- Get data from Flask template ---
-            const reportId = "{{ report.report_id }}";
-            let currentStatus = "{{ report.status }}";
-            const errorMessage = "{{ report.error or '' }}";
+            // *** FIX: Parse data from the JSON script tag ***
+            const reportDataElement = document.getElementById('report-data');
+            const report = JSON.parse(reportDataElement.textContent);
 
-            // --- DOM Elements ---
+            const reportId = report.report_id;
+            let currentStatus = report.status;
+            const errorMessage = report.error || '';
+
             const processingContainer = document.getElementById('processing-state');
             const reportContainer = document.getElementById('report-content');
             const errorContainer = document.getElementById('error-state');
             const errorMessageElement = document.getElementById('error-message');
 
             function checkStatus() {
-                console.log(`Polling for status of report: ${reportId}`);
                 fetch(`/api/report/status?reportId=${reportId}`)
                     .then(response => {
                         if (!response.ok) throw new Error('Network response was not ok');
                         return response.json();
                     })
                     .then(data => {
-                        console.log('Received status:', data.status);
                         if (data.status === 'completed') {
                             clearInterval(pollingInterval);
                             window.location.reload();
@@ -237,7 +264,7 @@
                         console.error('Polling error:', error);
                         clearInterval(pollingInterval);
                         currentStatus = 'failed';
-                        errorMessageElement.textContent = 'Could not retrieve report status. Please check your connection and try again.';
+                        errorMessageElement.textContent = 'Could not retrieve report status.';
                         updateUI();
                     });
             }
@@ -257,42 +284,27 @@
                     processingContainer.style.display = 'none';
                     reportContainer.style.display = 'block';
                     errorContainer.style.display = 'none';
-                    renderCharts(); // Render charts only when data is complete
+                    renderCharts();
                 }
             }
             
             function renderCharts() {
-                let renovationIdeas = [];
-                try {
-                    const rawData = {{ report.detailed_report.renovation_ideas | tojson | safe if report.detailed_report and report.detailed_report.renovation_ideas else '[]' }};
-                    if (Array.isArray(rawData)) renovationIdeas = rawData;
-                } catch (e) {
-                    console.error("Could not parse renovation ideas data:", e);
-                }
+                const renovationIdeas = report?.detailed_report?.renovation_ideas || [];
 
-                if (renovationIdeas.length === 0) {
-                    console.log("No renovation ideas to render in charts.");
-                    return;
-                }
+                if (renovationIdeas.length === 0) return;
         
-                // ROI Chart
                 const roiCtx = document.getElementById('roiChart')?.getContext('2d');
                 if (roiCtx) {
                     new Chart(roiCtx, {
                         type: 'bar',
                         data: {
                             labels: renovationIdeas.map(idea => idea.name),
-                            datasets: [{
-                                label: 'Estimated ROI (%)',
-                                data: renovationIdeas.map(idea => idea.adjusted_roi || idea.roi),
-                                backgroundColor: 'rgba(244, 162, 97, 0.7)',
-                            }]
+                            datasets: [{ label: 'Estimated ROI (%)', data: renovationIdeas.map(idea => idea.adjusted_roi || idea.roi), backgroundColor: '#f4a261' }]
                         },
-                        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false }, title: { display: true, text: 'Estimated ROI Comparison' } } }
+                        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false }, title: { display: true, text: 'ROI Comparison' } } }
                     });
                 }
         
-                // Cost vs Value Chart
                 const costValueCtx = document.getElementById('costValueChart')?.getContext('2d');
                 if (costValueCtx) {
                     new Chart(costValueCtx, {
@@ -300,24 +312,15 @@
                         data: {
                             labels: renovationIdeas.map(idea => idea.name),
                             datasets: [
-                                {
-                                    label: 'Est. Medium Cost ($)',
-                                    data: renovationIdeas.map(idea => idea.estimated_cost.medium),
-                                    backgroundColor: 'rgba(233, 196, 106, 0.7)',
-                                },
-                                {
-                                    label: 'Est. Medium Value Add ($)',
-                                    data: renovationIdeas.map(idea => idea.estimated_value_add.medium),
-                                    backgroundColor: 'rgba(42, 157, 143, 0.7)',
-                                }
+                                { label: 'Est. Cost ($)', data: renovationIdeas.map(idea => idea.estimated_cost.medium), backgroundColor: '#e9c46a' },
+                                { label: 'Value Add ($)', data: renovationIdeas.map(idea => idea.estimated_value_add.medium), backgroundColor: '#2a9d8f' }
                             ]
                         },
-                        options: { responsive: true, plugins: { legend: { position: 'top' }, title: { display: true, text: 'Estimated Cost vs. Value Added' } } }
+                        options: { responsive: true, plugins: { legend: { position: 'top' }, title: { display: true, text: 'Cost vs. Value Added' } } }
                     });
                 }
             }
 
-            // --- Initial UI setup on page load ---
             updateUI();
         });
     </script>
