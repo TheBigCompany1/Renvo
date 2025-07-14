@@ -64,17 +64,19 @@
             <section class="bg-white p-6 rounded-lg shadow-lg mb-8">
                 <h2 class="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-6">Property Overview</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="grid grid-cols-2 sm:grid-cols-2 gap-4">
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">${{ "{:,.0f}".format(report.property.price) }}</div><div class="label text-xs uppercase text-gray-500">List Price</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ report.property.beds }}</div><div class="label text-xs uppercase text-gray-500">Beds</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ report.property.baths }}</div><div class="label text-xs uppercase text-gray-500">Baths</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ "{:,.0f}".format(report.property.sqft) }}</div><div class="label text-xs uppercase text-gray-500">Sq. Ft.</div></div>
+                    <!-- FIX: Added Year Built, Lot Size, and Type -->
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">${{ "{:,.0f}".format(report.property.price) }}</div><div class="label text-xs uppercase text-gray-500">List Price</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.beds }}</div><div class="label text-xs uppercase text-gray-500">Beds</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.baths }}</div><div class="label text-xs uppercase text-gray-500">Baths</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ "{:,.0f}".format(report.property.sqft) }}</div><div class="label text-xs uppercase text-gray-500">Sq. Ft.</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.yearBuilt }}</div><div class="label text-xs uppercase text-gray-500">Year Built</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.lotSize }}</div><div class="label text-xs uppercase text-gray-500">Lot Size</div></div>
                     </div>
                     <div>
                          <img src="{{ report.property.images[0] if report.property.images else 'https://placehold.co/600x400/e2e8f0/e2e8f0?text=No+Image' }}" alt="Property Image" class="rounded-lg shadow-md w-full h-auto object-cover mb-4">
                     </div>
                 </div>
-                <!-- Property Description Added -->
                 {% if report.property.description %}
                 <div class="mt-6">
                     <h3 class="text-xl font-bold text-gray-800 mb-2">Property Description</h3>
@@ -123,11 +125,17 @@
                     </div>
                     <p class="text-gray-600 mb-6">{{ idea.description }}</p>
                     
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">${{ "{:,.0f}".format(idea.estimated_cost.medium) }}</div><div class="label text-xs uppercase text-gray-500">Est. Cost</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">${{ "{:,.0f}".format(idea.estimated_value_add.medium) }}</div><div class="label text-xs uppercase text-gray-500">Value Add</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ idea.timeline }}</div><div class="label text-xs uppercase text-gray-500">Timeline</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-2xl font-semibold">{{ idea.feasibility }}</div><div class="label text-xs uppercase text-gray-500">Feasibility</div></div>
+                    <!-- FIX: Changed to 3 columns and added Est. Sale Price -->
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">${{ "{:,.0f}".format(idea.estimated_cost.medium) }}</div><div class="label text-xs uppercase text-gray-500">Est. Cost</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">${{ "{:,.0f}".format(idea.estimated_value_add.medium) }}</div><div class="label text-xs uppercase text-gray-500">Value Add</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center">
+                            <div class="value text-xl font-semibold">${{ "{:,.0f}".format(idea.after_repair_value) }}</div>
+                            <div class="label text-xs uppercase text-gray-500">Est. Sale Price</div>
+                            <div class="text-xs text-gray-400 mt-1">{{ "{:,.0f}".format(idea.new_total_sqft) }} sqft &times; ${{ "{:,.0f}".format(idea.new_price_per_sqft) }}/sqft</div>
+                        </div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ idea.timeline }}</div><div class="label text-xs uppercase text-gray-500">Timeline</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ idea.feasibility }}</div><div class="label text-xs uppercase text-gray-500">Feasibility</div></div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-8">
@@ -156,7 +164,7 @@
                             <div class="space-y-2">
                                 {% if report.detailed_report.recommended_contractors %}
                                     {% for pro in report.detailed_report.recommended_contractors %}
-                                    <a href="{{ pro.url if pro.url else '#' }}" target="_blank" class="pro-link">{{ pro.name }} ({{pro.specialty}})</a>
+                                    <a href="{{ pro.url if pro.url else '#' }}" target="_blank" rel="noopener noreferrer" class="pro-link">{{ pro.name }} ({{pro.specialty}})</a>
                                     {% endfor %}
                                 {% else %}
                                     <p class="text-sm text-gray-500">No contractors found.</p>
@@ -188,7 +196,7 @@
                         <tbody>
                             {% for comp in report.detailed_report.comparable_properties %}
                             <tr class="bg-white border-b">
-                                <td class="py-4 px-6 font-medium text-gray-900"><a href="{{ comp.url }}" target="_blank" class="text-blue-600 hover:underline">{{ comp.address }}</a></td>
+                                <td class="py-4 px-6 font-medium text-gray-900"><a href="{{ comp.url }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">{{ comp.address }}</a></td>
                                 <td class="py-4 px-6">${{ "{:,.0f}".format(comp.sale_price) }}</td>
                                 <td class="py-4 px-6">{{ comp.brief_summary }}</td>
                             </tr>
@@ -220,7 +228,6 @@
         </div>
     </div>
 
-    <!-- *** FIX: Data is now safely injected into a JSON script tag *** -->
     <script id="report-data" type="application/json">
         {{ report | tojson | safe }}
     </script>
@@ -230,7 +237,6 @@
             const POLLING_INTERVAL_MS = 3000;
             let pollingInterval;
 
-            // *** FIX: Parse data from the JSON script tag ***
             const reportDataElement = document.getElementById('report-data');
             const report = JSON.parse(reportDataElement.textContent);
 
