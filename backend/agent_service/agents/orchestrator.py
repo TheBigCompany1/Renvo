@@ -4,15 +4,24 @@ from typing import Dict, Any, List
 from .text_agent import TextAnalysisAgent
 from .image_agent import ImageAnalysisAgent
 from .market_agent import MarketAnalysisAgent
-from langchain_openai import ChatOpenAI
+# FIX: Changed the import to use the Google library consistently
+from langchain_google_genai import ChatGoogleGenerativeAI
+from core.config import get_settings # Import settings for the API key
 import traceback
 
 class OrchestratorAgent:
     """Orchestrates the workflow between Text, Image, and Market Analysis agents."""
 
     def __init__(self, api_key: str, model: str):
-        """Initializes all specialist agents."""
-        self.llm = ChatOpenAI(model=model, openai_api_key=api_key, temperature=0)
+        """Initializes all specialist agents with the Google Generative AI model."""
+        # FIX: The orchestrator now uses ChatGoogleGenerativeAI.
+        # This ensures all agents use the same underlying client.
+        settings = get_settings()
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-pro-latest", 
+            google_api_key=settings.gemini_api_key,
+            convert_system_message_to_human=True
+        )
         self.text_agent = TextAnalysisAgent(llm=self.llm)
         self.image_agent = ImageAnalysisAgent(llm=self.llm)
         self.market_agent = MarketAnalysisAgent(llm=self.llm)
