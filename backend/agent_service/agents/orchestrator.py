@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 from .text_agent import TextAnalysisAgent
 from .image_agent import ImageAnalysisAgent
 from .market_agent import MarketAnalysisAgent
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 import traceback
 
 class OrchestratorAgent:
