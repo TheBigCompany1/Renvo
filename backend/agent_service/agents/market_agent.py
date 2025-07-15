@@ -6,9 +6,8 @@ from .base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from core.config import get_settings
-import datetime
+import datetime 
 
-# The Pydantic models (Cost, ValueAdd, etc.) remain the same.
 class Cost(BaseModel):
     low: int
     medium: int
@@ -59,41 +58,44 @@ class MarketAnalysisOutput(BaseModel):
     comparable_properties: List[ComparableProperty]
     recommended_contractors: List[Contractor]
 
-# --- END: Define the JSON Output Structure ---
-
 class MarketAnalysisAgent(BaseAgent):
-    # --- FIX: Temporarily simplified prompt for diagnostic purposes ---
+    # --- FIX: Restored the original, fully functional prompt ---
     PROMPT_TEMPLATE = """
-    You are a meticulous senior real estate investment analyst. Your task is to perform a detailed financial analysis for the property at {address} with a square footage of {sqft}. The original purchase price is ${price}.
-
-    **IMPORTANT DIAGNOSTIC STEP:** For this analysis only, you MUST assume an average price per square foot of **$1,250** for the local market. Do NOT use the google_search tool to find comps.
+    You are a meticulous senior real estate investment analyst. Your task is to perform a detailed market and financial analysis for the property at {address} with a square footage of {sqft}. The original purchase price is ${price}.
 
     **IDEAS TO ANALYZE:**
     {renovation_json}
 
-    **YOUR TASKS:**
-    1.  **Preserve and Populate ALL Fields**: For each idea, you MUST populate EVERY field defined in the `MarketAdjustedIdea` schema. This includes preserving all original data (`name`, `description`, `roadmap_steps`, `potential_risks`, etc.) and adding all new analysis fields. DO NOT OMIT ANY FIELDS.
-    2.  **Square Footage Analysis**: For each renovation idea, calculate the `new_total_sqft`. Then, calculate the `new_price_per_sqft` by dividing the `after_repair_value` by the `new_total_sqft`.
-    3.  **Calculate After Repair Value (ARV)**: Calculate the `after_repair_value` using the formula: `ARV = 1250 * (New Total Square Footage)`.
-    4.  **Recalculate ROI**: Recalculate the ROI and place it in the `adjusted_roi` field. The formula is: `((ARV - Original Property Price - Medium Cost) / Medium Cost) * 100`.
-    5.  **Market Summary**: Provide a brief, one-paragraph market summary assuming a strong local market.
-    6.  **Placeholders**: For `comparable_properties` and `recommended_contractors`, return empty lists `[]`.
+    **YOUR TASKS - A TWO-STEP PROCESS:**
 
-    **FINAL INSTRUCTION**: Before finishing, double-check your entire response to ensure it is a single, valid JSON object that perfectly matches the `MarketAnalysisOutput` schema.
+    **STEP 1: HYPER-LOCAL COMPARABLE PROPERTY ANALYSIS (COMPS)**
+    1.  **Find Comps**: Use the 'google_search' tool to find 2-3 recently sold properties.
+    2.  **Strict Comp Criteria**: You MUST prioritize properties in the **exact same zip code** as the subject property ({address}). Only if you find zero results should you expand to adjacent neighborhoods. The comps must be similar in bed/bath count, square footage, and amenities.
+    3.  **Price Per Square Foot**: For EACH comp you find, you MUST calculate and include its `price_per_sqft`.
+    4.  **Calculate Average**: Determine the average price per square foot from all the valid comps you found.
+
+    **STEP 2: FINANCIAL PROJECTIONS FOR EACH RENOVATION IDEA**
+    5.  **Preserve and Populate ALL Fields**: For each idea, you MUST populate EVERY field defined in the `MarketAdjustedIdea` schema. This includes preserving all original data (`name`, `description`, `roadmap_steps`, `potential_risks`, etc.) and adding all new analysis fields. DO NOT OMIT ANY FIELDS.
+    6.  **Square Footage Analysis**: For each renovation idea, calculate the `new_total_sqft`. Then, calculate the `new_price_per_sqft` by dividing the `after_repair_value` by the `new_total_sqft`.
+    7.  **Calculate After Repair Value (ARV)**: Calculate the `after_repair_value` using the formula: `ARV = (Average Price Per Square Foot from Step 4) * (New Total Square Footage)`.
+    8.  **Recalculate ROI**: Recalculate the ROI and place it in the `adjusted_roi` field. The formula is: `((ARV - Original Property Price - Medium Cost) / Medium Cost) * 100`.
+    9.  **Find Local Professionals**: For the top recommendation, find 2-3 local contractors.
+
+    **FINAL INSTRUCTION**: Before finishing, double-check your entire response to ensure it is a single, valid JSON object that perfectly matches the `MarketAnalysisOutput` schema, including all required fields for every object in the lists.
     """
 
     def __init__(self, llm):
         super().__init__(llm)
         settings = get_settings()
         self.structured_llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro-latest",
+            model="gemini-2.5-pro",
             google_api_key=settings.gemini_api_key,
             convert_system_message_to_human=True
         ).with_structured_output(MarketAnalysisOutput)
 
     async def process(self, property_data: Dict[str, Any], renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            print("[MarketAgent] Process started (DIAGNOSTIC MODE).")
+            print("[MarketAgent] Process started.")
             renovation_json = json.dumps(renovation_ideas, indent=2)
             address = property_data.get('address', 'Unknown Address')
             sqft = float(property_data.get('sqft', 0) or 0)
@@ -118,19 +120,13 @@ class MarketAnalysisAgent(BaseAgent):
                 renovation_json=renovation_json
             )
 
-            print("\n--- [MarketAgent] PROMPT SENT TO LLM (DIAGNOSTIC MODE) ---")
+            print("\n--- [MarketAgent] PROMPT SENT TO LLM ---")
             print(prompt)
             print("--- END OF PROMPT ---\n")
-
-            start_time = datetime.datetime.now()
-            print(f"[{start_time.strftime('%H:%M:%S')}] [MarketAgent] Awaiting response from LLM...")
             
             response = await self.structured_llm.ainvoke(prompt)
 
-            end_time = datetime.datetime.now()
-            duration = (end_time - start_time).total_seconds()
-            print(f"[{end_time.strftime('%H:%M:%S')}] [MarketAgent] LLM call finished successfully in {duration:.2f} seconds.")
-
+            print("[MarketAgent] Process finished successfully with structured output.")
             return response.dict()
 
         except Exception as e:
