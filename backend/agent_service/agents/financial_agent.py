@@ -4,6 +4,7 @@ from .base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 import traceback
+import json # FIX: Added the missing import for the json library
 
 # These models are used for structuring the output
 class Cost(BaseModel):
