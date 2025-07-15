@@ -1,13 +1,14 @@
 from typing import Dict, Any, List, Optional
 import json
 import traceback
-import re 
+import re
 from .base import BaseAgent
-from langchain_google_genai import ChatGoogleGenerativeAI
+# FIX: This import is no longer needed as the agent will receive the client
+# from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from core.config import get_settings
-import datetime 
 
+# The Pydantic models (Cost, ValueAdd, etc.) remain the same.
 class Cost(BaseModel):
     low: int
     medium: int
@@ -58,8 +59,8 @@ class MarketAnalysisOutput(BaseModel):
     comparable_properties: List[ComparableProperty]
     recommended_contractors: List[Contractor]
 
+
 class MarketAnalysisAgent(BaseAgent):
-    # --- FIX: Restored the original, fully functional prompt ---
     PROMPT_TEMPLATE = """
     You are a meticulous senior real estate investment analyst. Your task is to perform a detailed market and financial analysis for the property at {address} with a square footage of {sqft}. The original purchase price is ${price}.
 
@@ -86,31 +87,19 @@ class MarketAnalysisAgent(BaseAgent):
 
     def __init__(self, llm):
         super().__init__(llm)
-        settings = get_settings()
-        self.structured_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro",
-            google_api_key=settings.gemini_api_key,
-            convert_system_message_to_human=True
-        ).with_structured_output(MarketAnalysisOutput)
+        # FIX: The agent now uses the stable LLM passed from the orchestrator
+        # instead of creating its own separate, conflicting client.
+        self.structured_llm = self.llm.with_structured_output(MarketAnalysisOutput)
 
     async def process(self, property_data: Dict[str, Any], renovation_ideas: Dict[str, Any]) -> Dict[str, Any]:
         try:
             print("[MarketAgent] Process started.")
             renovation_json = json.dumps(renovation_ideas, indent=2)
             address = property_data.get('address', 'Unknown Address')
-            sqft = float(property_data.get('sqft', 0) or 0)
             
-            price_str = property_data.get('price')
-            price = 0.0
-            if isinstance(price_str, (int, float)):
-                price = float(price_str)
-            elif isinstance(price_str, str):
-                try:
-                    cleaned_str = re.sub(r'[$,\s]', '', price_str)
-                    price = float(cleaned_str)
-                except (ValueError, TypeError):
-                    print(f"[MarketAgent] Warning: Could not convert price string '{price_str}' to float.")
-                    price = 0.0
+            # Safely get and convert sqft and price
+            sqft = float(property_data.get('sqft', 0) or 0)
+            price = float(property_data.get('price', 0) or 0)
 
             prompt = self._create_prompt(
                 self.PROMPT_TEMPLATE,
@@ -123,7 +112,8 @@ class MarketAnalysisAgent(BaseAgent):
             print("\n--- [MarketAgent] PROMPT SENT TO LLM ---")
             print(prompt)
             print("--- END OF PROMPT ---\n")
-            
+
+            print("[MarketAgent] Initial call to LLM...")
             response = await self.structured_llm.ainvoke(prompt)
 
             print("[MarketAgent] Process finished successfully with structured output.")

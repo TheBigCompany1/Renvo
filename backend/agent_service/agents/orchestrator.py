@@ -4,6 +4,7 @@ from typing import Dict, Any, List
 from .text_agent import TextAnalysisAgent
 from .image_agent import ImageAnalysisAgent
 from .market_agent import MarketAnalysisAgent
+# This is where the Google AI client is imported
 from langchain_google_genai import ChatGoogleGenerativeAI
 from core.config import get_settings 
 import traceback
@@ -14,9 +15,9 @@ class OrchestratorAgent:
     def __init__(self, api_key: str, model: str):
         """Initializes all specialist agents with the Google Generative AI model."""
         settings = get_settings()
-        # FIX: Switched to the more resource-efficient 'flash' model
+        # FIX: The model is now set to the efficient 'flash' version
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro", 
+            model="gemini-1.5-flash", 
             google_api_key=settings.gemini_api_key,
             convert_system_message_to_human=True
         )
