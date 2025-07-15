@@ -6,6 +6,7 @@ from .base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from core.config import get_settings
+import datetime # Import datetime for timestamps
 
 # --- START: Define the JSON Output Structure ---
 class Cost(BaseModel):
@@ -101,23 +102,17 @@ class MarketAnalysisAgent(BaseAgent):
             address = property_data.get('address', 'Unknown Address')
             sqft = float(property_data.get('sqft', 0) or 0)
             
-            # =========== FIX START ===========
-            # This block handles various formats for the 'price' field.
-            # It cleans the string of currency symbols and commas before conversion.
             price_str = property_data.get('price')
             price = 0.0
             if isinstance(price_str, (int, float)):
                 price = float(price_str)
             elif isinstance(price_str, str):
                 try:
-                    # Remove '$', ',', and spaces before converting to float
                     cleaned_str = re.sub(r'[$,\s]', '', price_str)
                     price = float(cleaned_str)
                 except (ValueError, TypeError):
-                    # Log a warning if conversion fails, and default to 0.0
                     print(f"[MarketAgent] Warning: Could not convert price string '{price_str}' to float.")
                     price = 0.0
-            # =========== FIX END ===========
 
             prompt = self._create_prompt(
                 self.PROMPT_TEMPLATE,
@@ -131,10 +126,17 @@ class MarketAnalysisAgent(BaseAgent):
             print(prompt)
             print("--- END OF PROMPT ---\n")
 
-            print("[MarketAgent] Initial call to LLM...")
+            # --- FIX: Added detailed logging ---
+            start_time = datetime.datetime.now()
+            print(f"[{start_time.strftime('%H:%M:%S')}] [MarketAgent] Awaiting response from LLM...")
+            
             response = await self.structured_llm.ainvoke(prompt)
 
-            print("[MarketAgent] Process finished successfully with structured output.")
+            end_time = datetime.datetime.now()
+            duration = (end_time - start_time).total_seconds()
+            print(f"[{end_time.strftime('%H:%M:%S')}] [MarketAgent] LLM call finished successfully in {duration:.2f} seconds.")
+            # --- END OF FIX ---
+
             return response.dict()
 
         except Exception as e:
