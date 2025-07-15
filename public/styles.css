@@ -177,10 +177,10 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  /* FIX: Changed background color for a better blur effect and added blur properties */
+  /* FIX: Changed background color and added blur properties */
   background-color: rgba(17, 24, 39, 0.7); 
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px); /* For Safari support */
   display: none; /* Hidden by default */
   flex-direction: column;
   justify-content: center;
@@ -193,6 +193,13 @@ body {
 
 .progress-container {
   max-width: 500px;
+  padding: 1rem;
+}
+
+.progress-container h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
 }
 
 .progress-status {
@@ -205,22 +212,32 @@ body {
   width: 100%;
   background-color: rgba(255, 255, 255, 0.2);
   border-radius: 20px;
-  height: 20px;
+  height: 12px;
   overflow: hidden;
-  margin: 1rem 0;
+  margin: 1.5rem 0;
 }
 
 .progress-bar {
   width: 0%;
   height: 100%;
-  background-color: #FFAB40; /* Using your primary color */
+  background-color: var(--primary-color);
   border-radius: 20px;
-  animation: fill-progress 120s linear forwards;
+  /* FIX: Changed to a more modern indeterminate animation */
+  animation: progress-indeterminate 2.5s ease-in-out infinite;
 }
 
-@keyframes fill-progress {
-  from { width: 5%; }
-  to { width: 95%; } /* Stops at 95% to imply final compilation */
+@keyframes progress-indeterminate {
+    0% {
+        width: 20%;
+        transform: translateX(-100%);
+    }
+    50% {
+        width: 60%;
+    }
+    100% {
+        width: 20%;
+        transform: translateX(500%);
+    }
 }
 
 .progress-note {
