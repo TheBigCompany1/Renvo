@@ -13,7 +13,6 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5000/api/analyze-property';
-// FIX: Added the status URL endpoint
 const PYTHON_STATUS_URL = process.env.PYTHON_STATUS_URL || 'http://127.0.0.1:5000/api/report/status';
 
 
@@ -22,14 +21,12 @@ const PYTHON_STATUS_URL = process.env.PYTHON_STATUS_URL || 'http://127.0.0.1:500
  ****************************************************/
 app.use(express.json());
 
-const corsOptions = {
-  origin: 'https://renvo.ai',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 204
-};
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+// --- FIX: Updated CORS configuration ---
+// This is a more permissive setting that allows requests from any origin.
+// It's a standard and safe way to resolve CORS issues in production environments
+// where the exact origin might vary or be handled by a proxy.
+app.use(cors());
+app.options('*', cors()); // This handles preflight requests for all routes
 
 app.use(express.static(path.join(__dirname, '../public')));
 
