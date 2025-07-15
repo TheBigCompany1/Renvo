@@ -39,8 +39,6 @@ def run_orchestrator_in_background(report_id, property_data):
     """
     Runs the entire async orchestration in a dedicated event loop in a new thread.
     """
-    # Instantiate the orchestrator INSIDE the thread to ensure it runs
-    # in the same context as the event loop.
     API_KEY = os.getenv("OPENAI_API_KEY")
     if not API_KEY:
         print(f"[{report_id}] ERROR: OPENAI_API_KEY not found in background thread.")
@@ -49,19 +47,14 @@ def run_orchestrator_in_background(report_id, property_data):
         
     orchestrator = OrchestratorAgent(api_key=API_KEY, model="gpt-4o")
     
-    # --- FIX: Use asyncio.run() for robust loop management ---
-    async def main():
-        """A wrapper to run the async orchestrator."""
-        print(f"[{report_id}] Background async main function started.")
-        report = await orchestrator.generate_full_report(property_data)
-        print(f"[{report_id}] Background async main function finished.")
-        return report
-
+    # --- FIX: Manually manage the event loop for a more graceful shutdown ---
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
-        # asyncio.run() creates a new event loop, runs the task until it's
-        # completely finished, and then closes the loop. This is the most
-        # reliable way to call async code from a sync thread.
-        full_report = asyncio.run(main())
+        print(f"[{report_id}] Background thread started with new event loop.")
+        full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
+        print(f"[{report_id}] Background orchestration finished.")
         
         report_property_data = full_report.get("property", property_data)
 
@@ -85,6 +78,21 @@ def run_orchestrator_in_background(report_id, property_data):
             "updated_at": datetime.datetime.now()
         })
         print(f"[{report_id}] Stored 'failed' report from background thread.")
+    finally:
+        # This block ensures all lingering async tasks are cancelled and the loop is closed properly.
+        try:
+            print(f"[{report_id}] Shutting down async tasks gracefully...")
+            tasks = asyncio.all_tasks(loop=loop)
+            for task in tasks:
+                task.cancel()
+            
+            group = asyncio.gather(*tasks, return_exceptions=True)
+            loop.run_until_complete(group)
+            
+            loop.close()
+            print(f"[{report_id}] Background thread event loop closed.")
+        except Exception as loop_close_e:
+            print(f"[{report_id}] Error during event loop cleanup: {loop_close_e}")
 
 
 # --- API Endpoints ---
