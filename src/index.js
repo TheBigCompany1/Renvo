@@ -13,6 +13,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5000/api/analyze-property';
+// FIX: Added the status URL endpoint
+const PYTHON_STATUS_URL = process.env.PYTHON_STATUS_URL || 'http://127.0.0.1:5000/api/report/status';
+
 
 /****************************************************
  * MIDDLEWARE
@@ -29,6 +32,50 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 app.use(express.static(path.join(__dirname, '../public')));
+
+/****************************************************
+ * NEW POLLING FUNCTION
+ ****************************************************/
+/**
+ * Polls the Python backend until the report is completed or fails.
+ * @param {string} reportId - The ID of the report to poll.
+ * @returns {Promise<void>} - Resolves when the report is complete.
+ * @throws {Error} - Rejects if the report fails or times out.
+ */
+async function pollReportStatus(reportId) {
+    const pollInterval = 5000; // 5 seconds
+    const maxAttempts = 36; // 3 minutes timeout (5s * 36)
+    let attempt = 0;
+
+    console.log(`[Node] Starting to poll for reportId: ${reportId}`);
+
+    while (attempt < maxAttempts) {
+        attempt++;
+        try {
+            const statusResponse = await axios.get(`${PYTHON_STATUS_URL}?reportId=${reportId}`);
+            const { status } = statusResponse.data;
+            console.log(`[Node] Poll attempt ${attempt}: Report ${reportId} status is ${status}`);
+
+            if (status === 'completed') {
+                console.log(`[Node] Report ${reportId} completed successfully.`);
+                return; // Success!
+            }
+            if (status === 'failed') {
+                throw new Error('Report generation failed on the Python backend.');
+            }
+            // If status is 'processing', wait for the next interval.
+
+        } catch (error) {
+            console.error(`[Node] Error polling status for ${reportId}:`, error.message);
+            // We will continue polling even on error, in case it's a temporary network blip
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error('Report generation timed out after 3 minutes.');
+}
+
 
 /****************************************************
  * ROUTES
@@ -186,10 +233,15 @@ app.post('/api/analyze-property', async (req, res) => {
         }
         throw new Error(`Failed to communicate with analysis service: ${axiosError.message}`);
     }
+    
+    // --- FIX: Wait for the report to be complete BEFORE responding to the client ---
+    const { reportId } = pythonResponse.data;
+    await pollReportStatus(reportId);
 
     if (!res.headersSent) {
-        res.json(pythonResponse.data);
-        console.log("Final success response sent.");
+        // Now that polling is complete, send the final response with the completed status
+        res.json({ reportId, status: 'completed' });
+        console.log("Final success response sent with completed status.");
     } else {
          console.log("Headers already sent, cannot send final success response.");
     }
