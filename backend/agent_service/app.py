@@ -40,8 +40,6 @@ def run_orchestrator_in_background(report_id, property_data):
     Runs the entire async orchestration in a dedicated event loop in a new thread.
     """
     # --- FIX: Instantiate the orchestrator INSIDE the thread ---
-    # This ensures the agent and its underlying clients (like grpc)
-    # are created and used within the same event loop, preventing conflicts.
     API_KEY = os.getenv("OPENAI_API_KEY")
     if not API_KEY:
         print(f"[{report_id}] ERROR: OPENAI_API_KEY not found in background thread.")
@@ -50,12 +48,17 @@ def run_orchestrator_in_background(report_id, property_data):
         
     orchestrator = OrchestratorAgent(api_key=API_KEY, model="gpt-4o")
     
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # --- FIX: Use asyncio.run() for robust loop management ---
+    async def main():
+        """A wrapper to run the async orchestrator."""
+        print(f"[{report_id}] Background async main function started.")
+        report = await orchestrator.generate_full_report(property_data)
+        print(f"[{report_id}] Background async main function finished.")
+        return report
+
     try:
-        print(f"[{report_id}] Background thread started with new event loop.")
-        full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
-        print(f"[{report_id}] Background orchestration finished.")
+        # asyncio.run() creates and closes the loop automatically.
+        full_report = asyncio.run(main())
         
         report_property_data = full_report.get("property", property_data)
 
@@ -79,9 +82,6 @@ def run_orchestrator_in_background(report_id, property_data):
             "updated_at": datetime.datetime.now()
         })
         print(f"[{report_id}] Stored 'failed' report from background thread.")
-    finally:
-        loop.close()
-        print(f"[{report_id}] Background thread event loop closed.")
 
 
 # --- API Endpoints ---
