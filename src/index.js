@@ -12,8 +12,10 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5000/api/analyze-property';
-const PYTHON_STATUS_URL = process.env.PYTHON_STATUS_URL || 'http://127.0.0.1:5000/api/report/status';
+
+// --- FIX: Updated default URLs to use your public Render service address ---
+const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'https://renvo-python.onrender.com/api/analyze-property';
+const PYTHON_STATUS_URL = process.env.PYTHON_STATUS_URL || 'https://renvo-python.onrender.com/api/report/status';
 
 
 /****************************************************
@@ -21,27 +23,20 @@ const PYTHON_STATUS_URL = process.env.PYTHON_STATUS_URL || 'http://127.0.0.1:500
  ****************************************************/
 app.use(express.json());
 
-// --- FIX: Updated CORS configuration ---
+// --- FIX: Updated CORS configuration for production ---
 // This is a more permissive setting that allows requests from any origin.
-// It's a standard and safe way to resolve CORS issues in production environments
-// where the exact origin might vary or be handled by a proxy.
+// It's a standard and safe way to resolve CORS issues in this environment.
 app.use(cors());
 app.options('*', cors()); // This handles preflight requests for all routes
 
 app.use(express.static(path.join(__dirname, '../public')));
 
 /****************************************************
- * NEW POLLING FUNCTION
+ * POLLING FUNCTION
  ****************************************************/
-/**
- * Polls the Python backend until the report is completed or fails.
- * @param {string} reportId - The ID of the report to poll.
- * @returns {Promise<void>} - Resolves when the report is complete.
- * @throws {Error} - Rejects if the report fails or times out.
- */
 async function pollReportStatus(reportId) {
     const pollInterval = 5000; // 5 seconds
-    const maxAttempts = 36; // 3 minutes timeout (5s * 36)
+    const maxAttempts = 36; // 3 minutes timeout
     let attempt = 0;
 
     console.log(`[Node] Starting to poll for reportId: ${reportId}`);
@@ -55,16 +50,13 @@ async function pollReportStatus(reportId) {
 
             if (status === 'completed') {
                 console.log(`[Node] Report ${reportId} completed successfully.`);
-                return; // Success!
+                return;
             }
             if (status === 'failed') {
                 throw new Error('Report generation failed on the Python backend.');
             }
-            // If status is 'processing', wait for the next interval.
-
         } catch (error) {
             console.error(`[Node] Error polling status for ${reportId}:`, error.message);
-            // We will continue polling even on error, in case it's a temporary network blip
         }
         
         await new Promise(resolve => setTimeout(resolve, pollInterval));
@@ -108,7 +100,6 @@ app.post('/api/analyze-property', async (req, res) => {
         return res.status(400).json({ error: "Please provide a valid Redfin or Zillow URL." });
     }
 
-    // === START DEBUGGING ===
     console.log("--- Filesystem Debugging ---");
     const chromePath = '/usr/bin/google-chrome-stable';
     try {
@@ -123,7 +114,6 @@ app.post('/api/analyze-property', async (req, res) => {
         console.log("Error during filesystem check:", e.message);
     }
     console.log("--- End Filesystem Debugging ---");
-    // === END DEBUGGING ===
 
     console.log("Launching browser with Docker's native Chrome...");
     browser = await puppeteer.launch({
@@ -231,12 +221,10 @@ app.post('/api/analyze-property', async (req, res) => {
         throw new Error(`Failed to communicate with analysis service: ${axiosError.message}`);
     }
     
-    // --- FIX: Wait for the report to be complete BEFORE responding to the client ---
     const { reportId } = pythonResponse.data;
     await pollReportStatus(reportId);
 
     if (!res.headersSent) {
-        // Now that polling is complete, send the final response with the completed status
         res.json({ reportId, status: 'completed' });
         console.log("Final success response sent with completed status.");
     } else {
