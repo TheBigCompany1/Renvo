@@ -39,7 +39,8 @@ def run_orchestrator_in_background(report_id, property_data):
     """
     Runs the entire async orchestration in a dedicated event loop in a new thread.
     """
-    # --- FIX: Instantiate the orchestrator INSIDE the thread ---
+    # Instantiate the orchestrator INSIDE the thread to ensure it runs
+    # in the same context as the event loop.
     API_KEY = os.getenv("OPENAI_API_KEY")
     if not API_KEY:
         print(f"[{report_id}] ERROR: OPENAI_API_KEY not found in background thread.")
@@ -57,7 +58,9 @@ def run_orchestrator_in_background(report_id, property_data):
         return report
 
     try:
-        # asyncio.run() creates and closes the loop automatically.
+        # asyncio.run() creates a new event loop, runs the task until it's
+        # completely finished, and then closes the loop. This is the most
+        # reliable way to call async code from a sync thread.
         full_report = asyncio.run(main())
         
         report_property_data = full_report.get("property", property_data)
