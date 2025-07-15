@@ -4,9 +4,9 @@ from .base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 import traceback
-import json # FIX: Added the missing import for the json library
+import json
 
-# These models are used for structuring the output
+# Pydantic models remain the same
 class Cost(BaseModel):
     low: int
     medium: int
@@ -43,6 +43,8 @@ class FinancialAnalysisOutput(BaseModel):
 
 class FinancialAnalysisAgent(BaseAgent):
     """An agent specialized in financial calculations for renovation projects."""
+    
+    # --- FIX: Updated prompt with a fallback instruction ---
     PROMPT_TEMPLATE = """
     You are a precise financial analyst for real estate investments. You will be given property data, a list of renovation ideas, and a list of comparable properties. Your sole task is to perform financial calculations.
 
@@ -55,11 +57,12 @@ class FinancialAnalysisAgent(BaseAgent):
 
     **Instructions:**
     1.  **Calculate Average Price/SqFt**: From the provided comparable properties, calculate the single average price per square foot.
-    2.  **Analyze Each Idea**: For each renovation idea, you MUST perform the following calculations with precision:
-        a. Calculate the `after_repair_value` (ARV) using the formula: `ARV = (Average Price Per Square Foot from Step 1) * (New Total Square Footage)`.
+    2.  **SAFETY NET**: If the list of comparable properties is empty, you MUST use a conservative estimate of **$1,100** as the average price per square foot for your calculations.
+    3.  **Analyze Each Idea**: For each renovation idea, you MUST perform the following calculations with precision:
+        a. Calculate the `after_repair_value` (ARV) using the formula: `ARV = (Average Price Per Square Foot) * (New Total Square Footage)`.
         b. Calculate the `estimated_value_add` (medium value) using the formula: `Value Add = ARV - Original Property Price`. Populate the `estimated_value_add` field with this.
         c. Recalculate the ROI and place it in the `adjusted_roi` field using the formula: `((ARV - Original Property Price - Medium Cost) / Medium Cost) * 100`.
-    3.  **Format Output**: Return a single, valid JSON object that perfectly matches the `FinancialAnalysisOutput` schema. You must preserve all original data and only add the new financial calculations. Do NOT use any tools.
+    4.  **Format Output**: Return a single, valid JSON object that perfectly matches the `FinancialAnalysisOutput` schema. You must preserve all original data and only add the new financial calculations. Do NOT use any tools.
     """
 
     def __init__(self, llm: ChatGoogleGenerativeAI):
