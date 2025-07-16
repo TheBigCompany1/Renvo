@@ -44,11 +44,11 @@ class FinancialAnalysisOutput(BaseModel):
 class FinancialAnalysisAgent(BaseAgent):
     """An agent specialized in financial calculations for renovation projects."""
     
-    # --- FIX: Updated prompt with a fallback instruction ---
+    # FIX: Changed "Original Property Price" to "List Price" for clarity
     PROMPT_TEMPLATE = """
     You are a precise financial analyst for real estate investments. You will be given property data, a list of renovation ideas, and a list of comparable properties. Your sole task is to perform financial calculations.
 
-    **Original Property Price:** ${price}
+    **List Price:** ${price}
     **Comparable Properties Found:**
     {comps_json}
 
@@ -60,8 +60,8 @@ class FinancialAnalysisAgent(BaseAgent):
     2.  **SAFETY NET**: If the list of comparable properties is empty, you MUST use a conservative estimate of **$1,100** as the average price per square foot for your calculations.
     3.  **Analyze Each Idea**: For each renovation idea, you MUST perform the following calculations with precision:
         a. Calculate the `after_repair_value` (ARV) using the formula: `ARV = (Average Price Per Square Foot) * (New Total Square Footage)`.
-        b. Calculate the `estimated_value_add` (medium value) using the formula: `Value Add = ARV - Original Property Price`. Populate the `estimated_value_add` field with this.
-        c. Recalculate the ROI and place it in the `adjusted_roi` field using the formula: `((ARV - Original Property Price - Medium Cost) / Medium Cost) * 100`.
+        b. **Crucially, calculate the `estimated_value_add` (medium value) using the formula: `Value Add = ARV - List Price`.** Populate the `estimated_value_add` field with this.
+        c. Recalculate the ROI and place it in the `adjusted_roi` field using the formula: `((ARV - List Price - Medium Cost) / Medium Cost) * 100`.
     4.  **Format Output**: Return a single, valid JSON object that perfectly matches the `FinancialAnalysisOutput` schema. You must preserve all original data and only add the new financial calculations. Do NOT use any tools.
     """
 

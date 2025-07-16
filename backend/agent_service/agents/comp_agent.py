@@ -17,7 +17,7 @@ class CompAnalysisOutput(BaseModel):
 class CompAnalysisAgent(BaseAgent):
     """An agent specialized in finding accurate comparable properties."""
     
-    # --- FIX: Two distinct prompts for different search strategies ---
+    # --- FIX: Overhauled prompts with stricter criteria for accuracy ---
     STRICT_PROMPT_TEMPLATE = """
     You are a meticulous real estate analyst. Your sole task is to find recently sold comparable properties ("comps") for a subject property.
 
