@@ -1,24 +1,13 @@
 // background.js - Simple background script for Chrome extension
 const API_CONFIG = {
   // baseUrl: "http://localhost:8000", // Your FastAPI server URL
-  baseUrl: "https://ww70e6xdhg.execute-api.us-east-2.amazonaws.com/dev",
+  baseUrl: "https://renvo-python.onrender.com",
   endpoints: {
-    quickReport: "/api/extension/v1/quickreport",
-    getReport: "/api/extension/v1/report/" // Will be appended with report ID
+    quickReport: "/api/analyze-property",
+    getReport: "/api/report/status?reportId=",
+    reportPage: "/report?reportId="
   }
 };
-
-// Initialize extension when installed
-chrome.runtime.onInstalled.addListener(() => {
-    console.log('Renovation ROI Insights extension installed');
-
-    // Set default API endpoint
-    chrome.storage.local.set({
-        // apiEndpoint: 'https://api.yourdomain.com/v1',
-        apiEndpoint: 'https://ww70e6xdhg.execute-api.us-east-2.amazonaws.com/dev/api/extension/v1',
-        generatedReports: []
-    });
-});
 
 // Listen for messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -41,10 +30,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break;
 
         case 'openReport':
-          const reportUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.getReport}${message.reportId}`;
+          const reportUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.reportPage}${message.reportId}`;
           chrome.tabs.create({ url: reportUrl });
           sendResponse({ success: true });
           break;
+
+        case 'generateReport':
+          generateReportFromBackground(message.apiEndpoint, message.requestData, message.deviceId)
+            .then(data => sendResponse(data))
+            .catch(error => {
+              console.error('API request failed:', error);
+              sendResponse({ error: error.message });
+            });
+          return true;
     }
 });
 
@@ -74,6 +72,24 @@ async function trackReportGeneration(reportId, propertyAddress) {
     setTimeout(() => {
         chrome.action.setBadgeText({ text: '' });
     }, 30000);
+}
+
+// Perform the generate report fetch from the background
+async function generateReportFromBackground(apiEndpoint, requestData, deviceId) {
+    const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId
+        },
+        body: JSON.stringify(requestData)
+    });
+
+    if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+    }
+
+    return response.json();
 }
 
 // Listen for tab updates to detect when user navigates to a property page

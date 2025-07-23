@@ -1,5 +1,14 @@
 // overlay.js - Injects the one-click report generation button
 
+const API_CONFIG = {
+  // baseUrl: "http://localhost:8000", // Your FastAPI server URL
+  baseUrl: "https://renvo-python.onrender.com",
+  endpoints: {
+    quickReport: "/api/extension/v1/quickreport/",
+    getReport: "/api/extension/v1/report/" // Will be appended with report ID
+  }
+};
+
 // Create and inject ROI report button
 function injectReportButton() {
     // Create button container
@@ -96,24 +105,39 @@ function generateReport(propertyData) {
         };
         
         // Send data to API
-        fetch(apiEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Device-ID': deviceId
-          },
-          body: JSON.stringify(requestData)
-        })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(data => {
+        // fetch(apiEndpoint, {
+        //   method: 'POST',
+        //   headers: {
+        //     'Content-Type': 'application/json',
+        //     'X-Device-ID': deviceId
+        //   },
+        //   body: JSON.stringify(requestData)
+        // })
+        // .then(response => {
+        //   if (!response.ok) {
+        //     throw new Error(`API error: ${response.status}`);
+        //   }
+        //   return response.json();
+        // })
+        // .then(data => {
+
+        chrome.runtime.sendMessage({
+          action: 'generateReport',
+          apiEndpoint,
+          requestData,
+          deviceId
+        }, (data) => {
           // Report generation initiated successfully
-          if (data.reportId) {
+          // if (data.reportId) {
             // Store report info in local storage
+            if (chrome.runtime.lastError) {
+            console.error('API request failed:', chrome.runtime.lastError);
+            showNotification('Failed to generate report. Please try again.', 'error');
+            toggleLoadingState(false);
+            return;
+          }
+
+          if (data && data.reportId) {
             storeReportInfo(data.reportId, propertyData.address);
             
             // Show results preview
@@ -131,12 +155,12 @@ function generateReport(propertyData) {
               propertyAddress: propertyData.address
             });
           }
-        })
-        .catch(error => {
-          console.error('API request failed:', error);
-          showNotification('Failed to generate report. Please try again.', 'error');
-        })
-        .finally(() => {
+        // })
+        // .catch(error => {
+        //   console.error('API request failed:', error);
+        //   showNotification('Failed to generate report. Please try again.', 'error');
+        // })
+        // .finally(() => {
           toggleLoadingState(false);
         });
       });
