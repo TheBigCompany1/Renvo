@@ -36,12 +36,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break;
 
         case 'generateReport':
-          generateReportFromBackground(message.apiEndpoint, message.requestData, message.deviceId)
-            .then(data => sendResponse(data))
-            .catch(error => {
-              console.error('API request failed:', error);
-              sendResponse({ error: error.message });
-            });
+          const { apiEndpoint, payload } = message;
+          fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+          .then(async (response) => {
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Server responded with ${response.status}: ${errorText}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            sendResponse(data);
+          })
+          .catch(error => {
+            console.error('Background fetch error:', error);
+            sendResponse({ error: error.message });
+          });
+          
+          // generateReportFromBackground(message.apiEndpoint, message.requestData, message.deviceId)
+          //   .then(data => sendResponse(data))
+          //   .catch(error => {
+          //     console.error('API request failed:', error);
+          //     sendResponse({ error: error.message });
+          //   });
           return true;
     }
 });

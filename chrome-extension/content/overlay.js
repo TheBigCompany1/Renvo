@@ -4,8 +4,8 @@ const API_CONFIG = {
   // baseUrl: "http://localhost:8000", // Your FastAPI server URL
   baseUrl: "https://renvo-python.onrender.com",
   endpoints: {
-    quickReport: "/api/extension/v1/quickreport/",
-    getReport: "/api/extension/v1/report/" // Will be appended with report ID
+    quickReport: "/api/analyze-property",
+    getReport: "/api/report/status?reportId=",
   }
 };
 
@@ -104,68 +104,45 @@ function generateReport(propertyData) {
           images: propertyData.images || []
         };
         
-        // Send data to API
-        // fetch(apiEndpoint, {
-        //   method: 'POST',
-        //   headers: {
-        //     'Content-Type': 'application/json',
-        //     'X-Device-ID': deviceId
-        //   },
-        //   body: JSON.stringify(requestData)
-        // })
-        // .then(response => {
-        //   if (!response.ok) {
-        //     throw new Error(`API error: ${response.status}`);
-        //   }
-        //   return response.json();
-        // })
-        // .then(data => {
-
-        chrome.runtime.sendMessage({
-          action: 'generateReport',
-          apiEndpoint,
-          requestData,
-          deviceId
-        }, (data) => {
-          // Report generation initiated successfully
-          // if (data.reportId) {
-            // Store report info in local storage
-            if (chrome.runtime.lastError) {
-            console.error('API request failed:', chrome.runtime.lastError);
-            showNotification('Failed to generate report. Please try again.', 'error');
-            toggleLoadingState(false);
-            return;
-          }
-
-          if (data && data.reportId) {
-            storeReportInfo(data.reportId, propertyData.address);
-            
-            // Show results preview
-            if (data.quickInsights) {
-              showResultsPreview(data.quickInsights, data.reportId);
-            } else {
-              // Show processing message with link to full report
-              showProcessingMessage(data.reportId);
-            }
-            
-            // Notify background script about the new report
-            chrome.runtime.sendMessage({ 
-              action: 'trackReportGeneration', 
-              reportId: data.reportId,
-              propertyAddress: propertyData.address
-            });
-          }
-        // })
-        // .catch(error => {
-        //   console.error('API request failed:', error);
-        //   showNotification('Failed to generate report. Please try again.', 'error');
-        // })
-        // .finally(() => {
+        const payload = { property_data: requestData };
+      // Send request to background script to bypass CORS
+      chrome.runtime.sendMessage({
+        action: 'generateReport',
+        apiEndpoint,
+        payload,
+        deviceId
+      }, (data) => {
+        if (chrome.runtime.lastError || data?.error) {
+          console.error('API request failed:', chrome.runtime.lastError || data.error);
+          showNotification('Failed to generate report. Please try again.', 'error');
           toggleLoadingState(false);
-        });
+          return;
+        }
+
+        if (data.reportId) {
+          storeReportInfo(data.reportId, propertyData.address);
+
+          if (data.quickInsights) {
+            showResultsPreview(data.quickInsights, data.reportId);
+          } else {
+            showProcessingMessage(data.reportId);
+          }
+
+          chrome.runtime.sendMessage({
+            action: 'trackReportGeneration',
+            reportId: data.reportId,
+            propertyAddress: propertyData.address
+          });
+        } else {
+          console.warn('No reportId returned in response:', data);
+          showNotification('No report ID returned. Please try again.', 'error');
+        }
+
+        toggleLoadingState(false);
       });
     });
-  }
+  });
+}
 
 // Generate or retrieve unique device ID
 async function getOrCreateDeviceId() {
