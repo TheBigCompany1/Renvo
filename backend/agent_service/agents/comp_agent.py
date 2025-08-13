@@ -46,7 +46,12 @@ class CompAnalysisAgent(BaseAgent):
 
     def __init__(self, llm: ChatGoogleGenerativeAI):
         super().__init__(llm)
-        self.structured_llm = self.llm.with_structured_output(CompAnalysisOutput)
+        try:
+            bound_llm = llm.bind_tools(tools = [{"google_search": {}}], tool_choice = "auto")
+        except Exception as e:
+            print("[CompAnalysisAgent] Warning: could not bind google_search tool; using plain LLM instead.", e)
+            bound_llm = llm
+        self.structured_llm = bound_llm.with_structured_output(CompAnalysisOutput)
 
     async def process(self, address: str, search_mode: str = 'strict') -> Dict[str, Any]:
         """
