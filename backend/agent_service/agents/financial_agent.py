@@ -56,8 +56,8 @@ class FinancialAnalysisAgent(BaseAgent):
     {renovation_json}
 
     **Instructions:**
-    1.  **Calculate Average Price/SqFt**: From the provided comparable properties, calculate the single average price per square foot.
-    2.  **SAFETY NET**: If the list of comparable properties is empty, you MUST use a conservative estimate of **$1,100** as the average price per square foot for your calculations.
+    1.  **Research Costs**: For each renovation idea, use the `google_search` tool to find reliable and recent estimates of renovation costs… Include a `cost_source` field with the URL used for each idea.
+    2.  **Calculate Average Price/SqFt**: From the provided comparable properties, calculate the single average price per square foot (use $1,100 if no comps).
     3.  **Analyze Each Idea**: For each renovation idea, you MUST perform the following calculations with precision:
         a. Calculate the `after_repair_value` (ARV) using the formula: `ARV = (Average Price Per Square Foot) * (New Total Square Footage)`.
         b. **Crucially, calculate the `estimated_value_add` (medium value) using the formula: `Value Add = ARV - List Price`.** Populate the `estimated_value_add` field with this.
@@ -67,7 +67,15 @@ class FinancialAnalysisAgent(BaseAgent):
 
     def __init__(self, llm: ChatGoogleGenerativeAI):
         super().__init__(llm)
-        self.structured_llm = self.llm.with_structured_output(FinancialAnalysisOutput)
+        try:
+            bound_llm = llm.bind_tools(
+                tools=[{"google_search": {}}],
+                tool_choice="auto",
+            )
+        except Exception as e:
+            print(f"[FinancialAnalysisAgent] Warning: could not bind google_search tool; using plain LLM instead. Error: {e}")
+            bound_llm = llm
+        self.structured_llm = bound_llm.with_structured_output(FinancialAnalysisOutput)
 
     async def process(self, property_data: Dict[str, Any], renovation_ideas: List[Dict[str, Any]], comps: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Performs financial analysis on renovation ideas."""
