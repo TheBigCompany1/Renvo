@@ -1,3 +1,4 @@
+# backend/agent_service/app.py
 from flask import Flask, request, jsonify, render_template, abort
 import asyncio
 import uuid
@@ -17,6 +18,14 @@ app = Flask(__name__, template_folder="templates")
 
 # --- In-memory Storage ---
 report_storage = {}
+
+# --- Health Check Endpoint ---
+@app.route("/healthz")
+def health_check():
+    """
+    Simple health check endpoint that Render can use to determine if the service is live.
+    """
+    return jsonify({"status": "ok"}), 200
 
 # --- Helper Functions ---
 def safe_float_from_price(price_str):

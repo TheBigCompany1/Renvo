@@ -13,9 +13,12 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// Use the environment variable for the API URL, with a fallback to the production URL.
+const PYTHON_API_URL = process.env.PYTHON_API_URL || 'https://renvo-python.onrender.com';
+
 // --- FIX: Updated default URLs to use your public Render service address ---
-const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'https://renvo-python.onrender.com/api/analyze-property';
-const PYTHON_STATUS_URL = process.env.PYTHON_STATUS_URL || 'https://renvo-python.onrender.com/api/report/status';
+const PYTHON_SERVICE_URL = `${PYTHON_API_URL}/api/analyze-property`;
+const PYTHON_STATUS_URL = `${PYTHON_API_URL}/api/report/status`;
 
 
 /****************************************************
