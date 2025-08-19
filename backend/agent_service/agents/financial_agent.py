@@ -44,7 +44,7 @@ class FinancialAnalysisOutput(BaseModel):
 class FinancialAnalysisAgent(BaseAgent):
     """An agent specialized in financial calculations for renovation projects."""
     
-    # FIX: Changed "Original Property Price" to "List Price" for clarity
+    # FIX: Corrected the ROI formula in the prompt instructions.
     PROMPT_TEMPLATE = """
     You are a precise financial analyst for real estate investments. You will be given property data, a list of renovation ideas, and a list of comparable properties. Your sole task is to perform financial calculations.
 
@@ -61,7 +61,7 @@ class FinancialAnalysisAgent(BaseAgent):
     3.  **Analyze Each Idea**: For each renovation idea, you MUST perform the following calculations with precision:
         a. Calculate the `after_repair_value` (ARV) using the formula: `ARV = (Average Price Per Square Foot) * (New Total Square Footage)`.
         b. **Crucially, calculate the `estimated_value_add` (medium value) using the formula: `Value Add = ARV - List Price`.** Populate the `estimated_value_add` field with this.
-        c. Recalculate the ROI and place it in the `adjusted_roi` field using the formula: `((ARV - List Price - Medium Cost) / Medium Cost) * 100`.
+        c. Recalculate the ROI and place it in the `adjusted_roi` field using the formula: `(ARV - List Price - Medium Cost) / Medium Cost`.
     4.  **Format Output**: Return a single, valid JSON object that perfectly matches the `FinancialAnalysisOutput` schema. You must preserve all original data and only add the new financial calculations. Do NOT use any tools.
     """
 

@@ -39,7 +39,8 @@ app.use(express.static(path.join(__dirname, '../public')));
  ****************************************************/
 async function pollReportStatus(reportId) {
     const pollInterval = 5000; // 5 seconds
-    const maxAttempts = 36; // 3 minutes timeout
+    // FIX: Increased timeout from 3 minutes (36 attempts) to 5 minutes (60 attempts)
+    const maxAttempts = 60; // 5 minutes timeout
     let attempt = 0;
 
     console.log(`[Node] Starting to poll for reportId: ${reportId}`);
@@ -48,6 +49,7 @@ async function pollReportStatus(reportId) {
         attempt++;
         try {
             const statusResponse = await axios.get(`${PYTHON_STATUS_URL}?reportId=${reportId}`);
+            // Adding a comment to force a fresh build on Render.
             const { status } = statusResponse.data;
             console.log(`[Node] Poll attempt ${attempt}: Report ${reportId} status is ${status}`);
 
@@ -65,7 +67,7 @@ async function pollReportStatus(reportId) {
         await new Promise(resolve => setTimeout(resolve, pollInterval));
     }
 
-    throw new Error('Report generation timed out after 3 minutes.');
+    throw new Error('Report generation timed out after 5 minutes.');
 }
 
 
