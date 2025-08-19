@@ -5,6 +5,7 @@ flask
 gunicorn
 flask-cors
 gevent
+redis
 
 # LangChain - Modern packages
 langchain-community
