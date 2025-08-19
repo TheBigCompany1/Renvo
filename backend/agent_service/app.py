@@ -8,6 +8,7 @@ import traceback
 import re
 import json
 import threading
+import redis
 
 from dotenv import load_dotenv
 from agents.orchestrator import OrchestratorAgent
@@ -16,8 +17,11 @@ load_dotenv()
 
 app = Flask(__name__, template_folder="templates")
 
-# --- In-memory Storage ---
-report_storage = {}
+# --- FIX: Use Redis for shared, persistent storage across all workers ---
+redis_url = os.getenv("REDIS_URL")
+if not redis_url:
+    raise RuntimeError("REDIS_URL environment variable not set.")
+report_storage = redis.from_url(redis_url)
 
 # --- Health Check Endpoint ---
 @app.route("/healthz")
@@ -51,12 +55,15 @@ def run_orchestrator_in_background(report_id, property_data):
     API_KEY = os.getenv("OPENAI_API_KEY")
     if not API_KEY:
         print(f"[{report_id}] ERROR: OPENAI_API_KEY not found in background thread.")
-        report_storage[report_id].update({"status": "failed", "error": "API Key not configured."})
+        # FIX: Update Redis with the error
+        initial_report_str = report_storage.get(report_id)
+        report_data = json.loads(initial_report_str) if initial_report_str else {}
+        report_data.update({"status": "failed", "error": "API Key not configured."})
+        report_storage.set(report_id, json.dumps(report_data, default=str))
         return
         
     orchestrator = OrchestratorAgent(api_key=API_KEY, model="gpt-4o")
     
-    # --- FIX: Manually manage the event loop for a more graceful shutdown ---
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
@@ -65,30 +72,39 @@ def run_orchestrator_in_background(report_id, property_data):
         full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
         print(f"[{report_id}] Background orchestration finished.")
         
+        # FIX: Get the initial report data from Redis to update it
+        initial_report_str = report_storage.get(report_id)
+        report_data = json.loads(initial_report_str) if initial_report_str else {}
+
         report_property_data = full_report.get("property", property_data)
 
-        report_storage[report_id].update({
+        report_data.update({
              "status": "completed",
              "property": report_property_data,
-             "updated_at": datetime.datetime.now(),
+             "updated_at": datetime.datetime.now().isoformat(),
              "detailed_report": full_report.get("detailed_report"),
              "market_summary": full_report.get("market_summary") or full_report.get("detailed_report", {}).get("market_summary"),
              "quick_insights": full_report.get("quick_insights", {}),
              "error": full_report.get("error")
         })
-        print(f"[{report_id}] Stored 'completed' report from background thread.")
+        # FIX: Save the final report back to Redis
+        report_storage.set(report_id, json.dumps(report_data, default=str))
+        print(f"[{report_id}] Stored 'completed' report in Redis.")
 
     except Exception as e:
         print(f"[{report_id}] EXCEPTION during background orchestration: {str(e)}")
         print(f"[{report_id}] Traceback: {traceback.format_exc()}")
-        report_storage[report_id].update({
+        # FIX: Update Redis with the failure status
+        initial_report_str = report_storage.get(report_id)
+        report_data = json.loads(initial_report_str) if initial_report_str else {}
+        report_data.update({
             "status": "failed", 
             "error": str(e),
-            "updated_at": datetime.datetime.now()
+            "updated_at": datetime.datetime.now().isoformat()
         })
-        print(f"[{report_id}] Stored 'failed' report from background thread.")
+        report_storage.set(report_id, json.dumps(report_data, default=str))
+        print(f"[{report_id}] Stored 'failed' report in Redis.")
     finally:
-        # This block ensures all lingering async tasks are cancelled and the loop is closed properly.
         try:
             print(f"[{report_id}] Shutting down async tasks gracefully...")
             tasks = asyncio.all_tasks(loop=loop)
@@ -112,12 +128,8 @@ def analyze_property():
     and immediately returns a reportId.
     """
     data = request.get_json()
-    url = data.get("url") or (data.get("property_data") or {}).get("url")
-    if not url or ("redfin" not in url and "zillow" not in url):
-        print("API Error: Invalid URL provided.")
-        return jsonify({"error": "Please provide a valid Redfin or Zillow URL."}), 400
-
     property_data = data.get("property_data") or {}
+
     print("Received property_data (summary):", {
         k: v for k, v in property_data.items() if k not in ['description', 'images']
     })
@@ -131,14 +143,16 @@ def analyze_property():
     report_id = str(uuid.uuid4())
     print(f"Generated report ID: {report_id}")
 
-    report_storage[report_id] = {
+    # FIX: Store the initial report data in Redis
+    initial_report = {
         "report_id": report_id,
         "status": "processing",
         "property": property_data,
-        "created_at": datetime.datetime.now(),
-        "updated_at": datetime.datetime.now(),
+        "created_at": datetime.datetime.now().isoformat(),
+        "updated_at": datetime.datetime.now().isoformat(),
         "error": None
     }
+    report_storage.set(report_id, json.dumps(initial_report, default=str))
     
     thread = threading.Thread(target=run_orchestrator_in_background, args=(report_id, property_data))
     thread.start()
@@ -154,10 +168,13 @@ def get_report_status():
     A lightweight endpoint for the frontend to poll for the report status.
     """
     report_id = request.args.get("reportId")
-    if not report_id or report_id not in report_storage:
+    # FIX: Get report from Redis
+    report_str = report_storage.get(report_id)
+    
+    if not report_str:
         return jsonify({"status": "not_found"}), 404
     
-    report = report_storage[report_id]
+    report = json.loads(report_str)
     return jsonify({
         "status": report.get("status"),
         "error": report.get("error")
@@ -172,11 +189,13 @@ def report():
     report_id = request.args.get("reportId")
     print(f"GET /report request for ID: {report_id}")
 
-    if not report_id or report_id not in report_storage:
+    # FIX: Get report from Redis
+    report_str = report_storage.get(report_id)
+    if not report_str:
         print(f"Report '{report_id}' not found in storage.")
         abort(404)
 
-    report_data = report_storage.get(report_id)
+    report_data = json.loads(report_str)
     report_status = report_data.get("status", "unknown")
     print(f"Report '{report_id}' status: {report_status}")
 
