@@ -1,3 +1,4 @@
+# Force a fresh build by adding a comment.
 # Use the full official Node.js 18 image for better compatibility
 FROM node:18
 

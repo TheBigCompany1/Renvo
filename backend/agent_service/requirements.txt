@@ -5,10 +5,10 @@ flask
 gunicorn
 flask-cors
 gevent
+redis
 
 # LangChain - Modern packages
 langchain-community
-langchain-openai
 langchain-core
 langchain-google-genai
 
