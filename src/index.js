@@ -8,20 +8,17 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const cors = require('cors');
-const { randomUUID } = require('crypto'); // ADDED: For unique request logging
+const { randomUUID } = require('crypto');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// MODIFIED: This check is now stricter. This MUST be set to the internal
-// service URL (e.g., http://renvo-python:10000) in your Render settings.
 const PYTHON_API_URL = process.env.PYTHON_API_URL;
 if (!PYTHON_API_URL) {
-  console.error("FATAL ERROR: The PYTHON_API_URL environment variable is not set.");
+  console.error("FATAL ERROR: PYTHON_API_URL environment variable is not set.");
   process.exit(1);
 }
-
 const PYTHON_SERVICE_URL = `${PYTHON_API_URL}/api/analyze-property`;
 
 /****************************************************
@@ -29,16 +26,8 @@ const PYTHON_SERVICE_URL = `${PYTHON_API_URL}/api/analyze-property`;
  ****************************************************/
 app.use(express.json());
 app.use(cors());
-app.options('*', cors()); // Handles preflight requests
+app.options('*', cors());
 app.use(express.static(path.join(__dirname, '../public')));
-
-/****************************************************
- * POLLING FUNCTION - DELETED
- ****************************************************/
-// The entire `pollReportStatus` function has been removed.
-// This was the source of the 5-minute timeout error. The responsibility
-// for polling is now correctly handled by the client-side JavaScript
-// on the Python service's report page.
 
 /****************************************************
  * ROUTES
@@ -47,11 +36,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-// The '/report' route was removed as it's not needed. The Python
-// service serves its own report page directly.
-
 app.get('/api/ping', (req, res) => {
-  console.log("Received GET /api/ping request");
   res.setHeader('Content-Type', 'text/plain');
   res.status(200).send('pong');
 });
@@ -60,7 +45,7 @@ app.get('/api/ping', (req, res) => {
  * ENDPOINT: /api/analyze-property
  ****************************************************/
 app.post('/api/analyze-property', async (req, res) => {
-  const reqId = randomUUID().slice(0, 8); // ADDED: Unique ID for this specific request log.
+  const reqId = randomUUID().slice(0, 8);
   console.log(`[${reqId}] --- Received new /api/analyze-property request ---`);
   let browser = null;
   try {
@@ -68,18 +53,15 @@ app.post('/api/analyze-property', async (req, res) => {
     if (!url || (!url.includes("redfin") && !url.includes("zillow"))) {
         return res.status(400).json({ error: "Please provide a valid Redfin or Zillow URL." });
     }
-    
-    // Filesystem and Puppeteer launch logic remains the same...
+
     console.log(`[${reqId}] Launching browser...`);
     browser = await puppeteer.launch({
         executablePath: '/usr/bin/google-chrome-stable',
-        protocolTimeout: 120000,
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     });
     const page = await browser.newPage();
     
-    // Page navigation and scraping logic remains the same...
     console.log(`[${reqId}] Navigating to:`, url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await new Promise(resolve => setTimeout(resolve, 10000));
@@ -98,18 +80,15 @@ app.post('/api/analyze-property', async (req, res) => {
         console.log(`[${reqId}] Browser closed.`);
     }
 
-    // Forwarding to Python service remains the same...
-    console.log(`[${reqId}] Forwarding data to Python service...`);
+    console.log(`[${reqId}] Forwarding data to Python service at ${PYTHON_SERVICE_URL}`);
     const pythonResponse = await axios.post(PYTHON_SERVICE_URL, { property_data: propertyDetails });
 
     const { reportId } = pythonResponse.data;
     if (!reportId) {
          throw new Error("Python service did not return the expected reportId.");
     }
-    console.log(`[${reqId}] Python service responded successfully with reportId: ${reportId}`);
+    console.log(`[${reqId}] Python service responded with reportId: ${reportId}`);
     
-    // MODIFIED: Removed the call to pollReportStatus.
-    // Immediately send the reportId back to the client.
     res.json({ reportId });
     console.log(`[${reqId}] --- Final success response sent to client. ---`);
 

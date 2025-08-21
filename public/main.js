@@ -22,8 +22,7 @@ document.addEventListener("DOMContentLoaded", function() {
         startStatusUpdates();
   
         try {
-            // **THE FIX**: This now uses a relative URL. It will correctly call the
-            // API of whatever environment it's running on (staging or production).
+            // THE FIX: Use a relative URL to call the backend of the current environment.
             const response = await fetch("/api/analyze-property", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -41,8 +40,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 throw new Error("Server response did not include a valid report ID.");
             }
   
-            // This logic remains the same. It correctly redirects the user to the Python
-            // service's report page, which will handle the polling.
+            // This redirects to the Python service's report page, which handles its own polling.
             const reportUrl = `https://renvo-python.onrender.com/report?reportId=${data.reportId}`;
             window.location.href = reportUrl;
   
