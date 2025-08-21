@@ -8,68 +8,40 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const cors = require('cors');
+const { randomUUID } = require('crypto'); // ADDED: For unique request logging
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Use the environment variable for the API URL, with a fallback to the production URL.
-const PYTHON_API_URL = process.env.PYTHON_API_URL || 'https://renvo-python.onrender.com';
+// MODIFIED: Make the check for this environment variable stricter.
+// It must be set to the internal service URL (e.g., http://renvo-python:10000) on Render.
+const PYTHON_API_URL = process.env.PYTHON_API_URL;
+if (!PYTHON_API_URL) {
+  console.error("FATAL ERROR: The PYTHON_API_URL environment variable is not set. This is required for the application to function.");
+  process.exit(1); // Exit if the critical URL is not configured.
+}
 
-// --- FIX: Updated default URLs to use your public Render service address ---
 const PYTHON_SERVICE_URL = `${PYTHON_API_URL}/api/analyze-property`;
-const PYTHON_STATUS_URL = `${PYTHON_API_URL}/api/report/status`;
-
+// REMOVED: PYTHON_STATUS_URL is no longer needed as the server will not poll.
+// const PYTHON_STATUS_URL = `${PYTHON_API_URL}/api/report/status`;
 
 /****************************************************
  * MIDDLEWARE
  ****************************************************/
 app.use(express.json());
-
-// --- FIX: Updated CORS configuration for production ---
-// This is a more permissive setting that allows requests from any origin.
-// It's a standard and safe way to resolve CORS issues in this environment.
 app.use(cors());
-app.options('*', cors()); // This handles preflight requests for all routes
-
+app.options('*', cors());
 app.use(express.static(path.join(__dirname, '../public')));
 
 /****************************************************
- * POLLING FUNCTION
+ * POLLING FUNCTION - REMOVED
  ****************************************************/
-async function pollReportStatus(reportId) {
-    const pollInterval = 5000; // 5 seconds
-    // FIX: Increased timeout from 3 minutes (36 attempts) to 5 minutes (60 attempts)
-    const maxAttempts = 60; // 5 minutes timeout
-    let attempt = 0;
-
-    console.log(`[Node] Starting to poll for reportId: ${reportId}`);
-
-    while (attempt < maxAttempts) {
-        attempt++;
-        try {
-            const statusResponse = await axios.get(`${PYTHON_STATUS_URL}?reportId=${reportId}`);
-            // Adding a comment to force a fresh build on Render.
-            const { status } = statusResponse.data;
-            console.log(`[Node] Poll attempt ${attempt}: Report ${reportId} status is ${status}`);
-
-            if (status === 'completed') {
-                console.log(`[Node] Report ${reportId} completed successfully.`);
-                return;
-            }
-            if (status === 'failed') {
-                throw new Error('Report generation failed on the Python backend.');
-            }
-        } catch (error) {
-            console.error(`[Node] Error polling status for ${reportId}:`, error.message);
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-    }
-
-    throw new Error('Report generation timed out after 5 minutes.');
-}
-
+// REMOVED: The entire pollReportStatus function is deleted.
+// This is the source of the timeout error. The responsibility for polling
+// is correctly handled by the frontend report page (`report.html`), which
+// already has the necessary JavaScript to check the status until it's complete.
+// Keeping this here makes the Node service unstable.
 
 /****************************************************
  * ROUTES
@@ -78,6 +50,9 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+// REMOVED: This route is not needed and can cause confusion.
+// The report is served directly by the Python service.
+/*
 app.get('/report', (req, res) => {
   const reportPath = path.join(__dirname, '../backend/agent_service/templates/report.html');
   if (fs.existsSync(reportPath)) {
@@ -86,6 +61,7 @@ app.get('/report', (req, res) => {
       res.status(404).send('Report template not found at expected Node path.');
   }
 });
+*/
 
 app.get('/api/ping', (req, res) => {
   console.log("Received GET /api/ping request");
@@ -97,30 +73,28 @@ app.get('/api/ping', (req, res) => {
  * ENDPOINT: /api/analyze-property
  ****************************************************/
 app.post('/api/analyze-property', async (req, res) => {
+  const reqId = randomUUID().slice(0, 8); // ADDED: Unique ID for this specific request log.
+  console.log(`[${reqId}] --- Received new request ---`);
   let browser = null;
   try {
     const { url } = req.body;
     if (!url || (!url.includes("redfin") && !url.includes("zillow"))) {
-        console.log("Invalid URL received:", url);
+        console.log(`[${reqId}] Invalid URL received:`, url);
         return res.status(400).json({ error: "Please provide a valid Redfin or Zillow URL." });
     }
 
-    console.log("--- Filesystem Debugging ---");
+    // Filesystem Debugging (no changes)
+    console.log(`[${reqId}] --- Filesystem Debugging ---`);
     const chromePath = '/usr/bin/google-chrome-stable';
     try {
         const chromeExists = fs.existsSync(chromePath);
-        console.log(`Does ${chromePath} exist? ${chromeExists}`);
-        if (!chromeExists) {
-            const usrBinContents = fs.readdirSync('/usr/bin');
-            const chromeLikeFiles = usrBinContents.filter(f => f.toLowerCase().includes('chrome'));
-            console.log("Found chrome-like files in /usr/bin/:", chromeLikeFiles);
-        }
+        console.log(`[${reqId}] Does ${chromePath} exist? ${chromeExists}`);
     } catch (e) {
-        console.log("Error during filesystem check:", e.message);
+        console.log(`[${reqId}] Error during filesystem check:`, e.message);
     }
-    console.log("--- End Filesystem Debugging ---");
+    console.log(`[${reqId}] --- End Filesystem Debugging ---`);
 
-    console.log("Launching browser with Docker's native Chrome...");
+    console.log(`[${reqId}] Launching browser with Docker's native Chrome...`);
     browser = await puppeteer.launch({
         executablePath: '/usr/bin/google-chrome-stable',
         protocolTimeout: 120000,
@@ -134,128 +108,92 @@ app.post('/api/analyze-property', async (req, res) => {
     });
     const page = await browser.newPage();
 
-    page.on('console', msg => {
-        const type = msg.type().substr(0, 3).toUpperCase();
-        const colors = { LOG: '\x1b[37m', ERR: '\x1b[31m', WAR: '\x1b[33m', INF: '\x1b[34m' };
-        const color = colors[type] || '\x1b[37m';
-        console.log(`${color}[Browser Console - ${type}]\x1b[0m`, msg.text());
-    });
-    page.on('pageerror', error => {
-        console.error('\x1b[31m[Browser Page Error]\x1b[0m', error.message);
-    });
+    // ADDED: Enhanced logging with request ID for browser events
+    page.on('console', msg => console.log(`[${reqId}] BROWSER LOG:`, msg.text()));
+    page.on('pageerror', error => console.error(`[${reqId}] BROWSER ERROR:`, error.message));
     page.on('requestfailed', request => {
          const failureText = request.failure()?.errorText;
          if (failureText && failureText !== 'net::ERR_ABORTED') {
-            console.warn(`\x1b[33m[Browser Request Failed]\x1b[0m ${failureText} ${request.url()}`);
+            console.warn(`[${reqId}] BROWSER REQ FAIL: ${failureText} ${request.url()}`);
          }
     });
 
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
-    console.log("Waiting 3 seconds before navigation...");
+    console.log(`[${reqId}] Waiting 3 seconds before navigation...`);
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    console.log("Navigating to:", url);
+    console.log(`[${reqId}] Navigating to:`, url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    console.log("Page DOM loaded, waiting 10 seconds for dynamic content...");
+    console.log(`[${reqId}] Page DOM loaded, waiting 10 seconds for dynamic content...`);
     await new Promise(resolve => setTimeout(resolve, 10000));
-    console.log("Finished waiting 10 seconds.");
+    console.log(`[${reqId}] Finished waiting.`);
 
-    console.log("Injecting and evaluating scrape script...");
+    console.log(`[${reqId}] Injecting and evaluating scrape script...`);
     const scrapeScriptPath = path.join(__dirname, 'scrape.js');
     if (!fs.existsSync(scrapeScriptPath)) {
-        console.error("CRITICAL: scrape.js not found at path:", scrapeScriptPath);
+        console.error(`[${reqId}] CRITICAL: scrape.js not found at path:`, scrapeScriptPath);
         throw new Error("Scraping script file is missing.");
     }
     const scriptContent = fs.readFileSync(scrapeScriptPath, 'utf8');
+    const propertyDetails = await page.evaluate(scriptContent); // Evaluate script directly
 
-    const propertyDetails = await page.evaluate(scriptToEvaluate => {
-        try {
-            return eval(scriptToEvaluate);
-        } catch (e) {
-             return {
-                 address: 'Address not found', price: null, beds: null, baths: null, sqft: null, yearBuilt: null, lotSize: null, homeType: null, description: null, hoaFee: null, propertyTax: null, images: [], source: 'unknown', url: window.location.href, timestamp: new Date().toISOString(), estimate: null, estimatePerSqft: null, interiorFeatures: {}, parkingFeatures: {}, communityFeatures: {}, priceHistory: [], taxHistory: [], daysOnMarket: null, constructionDetails: {}, utilityDetails: {}, listingAgent: null, listingBrokerage: null, additionalDetails: {},
-                 error: `Error evaluating scrape script in browser: ${e.message}`
-             };
-        }
-    }, scriptContent);
-
-    console.log('Property details received from browser:', propertyDetails);
+    console.log(`[${reqId}] Property details received from browser.`);
 
     if (propertyDetails.error) {
-        console.error('Error reported by scrape script:', propertyDetails.error);
+        console.error(`[${reqId}] Error reported by scrape script:`, propertyDetails.error);
         throw new Error(propertyDetails.error);
     }
-    if (!propertyDetails || Object.keys(propertyDetails).length === 0) {
-        console.error('Scraping returned empty or null data.');
-        throw new Error('Failed to scrape property details: No data returned.');
+    if (!propertyDetails || !propertyDetails.address || propertyDetails.address === 'Address not found') {
+        console.error(`[${reqId}] Scraping returned empty or invalid data.`);
+        throw new Error('Failed to scrape property details: No valid data returned.');
     }
 
     if (browser) {
-        console.log("Closing browser BEFORE calling Python service...");
-        try {
-            await browser.close();
-            browser = null;
-        } catch (closeErr) {
-            console.error("Error closing browser early:", closeErr);
-            browser = null;
-        }
+        console.log(`[${reqId}] Closing browser BEFORE calling Python service...`);
+        await browser.close();
+        browser = null;
     }
 
-    console.log("Forwarding data to Python service...");
-    let pythonResponse;
-    try {
-        pythonResponse = await axios.post(PYTHON_SERVICE_URL, {
-            property_data: propertyDetails
-        }, { timeout: 10 * 60 * 1000 });
+    console.log(`[${reqId}] Forwarding data to Python service...`);
+    const pythonResponse = await axios.post(PYTHON_SERVICE_URL, {
+        property_data: propertyDetails
+    });
 
-        console.log("Python service response:", pythonResponse.data);
-
-        if (!pythonResponse.data || !pythonResponse.data.reportId) {
-             throw new Error("Python service did not return the expected reportId.");
-        }
-
-    } catch (axiosError) {
-        console.error("Error calling Python service:", axiosError.message);
-        if (axiosError.response) {
-            console.error("Python service response status:", axiosError.response.status);
-            console.error("Python service response data:", axiosError.response.data);
-        } else if (axiosError.request) {
-            console.error("Python service made no response.");
-        }
-        throw new Error(`Failed to communicate with analysis service: ${axiosError.message}`);
-    }
-    
     const { reportId } = pythonResponse.data;
-    await pollReportStatus(reportId);
+    if (!reportId) {
+         throw new Error("Python service did not return the expected reportId.");
+    }
+    console.log(`[${reqId}] Python service responded with reportId: ${reportId}`);
+    
+    // REMOVED: Do not poll from the server.
+    // await pollReportStatus(reportId);
 
+    // MODIFIED: Immediately send the reportId back to the client.
     if (!res.headersSent) {
-        res.json({ reportId, status: 'completed' });
-        console.log("Final success response sent with completed status.");
+        res.json({ reportId });
+        console.log(`[${reqId}] --- Final success response sent to client. ---`);
     } else {
-         console.log("Headers already sent, cannot send final success response.");
+         console.log(`[${reqId}] Headers already sent, cannot send final response.`);
     }
 
   } catch (error) {
-    console.error("Error in /api/analyze-property endpoint:", error.message, error.stack);
+    console.error(`[${reqId}] Error in /api/analyze-property endpoint:`, error.message, error.stack);
     if (browser) {
-        console.warn("Ensuring browser is closed in main catch block...");
-        try { await browser.close(); browser = null; } catch (closeErr) { console.error("Error closing browser in main catch:", closeErr); }
+        console.warn(`[${reqId}] Ensuring browser is closed in main catch block...`);
+        try { await browser.close(); } catch (closeErr) { console.error(`[${reqId}] Error closing browser in main catch:`, closeErr); }
     }
     if (!res.headersSent) {
         res.status(500).json({ error: error.message || "Internal server error during analysis process." });
-    } else {
-        console.log("Headers already sent, cannot send error response from main catch block.");
     }
   } finally {
       if (browser) {
-          console.warn("Closing browser in FINALLY block (should have closed earlier)...");
-          try { await browser.close(); } catch (closeErr) { console.error("Error closing browser in finally:", closeErr); }
+          console.warn(`[${reqId}] Closing browser in FINALLY block (should have already been closed)...`);
+          try { await browser.close(); } catch (closeErr) { console.error(`[${reqId}] Error closing browser in finally:`, closeErr); }
       }
-      console.log("--- /api/analyze-property request finished ---");
+      console.log(`[${reqId}] --- /api/analyze-property request processing finished ---`);
   }
 });
-
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
