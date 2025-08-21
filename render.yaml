@@ -1,35 +1,51 @@
-# render.yaml - Simplified for clarity and correctness
+# render.yaml - Final, robust configuration for production and previews
 
 services:
-  # The Node.js Frontend/Proxy Service for Production
+  # ==================================
+  # == PRODUCTION NODE.JS SERVICE ==
+  # ==================================
   - name: renvo-node-final
     type: web
     runtime: docker
     repo: https://github.com/TheBigCompany1/Renvo
-    branch: main # Deploys from the main branch
+    branch: main
     healthCheckPath: /api/ping
-    # Production environment variables should be set in the Render dashboard, not here.
+    envVars:
+      # This points the production Node service to the production Python service's internal URL.
+      # This value should be set directly on the service in the Render dashboard
+      # to keep secrets out of the YAML file.
+      - key: PYTHON_API_URL
+        fromService:
+          type: web
+          name: renvo-node-final
+          envVarKey: PYTHON_API_URL
 
-  # The Python Backend Service for Production
+  # ==================================
+  # == PRODUCTION PYTHON SERVICE ==
+  # ==================================
   - name: renvo-python
     type: web
     runtime: python
     repo: https://github.com/TheBigCompany1/Renvo
-    branch: main # Deploys from the main branch
+    branch: main
     rootDir: backend/agent_service
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --worker-class gevent --workers 4 app:app
     healthCheckPath: /healthz
-    # Production environment variables should be set in the Render dashboard, not here.
+    # Production API keys and Redis URL should be set in the Render dashboard.
 
-# This section tells Render how to build your Pull Requests
+# ==================================
+# == PREVIEW ENVIRONMENT SETUP ==
+# ==================================
 previews:
-  - services:
-      # For PRs, create a preview of the Node.js service...
+  - # This section defines how to build any Pull Request.
+    services:
+      # Create a preview version of the Node.js service...
       - name: renvo-node-final
         # ...and apply the variables from your existing staging group.
         envVarGroup: renvo-staging
-      # Also for PRs, create a preview of the Python service...
+
+      # Also create a preview version of the Python service...
       - name: renvo-python
         # ...and apply the same staging variables.
         envVarGroup: renvo-staging
