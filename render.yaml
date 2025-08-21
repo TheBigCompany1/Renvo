@@ -1,75 +1,35 @@
-# render.yaml - Defines the services for the Renvo application
+# render.yaml - Simplified for clarity and correctness
 
-# 1. Define the Environment Group for Staging (Preview Environments)
-envVarGroups:
-  - name: renvo-staging
-    envVars:
-      - key: PYTHON_API_URL
-        # This uses a special variable to point to the Python service within the same PR environment
-        value: http://${{ services.renvo-python.name }}:${{ services.renvo-python.port }}
-      - key: REDIS_URL
-        # This syncs the Redis URL from your existing renvo-staging group
-        fromEnvVarGroup: renvo-staging
-
-# 2. Define the services in your application
 services:
-  # The Node.js Frontend/Proxy Service
+  # The Node.js Frontend/Proxy Service for Production
   - name: renvo-node-final
     type: web
     runtime: docker
     repo: https://github.com/TheBigCompany1/Renvo
-    # Specifies which branches automatically deploy to this production service
-    autoDeploy: true
-    branch: main
-    # Defines the health check for the production service
+    branch: main # Deploys from the main branch
     healthCheckPath: /api/ping
-    # Sets the production environment variable directly
-    envVars:
-      - key: PYTHON_API_URL
-        # Points to the production python service's internal address
-        value: http://renvo-python:10000
+    # Production environment variables should be set in the Render dashboard, not here.
 
-  # The Python Backend Service
+  # The Python Backend Service for Production
   - name: renvo-python
     type: web
     runtime: python
     repo: https://github.com/TheBigCompany1/Renvo
-    # Specifies which branches automatically deploy to this production service
-    autoDeploy: true
-    branch: main
-    # Build and start commands, relative to the root directory
+    branch: main # Deploys from the main branch
     rootDir: backend/agent_service
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --worker-class gevent --workers 4 app:app
-    # Defines the health check for the production service
     healthCheckPath: /healthz
-    envVars:
-      # Syncs API keys from your existing production service settings
-      - key: GEMINI_API_KEY
-        fromService:
-          type: web
-          name: renvo-python
-          envVarKey: GEMINI_API_KEY
-      - key: OPENAI_API_KEY
-        fromService:
-          type: web
-          name: renvo-python
-          envVarKey: OPENAI_API_KEY
-      - key: REDIS_URL
-        fromService:
-          type: web
-          name: renvo-python
-          envVarKey: REDIS_URL
+    # Production environment variables should be set in the Render dashboard, not here.
 
-# 3. Configure how Preview Environments are created for Pull Requests
+# This section tells Render how to build your Pull Requests
 previews:
-  - # This rule applies to any pull request
-    path: /
-    # For every PR, create a temporary version of the services defined above
-    services:
+  - services:
+      # For PRs, create a preview of the Node.js service...
       - name: renvo-node-final
-        # For the preview version, apply the "renvo-staging" environment group
+        # ...and apply the variables from your existing staging group.
         envVarGroup: renvo-staging
+      # Also for PRs, create a preview of the Python service...
       - name: renvo-python
-        # For the preview version, apply the "renvo-staging" environment group
+        # ...and apply the same staging variables.
         envVarGroup: renvo-staging
