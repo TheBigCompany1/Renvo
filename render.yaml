@@ -31,11 +31,8 @@ services:
 # ==================================================
 # == PREVIEW ENVIRONMENT (STAGING) CONFIGURATION ==
 # ==================================================
-# THE FIX: The 'previews:' block is now an object, not a list.
-# The hyphen that was causing the error has been removed.
 previews:
-  path: /
-  services:
+  services: # This is the only key needed under the 'previews' object.
     # For PRs, create a preview of the Node.js service...
     - name: renvo-node-final
       # ...and apply the variables from your existing staging group.
