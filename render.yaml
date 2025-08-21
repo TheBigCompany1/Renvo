@@ -1,4 +1,4 @@
-# render.yaml - Final, robust configuration for production and previews
+# render.yaml - Defines the application blueprint for Render
 
 services:
   # ==================================
@@ -9,16 +9,10 @@ services:
     runtime: docker
     repo: https://github.com/TheBigCompany1/Renvo
     branch: main
+    autoDeploy: true
     healthCheckPath: /api/ping
-    envVars:
-      # This points the production Node service to the production Python service's internal URL.
-      # This value should be set directly on the service in the Render dashboard
-      # to keep secrets out of the YAML file.
-      - key: PYTHON_API_URL
-        fromService:
-          type: web
-          name: renvo-node-final
-          envVarKey: PYTHON_API_URL
+    # Note: All production envVars (like PYTHON_API_URL)
+    # must be set in the Render Dashboard for this service.
 
   # ==================================
   # == PRODUCTION PYTHON SERVICE ==
@@ -28,24 +22,28 @@ services:
     runtime: python
     repo: https://github.com/TheBigCompany1/Renvo
     branch: main
+    autoDeploy: true
     rootDir: backend/agent_service
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --worker-class gevent --workers 4 app:app
     healthCheckPath: /healthz
-    # Production API keys and Redis URL should be set in the Render dashboard.
+    # Note: All production envVars (API keys, REDIS_URL)
+    # must be set in the Render Dashboard for this service.
 
 # ==================================
 # == PREVIEW ENVIRONMENT SETUP ==
 # ==================================
 previews:
-  - # This section defines how to build any Pull Request.
-    services:
-      # Create a preview version of the Node.js service...
+  # This section defines how to build any Pull Request.
+  - services:
+      # For PRs, create a preview version of the Node.js service.
+      # It inherits all settings from the production definition above.
       - name: renvo-node-final
-        # ...and apply the variables from your existing staging group.
+        # Override: Apply the variables from your existing staging group.
         envVarGroup: renvo-staging
 
-      # Also create a preview version of the Python service...
+      # For PRs, create a preview version of the Python service.
+      # It inherits all settings from the production definition above.
       - name: renvo-python
-        # ...and apply the same staging variables.
+        # Override: Apply the same staging variables.
         envVarGroup: renvo-staging
