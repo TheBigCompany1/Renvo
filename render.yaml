@@ -11,9 +11,6 @@ services:
     branch: main
     autoDeploy: true
     healthCheckPath: /api/ping
-    # THE FIX: This line tells Render to create previews for this service
-    # and which environment group to use for those previews.
-    previewEnvVarGroup: renvo-staging
     # Note: Production envVars (like PYTHON_API_URL) are managed in the Render Dashboard.
 
   # ==================================
@@ -29,7 +26,20 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn --worker-class gevent --workers 4 app:app"
     healthCheckPath: /healthz
-    # THE FIX: This line does the same for the Python service, linking
-    # it to the same preview environment as the Node.js service.
-    previewEnvVarGroup: renvo-staging
     # Note: Production envVars (API keys, REDIS_URL) are managed in the Render Dashboard.
+
+# ==================================================
+# == PREVIEW ENVIRONMENT (STAGING) CONFIGURATION ==
+# ==================================================
+previews:
+  - path: / # This trigger rule creates a preview for any change in a PR.
+    services:
+      # For PRs, create a preview of the Node.js service...
+      - name: renvo-node-final
+        # ...and apply the variables from your existing staging group.
+        envVarGroup: renvo-staging
+
+      # For PRs, create a preview of the Python service...
+      - name: renvo-python
+        # ...and apply the same staging variables.
+        envVarGroup: ren-staging
