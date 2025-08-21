@@ -9,7 +9,6 @@ redis
 
 # LangChain - Modern packages
 langchain-community
-langchain-openai
 langchain-core
 langchain-google-genai
 
