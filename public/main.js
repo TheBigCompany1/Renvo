@@ -18,21 +18,20 @@ document.addEventListener("DOMContentLoaded", function() {
             return;
         }
   
-        // Show new progress overlay and start status updates
-        if (overlay) {
-            overlay.style.display = 'flex';
-        }
+        overlay.style.display = 'flex';
         startStatusUpdates();
   
         try {
-            const response = await fetch("https://renvo-node-final.onrender.com/api/analyze-property", {
+            // **THE FIX**: This now uses a relative URL. It will correctly call the
+            // API of whatever environment it's running on (staging or production).
+            const response = await fetch("/api/analyze-property", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url })
             });
   
             if (!response.ok) {
-                const errorBody = await response.json(); // Try to get JSON error from the server
+                const errorBody = await response.json();
                 throw new Error(`API Error: ${response.status} - ${errorBody.error || 'Unknown server error'}`);
             }
   
@@ -42,15 +41,14 @@ document.addEventListener("DOMContentLoaded", function() {
                 throw new Error("Server response did not include a valid report ID.");
             }
   
-            // Redirect the browser to the Python service report page, which handles its own polling.
+            // This logic remains the same. It correctly redirects the user to the Python
+            // service's report page, which will handle the polling.
             const reportUrl = `https://renvo-python.onrender.com/report?reportId=${data.reportId}`;
-            console.log(`[main.js] Received reportId ${data.reportId}. Redirecting browser to: ${reportUrl}`);
             window.location.href = reportUrl;
   
         } catch (error) {
             console.error("[main.js] Error in fetch/redirect process:", error);
             alert(`An error occurred: ${error.message || 'Unknown fetch/processing error'}`);
-            // Hide overlay on error
             if (overlay) {
                 overlay.style.display = 'none';
             }
@@ -79,6 +77,6 @@ document.addEventListener("DOMContentLoaded", function() {
       }
   
       updateText();
-      statusInterval = setInterval(updateText, 10000); // Update text every 10 seconds
+      statusInterval = setInterval(updateText, 10000);
     }
   });
