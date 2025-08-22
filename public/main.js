@@ -41,19 +41,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             pollForReport(reportId);
         }
     } else {
-        // We are on the main submission page
-        const form = document.getElementById('property-form');
-        if (form) {
-            form.addEventListener('submit', handleFormSubmit);
+        // --- FIX: Listen for a click on the button instead of a form submit ---
+        const submitButton = document.querySelector('#property-form button[type="submit"]');
+        if (submitButton) {
+            submitButton.addEventListener('click', handleFormSubmit);
         }
     }
 });
 
 async function handleFormSubmit(event) {
+    // Prevent the default form submission which causes the page to reload.
     event.preventDefault();
+    
     const url = document.getElementById('url-input').value;
     const resultsDiv = document.getElementById('results');
-    const submitButton = event.target.querySelector('button[type="submit"]');
+    const submitButton = event.target;
 
     resultsDiv.innerHTML = '<p class="text-blue-500">Analyzing... Please wait.</p>';
     submitButton.disabled = true;
@@ -69,7 +71,7 @@ async function handleFormSubmit(event) {
         const data = await response.json();
 
         if (response.ok && data.reportId) {
-            // --- FIX: Use the dynamically fetched PYTHON_API_URL ---
+            // Use the dynamically fetched PYTHON_API_URL for redirection
             window.location.href = `${PYTHON_API_URL}/report?reportId=${data.reportId}`;
         } else {
             throw new Error(data.error || 'An unknown error occurred.');
@@ -84,12 +86,12 @@ async function handleFormSubmit(event) {
 
 async function pollForReport(reportId) {
     try {
-        // --- FIX: Use the dynamically fetched PYTHON_API_URL ---
+        // Use the dynamically fetched PYTHON_API_URL for polling
         const statusResponse = await fetch(`${PYTHON_API_URL}/api/report/status?reportId=${reportId}`);
         const statusData = await statusResponse.json();
 
         if (statusData.status === 'complete') {
-            // --- FIX: Use the dynamically fetched PYTHON_API_URL ---
+            // Use the dynamically fetched PYTHON_API_URL for the final redirect
             window.location.href = `${PYTHON_API_URL}/report?reportId=${reportId}`;
         } else if (statusData.status === 'error') {
             document.getElementById('main-content').innerHTML = `<div class="text-red-500 text-center p-8">An error occurred while generating your report.</div>`;
