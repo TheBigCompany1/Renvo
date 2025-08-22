@@ -6,6 +6,9 @@ let PYTHON_API_URL = '';
 async function fetchConfig() {
     try {
         const response = await fetch('/api/config');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const config = await response.json();
         PYTHON_API_URL = config.pythonApiUrl;
         console.log('Successfully fetched config. Python API URL:', PYTHON_API_URL);
@@ -41,10 +44,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             pollForReport(reportId);
         }
     } else {
-        // --- FIX: Listen for a click on the button instead of a form submit ---
-        const submitButton = document.querySelector('#property-form button[type="submit"]');
-        if (submitButton) {
-            submitButton.addEventListener('click', handleFormSubmit);
+        // --- FIX: Listen for the 'submit' event on the form itself ---
+        const form = document.getElementById('property-form');
+        if (form) {
+            form.addEventListener('submit', handleFormSubmit);
         }
     }
 });
@@ -55,7 +58,8 @@ async function handleFormSubmit(event) {
     
     const url = document.getElementById('url-input').value;
     const resultsDiv = document.getElementById('results');
-    const submitButton = event.target;
+    // Get the button from the form that was submitted.
+    const submitButton = event.target.querySelector('button[type="submit"]');
 
     resultsDiv.innerHTML = '<p class="text-blue-500">Analyzing... Please wait.</p>';
     submitButton.disabled = true;
