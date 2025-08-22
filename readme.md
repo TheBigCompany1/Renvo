@@ -14,3 +14,4 @@ A real estate comparables platform.
 1. **Install** dependencies:
    ```bash
    npm install
+# Test for staging environment
