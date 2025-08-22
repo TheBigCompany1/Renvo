@@ -57,7 +57,7 @@ def run_orchestrator_in_background(report_id, property_data):
         report_storage.set(report_id, json.dumps(report_data))
         return
         
-    orchestrator = OrchestratorAgent(api_key=API_KEY, model="gpt-4o")
+    orchestrator = OrchestratorAgent(model="gpt-4o")
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     

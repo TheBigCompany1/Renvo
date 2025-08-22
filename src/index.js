@@ -14,10 +14,15 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// Use the Stealth plugin
+puppeteer.use(StealthPlugin());
+
+// --- SAFEGUARD: Ensure PYTHON_API_URL is set ---
+// This is the critical check to prevent calling the wrong environment.
 const PYTHON_API_URL = process.env.PYTHON_API_URL;
 if (!PYTHON_API_URL) {
   console.error("FATAL ERROR: PYTHON_API_URL environment variable is not set.");
-  process.exit(1);
+  process.exit(1); // Exit immediately if the variable is missing.
 }
 const PYTHON_SERVICE_URL = `${PYTHON_API_URL}/api/analyze-property`;
 
@@ -55,6 +60,8 @@ app.post('/api/analyze-property', async (req, res) => {
     }
 
     console.log(`[${reqId}] Launching browser...`);
+    // --- BROWSER CONFIGURATION ---
+    // Using recommended args for running in a containerized environment like Render.
     browser = await puppeteer.launch({
         executablePath: '/usr/bin/google-chrome-stable',
         headless: true,
@@ -64,6 +71,8 @@ app.post('/api/analyze-property', async (req, res) => {
     
     console.log(`[${reqId}] Navigating to:`, url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    
+    // Increased wait time to ensure dynamic content loads
     await new Promise(resolve => setTimeout(resolve, 10000));
 
     console.log(`[${reqId}] Injecting and evaluating scrape script...`);
@@ -95,7 +104,8 @@ app.post('/api/analyze-property', async (req, res) => {
   } catch (error) {
     console.error(`[${reqId}] CRITICAL ERROR in /api/analyze-property:`, error.message);
     if (browser) {
-        try { await browser.close(); } catch (e) { /* ignore */ }
+        // Ensure browser is closed even on error
+        try { await browser.close(); } catch (e) { /* ignore cleanup errors */ }
     }
     if (!res.headersSent) {
         res.status(500).json({ error: error.message || "Internal server error." });
