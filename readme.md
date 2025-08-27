@@ -16,3 +16,4 @@ A real estate comparables platform.
    npm install
 # Test for staging environmentdddd
 # Test for staging environmentdddd
+# Test for staging environment3
