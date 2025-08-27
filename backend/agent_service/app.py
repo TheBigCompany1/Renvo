@@ -1,7 +1,7 @@
 # backend/agent_service/app.py
 from flask import Flask, request, jsonify, render_template, abort
 import asyncio
-import uuid # <-- FIX: Added missing import
+import uuid
 import os
 import datetime
 import traceback
@@ -48,38 +48,53 @@ def safe_float_from_price(price_str):
         return 0.0
 
 def run_orchestrator_in_background(report_id, property_data):
-    # --- FIX: This function has been updated to use the new Gemini Orchestrator ---
+    # This function contains the critical fix for error handling
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
     try:
         print(f"[{report_id}] Background orchestration thread started.")
-        # Create an instance of the new orchestrator. It no longer needs API keys passed directly.
         orchestrator = OrchestratorAgent() 
         
         full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
         
         report_data = json.loads(report_storage.get(report_id) or '{}')
+
+        # --- THIS IS THE FIX ---
+        # We now check if the orchestrator returned an error.
+        if "error" in full_report and full_report["error"]:
+            print(f"[{report_id}] ❌ Orchestration failed with error: {full_report['error']}")
+            report_data.update({
+                "status": "failed",
+                "error": full_report["error"],
+                "updated_at": datetime.datetime.now().isoformat()
+            })
+            report_storage.set(report_id, json.dumps(report_data))
+            print(f"[{report_id}] ❌ Stored 'failed' report in Redis.")
+            return  # Stop execution
+        # --- END OF FIX ---
+
+        # This part only runs if there was no error
         report_data.update({
              "status": "completed",
              "property": full_report.get("property", property_data),
              "updated_at": datetime.datetime.now().isoformat(),
              "detailed_report": full_report.get("detailed_report"),
              "market_summary": full_report.get("market_summary"),
-             "error": full_report.get("error")
+             "error": None
         })
         report_storage.set(report_id, json.dumps(report_data))
         print(f"[{report_id}] ✅ Stored 'completed' report in Redis.")
 
     except Exception as e:
-        print(f"[{report_id}] ❌ EXCEPTION during background orchestration: {e}")
-        print(traceback.format_exc()) # Added for more detailed error logging
+        print(f"[{report_id}] ❌ CRITICAL EXCEPTION during background orchestration: {e}")
+        print(traceback.format_exc())
         report_data = json.loads(report_storage.get(report_id) or '{}')
         report_data.update({
             "status": "failed", "error": str(e), "updated_at": datetime.datetime.now().isoformat()
         })
         report_storage.set(report_id, json.dumps(report_data))
-        print(f"[{report_id}] ❌ Stored 'failed' report in Redis.")
+        print(f"[{report_id}] ❌ Stored 'failed' report in Redis due to critical exception.")
     finally:
         loop.close()
 
@@ -155,4 +170,3 @@ def report():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
-# Test for staging environment123456
