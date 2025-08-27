@@ -15,3 +15,4 @@ A real estate comparables platform.
    ```bash
    npm install
 # Test for staging environmentdddd
+# Test for staging environmentdddd
