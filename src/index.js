@@ -14,6 +14,8 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+puppeteer.use(StealthPlugin());
+
 const PYTHON_API_URL = process.env.PYTHON_API_URL;
 if (!PYTHON_API_URL) {
   console.error("FATAL ERROR: PYTHON_API_URL environment variable is not set.");
@@ -34,6 +36,12 @@ app.use(express.static(path.join(__dirname, '../public')));
  ****************************************************/
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
+// --- NEW ENDPOINT ---
+// This endpoint provides the correct Python API URL to the frontend.
+app.get('/api/config', (req, res) => {
+  res.json({ pythonApiUrl: PYTHON_API_URL });
 });
 
 app.get('/api/ping', (req, res) => {
