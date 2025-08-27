@@ -13,9 +13,9 @@ load_dotenv(dotenv_path=dotenv_path)
 class Settings(BaseSettings):
     """Application settings."""
     app_name: str = "Renvo API"
-    openai_api_key: str = os.getenv("OPENAI_API_KEY")
-    openai_model: str = os.getenv("OPENAI_MODEL")
+    # --- FIX: Removed the unused 'openai_api_key' setting ---
     gemini_api_key: str = os.getenv("GEMINI_API_KEY")
+    redis_url: str = os.getenv("REDIS_URL") 
     
     # Database settings (for future use)
     database_url: str = os.getenv("DATABASE_URL", "")
