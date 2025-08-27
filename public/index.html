@@ -31,31 +31,37 @@
   </div>
   <!-- Fixed overlay to darken the background -->
   <div class="hero-overlay"></div>
-  <!-- Fixed hero content -->
-  <div class="hero-content">
+  
+  <!-- Main content area -->
+  <main id="main-content" class="hero-content">
     <h1 class="hero-title">RENVO</h1>
     <p class="hero-tagline">Maximize the Value of Your Property with Highest and Best Use Analysis</p>
-    <form class="hero-search-form" id="address-form" autocomplete="off">
+    
+    <!-- 
+      FIX: The onsubmit attribute tells the form to run our JavaScript function
+      and `return false;` prevents the page from reloading. The form ID is also corrected.
+    -->
+    <form class="hero-search-form" id="property-form" onsubmit="handleFormSubmit(event); return false;">
       <input 
-        type="text" 
-        id="address-input"
+        type="url" 
+        id="url-input"
         placeholder="Enter Redfin or Zillow URL (e.g., https://www.redfin.com/...)"
         aria-label="Enter property URL"
+        required
       />
       <button type="submit">Search</button>
     </form>
-  </div>
+    <div id="results" class="mt-4 text-white"></div>
+  </main>
 </section>
 
-  <!-- (Other sections such as Trending Properties, Reviews, etc. remain as they are) -->
-
-  <!-- Footer (Original) -->
+  <!-- Footer -->
   <footer class="site-footer">
     <p>© 2025 Renvo. All rights reserved.</p>
     <p>Data sourced from multiple real estate data providers.</p>
   </footer>
 
-  <!-- This is your existing progress overlay. The new CSS will style this element. -->
+  <!-- Progress overlay for loading state -->
   <div id="progress-overlay" class="progress-overlay">
     <div class="progress-container">
         <h1>Analyzing Property</h1>
