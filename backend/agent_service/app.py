@@ -1,7 +1,7 @@
 # backend/agent_service/app.py
 from flask import Flask, request, jsonify, render_template, abort
 import asyncio
-import uuid
+import uuid # <-- FIX: Added missing import
 import os
 import datetime
 import traceback
@@ -48,21 +48,15 @@ def safe_float_from_price(price_str):
         return 0.0
 
 def run_orchestrator_in_background(report_id, property_data):
-    # This background thread now assumes Redis is connected.
-    API_KEY = os.getenv("OPENAI_API_KEY")
-    if not API_KEY:
-        print(f"[{report_id}] ERROR: OPENAI_API_KEY not found in background thread.")
-        report_data = json.loads(report_storage.get(report_id) or '{}')
-        report_data.update({"status": "failed", "error": "API Key not configured."})
-        report_storage.set(report_id, json.dumps(report_data))
-        return
-        
-    orchestrator = OrchestratorAgent(model="gpt-4o")
+    # --- FIX: This function has been updated to use the new Gemini Orchestrator ---
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
     try:
         print(f"[{report_id}] Background orchestration thread started.")
+        # Create an instance of the new orchestrator. It no longer needs API keys passed directly.
+        orchestrator = OrchestratorAgent() 
+        
         full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
         
         report_data = json.loads(report_storage.get(report_id) or '{}')
@@ -79,6 +73,7 @@ def run_orchestrator_in_background(report_id, property_data):
 
     except Exception as e:
         print(f"[{report_id}] ❌ EXCEPTION during background orchestration: {e}")
+        print(traceback.format_exc()) # Added for more detailed error logging
         report_data = json.loads(report_storage.get(report_id) or '{}')
         report_data.update({
             "status": "failed", "error": str(e), "updated_at": datetime.datetime.now().isoformat()
@@ -160,5 +155,3 @@ def report():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
-
- # Triggering a new build for the staging1234567890

@@ -15,7 +15,8 @@ import json
 class OrchestratorAgent:
     """Orchestrates the workflow between a team of specialist agents."""
 
-    def __init__(self, api_key: str, model: str):
+    # --- FIX: Removed unused 'api_key' and 'model' arguments ---
+    def __init__(self):
         """Initializes all specialist agents."""
         settings = get_settings()
         self.llm = ChatGoogleGenerativeAI(
@@ -74,7 +75,6 @@ class OrchestratorAgent:
             if not final_ideas:
                 raise ValueError("Financial analysis failed to produce renovation ideas.")
 
-            # --- FIX: Run final agents sequentially to reduce memory pressure ---
             # Step 4: Contractor Search
             top_idea_name = final_ideas[0]['name']
             print(f"[Orchestrator] Calling ContractorSearchAgent for top idea: {top_idea_name}")
