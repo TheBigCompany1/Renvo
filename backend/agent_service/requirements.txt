@@ -1,4 +1,3 @@
-requirements.txt
 Core web framework
 flask
 gunicorn
@@ -9,12 +8,12 @@ LangChain - Modern packages
 langchain-community
 langchain-core
 langchain-google-genai
-langchain-openai # <-- FIX: Added for OpenAI fallback
-tiktoken # <-- FIX: Added as a dependency for langchain-openai
+langchain-openai
+tiktoken
 
 Pydantic for data validation
 pydantic
-pydantic_settings # Added for settings management
+pydantic_settings
 
 Environment variables
 python-dotenv
