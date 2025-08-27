@@ -6,21 +6,15 @@ from typing import Dict, Any, Optional
 
 class BaseAgent(ABC):
     """
-    Base class for all agents, initializing a shared Google Generative AI model.
+    Base class for all agents, using a shared Google Generative AI model instance.
     """
     
-    def __init__(self, model="gemini-1.5-flash", temperature=0.4):
-        """Initializes the agent with the Google Generative AI model."""
-        gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if not gemini_api_key:
-            raise ValueError("GEMINI_API_KEY environment variable not set.")
-            
-        self.llm = ChatGoogleGenerativeAI(
-            model=model,
-            temperature=temperature,
-            google_api_key=gemini_api_key,
-            convert_system_message_to_human=True # Ensures compatibility
-        )
+    # --- FIX: The __init__ method now accepts an already-initialized llm instance ---
+    # This aligns with how the OrchestratorAgent creates the specialist agents
+    # and resolves the ValidationError.
+    def __init__(self, llm: ChatGoogleGenerativeAI):
+        """Initializes the agent with a shared language model instance."""
+        self.llm = llm
     
     @abstractmethod
     async def process(self, *args, **kwargs) -> Dict[str, Any]:
