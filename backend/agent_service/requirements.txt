@@ -1,22 +1,16 @@
-Core web framework
 flask
 gunicorn
 flask-cors
 redis
 
-LangChain - Modern packages
 langchain-community
 langchain-core
 langchain-google-genai
 langchain-openai
 tiktoken
 
-Pydantic for data validation
 pydantic
 pydantic_settings
-
-Environment variables
 python-dotenv
 
-HTTP client
 httpx
