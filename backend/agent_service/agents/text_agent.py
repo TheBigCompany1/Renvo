@@ -7,6 +7,7 @@ import traceback
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_core.pydantic_v1 import BaseModel as LangchainBaseModel, Field as LangchainField
 from core.config import get_settings
 
@@ -62,36 +63,43 @@ class TextAnalysisAgent(BaseAgent):
     After using your tools and analyzing the results, you MUST format your final response as a single, valid JSON object conforming to the required schema.
     """
 
-    def __init__(self, llm):
+    def __init__(self, llm: ChatGoogleGenerativeAI):
         super().__init__(llm)
-        settings = get_settings()
-        # ** THE FIX: Using the correct, high-performing model name 'gemini-1.5-pro-latest' **
-        self.structured_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro", 
-            google_api_key=settings.gemini_api_key,
-            convert_system_message_to_human=True
-        ).with_structured_output(RenovationIdeasOutput)
-
 
     async def process(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate renovation ideas using a robust, tool-calling LangChain flow."""
+        """Generate renovation ideas using a robust, tool-calling LangChain flow with an OpenAI fallback."""
         print("[TextAgent] Process started.")
+        property_json = json.dumps(property_data, indent=2)
+        prompt = self._create_prompt(self.PROMPT_TEMPLATE, property_json=property_json)
+
         try:
-            property_json = json.dumps(property_data, indent=2)
-            prompt = self._create_prompt(self.PROMPT_TEMPLATE, property_json=property_json)
-
-            # ** ADDED LOGGING **
-            print("\n--- [TextAgent] PROMPT SENT TO LLM ---")
-            print(prompt)
-            print("--- END OF PROMPT ---\n")
-
-            print("[TextAgent] Initial call to LLM...")
-            response = await self.structured_llm.ainvoke(prompt)
+            print("[TextAgent] Primary attempt: Calling Gemini...")
+            structured_llm_gemini = self.llm.with_structured_output(RenovationIdeasOutput)
+            response = await structured_llm_gemini.ainvoke(prompt)
             
-            print("[TextAgent] Process finished successfully with structured output.")
+            if not response:
+                raise ValueError("Gemini returned an empty response.")
+            
+            print("[TextAgent] Gemini call successful.")
             return response.dict()
 
         except Exception as e:
-            print(f"[TextAgent] General error in process: {str(e)}")
-            print(f"[TextAgent] Traceback: {traceback.format_exc()}")
-            return {"renovation_ideas": [], "error": f"General TextAgent error: {str(e)}"}
+            print(f"[TextAgent] Gemini call failed: {e}. Attempting fallback to OpenAI.")
+            
+            try:
+                # --- FALLBACK LOGIC ---
+                llm_openai = ChatOpenAI(model="gpt-4o", temperature=0.7)
+                structured_llm_openai = llm_openai.with_structured_output(RenovationIdeasOutput)
+                response_openai = await structured_llm_openai.ainvoke(prompt)
+
+                if response_openai:
+                    print("[TextAgent] Fallback to OpenAI successful.")
+                    return response_openai.dict()
+                else:
+                    print("[TextAgent] Fallback to OpenAI also failed (empty response).")
+                    return {"error": "Both primary and backup AI models failed to generate a response."}
+
+            except Exception as e_openai:
+                print(f"[TextAgent] Fallback to OpenAI also failed with an exception: {e_openai}")
+                print(f"[Text.Agent] Traceback: {traceback.format_exc()}")
+                return {"renovation_ideas": [], "error": f"Fallback OpenAI error: {str(e_openai)}"}

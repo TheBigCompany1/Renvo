@@ -1,25 +1,23 @@
-# requirements.txt
-
-# Core web framework
+requirements.txt
+Core web framework
 flask
 gunicorn
 flask-cors
-gevent
 redis
 
-# LangChain - Modern packages
+LangChain - Modern packages
 langchain-community
 langchain-core
 langchain-google-genai
+langchain-openai # <-- FIX: Added for OpenAI fallback
+tiktoken # <-- FIX: Added as a dependency for langchain-openai
 
-# Pydantic for data validation
+Pydantic for data validation
 pydantic
+pydantic_settings # Added for settings management
 
-# OpenAI client
-openai
-
-# Environment variables
+Environment variables
 python-dotenv
 
-# HTTP client
+HTTP client
 httpx
