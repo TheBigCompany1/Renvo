@@ -44,42 +44,37 @@ class ImageAnalysisAgent(BaseAgent):
     }}
     """
     
-    # *** THE FIX: The function signature is updated to correctly expect a List. ***
     async def process(self, image_urls: List[str], renovation_ideas: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Evaluate renovation ideas based on property images, now with robust error handling."""
         try:
             print("[ImageAgent] Process started.")
             
-            # *** THE FIX: This is the crucial safety check. ***
-            # If we receive no ideas from the previous step, we stop gracefully instead of crashing.
             if not renovation_ideas:
                 print("[ImageAgent] No initial ideas received. Skipping image analysis.")
                 return {"refined_renovation_ideas": [], "additional_suggestions": []}
 
+            # --- SAFETY CHECK FIX ---
+            # If scraper provides no images, don't call the AI. Just pass the ideas to the next agent.
+            if not image_urls:
+                print("[ImageAgent] No images provided by scraper. Passing through initial ideas without changes.")
+                return {"refined_renovation_ideas": renovation_ideas, "additional_suggestions": []}
+
             renovation_json = json.dumps(renovation_ideas, indent=2)
             
-            # --- We are keeping YOUR working logic below this line ---
             prompt_text = self.PROMPT_TEMPLATE.format(renovation_json=renovation_json)
             content_parts = [{"type": "text", "text": prompt_text}]
             
             print(f"[ImageAgent] Preparing {len(image_urls)} image(s) for vision analysis.")
             for url in image_urls:
-                content_parts.append({
-                    "type": "image_url",
-                    "image_url": {"url": url},
-                })
+                content_parts.append({ "type": "image_url", "image_url": {"url": url} })
                 
             message = HumanMessage(content=content_parts)
 
             print("[ImageAgent] Sending multi-modal prompt to LLM...")
-            response = await asyncio.to_thread(
-                self.llm.invoke,
-                [message]
-            )
+            response = await asyncio.to_thread(self.llm.invoke, [message])
             print("[ImageAgent] Received response from LLM.")
             
             raw_content = response.content.strip()
-            print(f"[ImageAgent] Raw LLM content (stripped): {raw_content[:500]}...")
             
             try:
                 result = json.loads(raw_content)
@@ -89,7 +84,9 @@ class ImageAnalysisAgent(BaseAgent):
                 if json_match:
                     result = json.loads(json_match.group(1))
                 else:
-                    raise ValueError("Could not extract valid JSON from LLM response.")
+                    # Fallback: If AI gives a bad response, pass original ideas through.
+                    print("[ImageAgent] Could not extract valid JSON. Passing through initial ideas as fallback.")
+                    return {"refined_renovation_ideas": renovation_ideas, "additional_suggestions": [{"name": "AI Note", "description": "Image analysis could not be completed.", "reason": "AI response format error."}]}
             
             print("[ImageAgent] Process finished successfully.")
             return result
@@ -98,9 +95,9 @@ class ImageAnalysisAgent(BaseAgent):
             import traceback
             print(f"[ImageAgent] General error in process: {str(e)}")
             print(f"[ImageAgent] Traceback: {traceback.format_exc()}")
-            # *** THE FIX: This now safely returns an empty list for ideas. ***
+            # On any other failure, pass through the original ideas so the process can continue.
             return {
-                "refined_renovation_ideas": [], 
+                "refined_renovation_ideas": renovation_ideas, 
                 "additional_suggestions": [],
                 "error": f"ImageAnalysisAgent error: {str(e)}"
             }

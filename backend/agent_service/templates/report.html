@@ -80,8 +80,22 @@
                         <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.yearBuilt }}</div><div class="label text-xs uppercase text-gray-500">Year Built</div></div>
                         <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.lotSize }}</div><div class="label text-xs uppercase text-gray-500">Lot Size</div></div>
                     </div>
-                    <div>
-                         <img src="{{ report.property.images[0] if report.property.images else 'https://placehold.co/600x400/e2e8f0/e2e8f0?text=No+Image' }}" alt="Property Image" class="rounded-lg shadow-md w-full h-auto object-cover mb-4">
+                    <div class="relative w-full overflow-hidden rounded-lg shadow-md">
+                        <div id="image-carousel" class="flex transition-transform duration-500 ease-in-out">
+                            {% if report.property.images %}
+                                {% for image_url in report.property.images %}
+                                <div class="flex-none w-full">
+                                    <img src="{{ image_url }}" alt="Property Image {{ loop.index }}" class="w-full h-64 object-cover">
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="flex-none w-full">
+                                    <img src="https://placehold.co/600x400/e2e8f0/e2e8f0?text=No+Image" alt="No Image Available" class="w-full h-64 object-cover">
+                                </div>
+                            {% endif %}
+                        </div>
+                        <button id="prevBtn" class="absolute top-1/2 left-2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full">‹</button>
+                        <button id="nextBtn" class="absolute top-1/2 right-2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full">›</button>
                     </div>
                 </div>
                 {% if report.property.description %}
@@ -431,6 +445,75 @@
             }
 
             updateUI();
+        });
+    </script>
+    <script>
+        // --- THIS SCRIPT CONTROLS THE NEW IMAGE CAROUSEL ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // This is the existing main script, we are adding the carousel logic inside it.
+            const reportDataElement = document.getElementById('report-data');
+            if (reportDataElement) { // Ensures this only runs on the main report page
+                
+                // This function should already exist in your script. We're adding a call inside it.
+                function updateUI() {
+                    let report;
+                    try {
+                        report = JSON.parse(reportDataElement.textContent);
+                    } catch (e) {
+                        // This part of your script handles errors, no changes needed here.
+                        return;
+                    }
+    
+                    const currentStatus = report.status;
+    
+                    if (currentStatus === 'completed') {
+                        // ... (your existing code for showing the report)
+                        initializeCarousel(); // <-- ADD THIS LINE to your existing function
+                    } else {
+                        // ... (your existing code for processing/failed states)
+                    }
+                }
+    
+                // This is the new function to add for the carousel logic.
+                function initializeCarousel() {
+                    const carousel = document.getElementById('image-carousel');
+                    if (!carousel) return;
+    
+                    const prevBtn = document.getElementById('prevBtn');
+                    const nextBtn = document.getElementById('nextBtn');
+                    const images = carousel.children;
+                    let currentIndex = 0;
+    
+                    function showImage(index) {
+                        if (images.length > 0) {
+                            const offset = -index * 100;
+                            carousel.style.transform = `translateX(${offset}%)`;
+                        }
+                    }
+    
+                    if (prevBtn) {
+                        prevBtn.addEventListener('click', () => {
+                            currentIndex = (currentIndex > 0) ? currentIndex - 1 : images.length - 1;
+                            showImage(currentIndex);
+                        });
+                    }
+                    
+                    if (nextBtn) {
+                        nextBtn.addEventListener('click', () => {
+                            currentIndex = (currentIndex < images.length - 1) ? currentIndex + 1 : 0;
+                            showImage(currentIndex);
+                        });
+                    }
+                    
+                    if (images.length <= 1) {
+                        if (prevBtn) prevBtn.style.display = 'none';
+                        if (nextBtn) nextBtn.style.display = 'none';
+                    }
+                }
+                
+                // Find the existing call to updateUI() at the bottom of your script and keep it.
+                // For example: updateUI();
+            }
         });
     </script>
 </body>

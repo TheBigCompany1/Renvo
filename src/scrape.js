@@ -74,7 +74,12 @@ function extractRedfinData() {
           data.baths = safeParseFloat(document.querySelector('meta[name="twitter:text:baths"]')?.content);
           data.sqft = safeParseInt(document.querySelector('meta[name="twitter:text:sqft"]')?.content);
 
-          let metaImages = Array.from(document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"], meta[name="twitter:image:src"]')).map(meta => meta.content).filter(Boolean);
+          let metaImages = Array.from(document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"], meta[name="twitter:image:src"]'))
+              .map(meta => meta.content)
+              .filter(Boolean)
+              // --- THIS IS THE FIX ---
+              .filter(url => !url.includes('logo')); // Add this line to filter out logos
+
           data.images = [...new Set(metaImages)];
           console.log(`[Scrape.js] Meta Data Found - Addr OK: ${data.address !== 'Address not found'}, Price: ${!!data.price}, Beds: ${data.beds}, Baths: ${data.baths}, SqFt: ${data.sqft}, Imgs: ${data.images.length}`);
       } catch (metaError) {
