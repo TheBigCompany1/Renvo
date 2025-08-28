@@ -73,12 +73,12 @@
                 <h2 class="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-6">Property Overview</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">${{ "{:,.0f}".format(report.property.price) }}</div><div class="label text-xs uppercase text-gray-500">List Price</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.beds }}</div><div class="label text-xs uppercase text-gray-500">Beds</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.baths }}</div><div class="label text-xs uppercase text-gray-500">Baths</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ "{:,.0f}".format(report.property.sqft) }}</div><div class="label text-xs uppercase text-gray-500">Sq. Ft.</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.yearBuilt }}</div><div class="label text-xs uppercase text-gray-500">Year Built</div></div>
-                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.lotSize }}</div><div class="label text-xs uppercase text-gray-500">Lot Size</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">${{ "{:,.0f}".format(report.property.price) if report.property.price is number else 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">List Price</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.beds or 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Beds</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.baths or 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Baths</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ "{:,.0f}".format(report.property.sqft) if report.property.sqft is number else 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Sq. Ft.</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.yearBuilt or 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Year Built</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.lotSize or 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Lot Size</div></div>
                     </div>
                     <div class="relative w-full overflow-hidden rounded-lg shadow-md">
                         <div id="image-carousel" class="flex transition-transform duration-500 ease-in-out">

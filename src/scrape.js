@@ -29,54 +29,62 @@ function extractRedfinData() {
     let data = {
         address: 'Address not found', price: null, beds: null, baths: null, sqft: null,
         yearBuilt: null, lotSize: null, homeType: null,
-        description: null, hoaFee: null, propertyTax: null, images: [],
+        description: null, images: [],
         source: 'redfin', url: window.location.href, timestamp: new Date().toISOString(),
-        estimate: null, estimatePerSqft: null,
-        priceHistory: [], error: null
+        error: null
      };
   
-     function formatPrice(value) {
-        const num = safeParseInt(value);
-        return num ? `$${num.toLocaleString()}` : null;
+     // Using your existing helper functions
+     function safeParseInt(value) {
+        if (value === null || value === undefined) return null;
+        const cleaned = String(value).replace(/[^0-9]/g, '');
+        return cleaned ? parseInt(cleaned, 10) : null;
+     }
+     function safeParseFloat(value) {
+        if (value === null || value === undefined) return null;
+        const cleaned = String(value).replace(/[^0-9.]/g, '');
+        return cleaned ? parseFloat(cleaned) : null;
      }
   
     try {
         // --- 1. CORE DETAILS (Address, Beds, Baths, SqFt) ---
-        // Meta tags are reliable for these.
+        // Using more direct and reliable selectors for all core data.
         data.address = document.querySelector('.address-section .homeAddress span')?.textContent || 'Address not found';
         data.beds = safeParseFloat(document.querySelector('[data-testid="beds-value"]')?.textContent);
         data.baths = safeParseFloat(document.querySelector('[data-testid="baths-value"]')?.textContent);
-        data.sqft = safeParseInt(document.querySelector('[data-testid="sqft-value"] span')?.textContent);
         
-        // --- 2. FIX FOR PRICE ---
-        // Prioritize the visible price element over meta tags.
+        // --- FIX FOR SQFT ---
+        // Prioritize the user-visible sqft value, then fall back to your old method.
+        data.sqft = safeParseInt(document.querySelector('[data-testid="sqft-value"] span')?.textContent) || 
+                    safeParseInt(document.querySelector('meta[name="twitter:text:sqft"]')?.content);
+  
+        // --- FIX FOR PRICE ---
         const priceElement = document.querySelector('[data-testid="price-wrapper"] [data-testid="price"]');
         if (priceElement) {
             data.price = safeParseInt(priceElement.textContent);
         } else {
-            // Fallback to meta tag if the primary element isn't found
             data.price = safeParseInt(document.querySelector('meta[name="twitter:text:price"]')?.content);
         }
   
-        // --- 3. FIX FOR IMAGES ---
-        // Use a more robust, multi-step process to get all images.
+        // --- FIX FOR IMAGES ---
         let collectedImages = new Set();
         try {
-            // Primary Method: Scrape the main photo carousel/gallery on the page.
             document.querySelectorAll('.ImageCarousel .carousel-photo img, .inline-gallery-photo-item img, .Photo-ScrollView img').forEach(img => {
                 if (img.src && !img.src.includes('maps.googleapis.com')) {
-                    collectedImages.add(img.src.replace('p_l.jpg', 'p_f.jpg')); // Request full-size image
+                    collectedImages.add(img.src.replace('p_l.jpg', 'p_f.jpg'));
                 }
             });
-            console.log(`[Scrape.js] Found ${collectedImages.size} images from primary HTML carousels.`);
-        } catch (e) { console.error("Error scraping primary carousels:", e); }
-        data.images = Array.from(collectedImages).slice(0, 15); // Limit to 15 images
-        if (data.images.length === 0) {
-            console.warn("[Scrape.js] WARNING: No property images were found by the scraper.");
+        } catch (e) { console.error("Error scraping carousels:", e); }
+        if (collectedImages.size === 0) {
+            document.querySelectorAll('meta[property="og:image"]').forEach(meta => {
+                if (meta.content && !meta.content.includes('logo')) {
+                    collectedImages.add(meta.content);
+                }
+            });
         }
+        data.images = Array.from(collectedImages).slice(0, 15);
   
-        // --- 4. OTHER DETAILS ---
-        // This logic remains stable.
+        // --- 4. OTHER DETAILS (Stable Logic) ---
         data.description = document.querySelector('.remarksContainer .remarks span')?.textContent.trim();
         document.querySelectorAll('.KeyDetailsTable .keyDetails-row').forEach(row => {
             const label = row.querySelector('.keyDetails-label')?.textContent.toLowerCase();
@@ -93,7 +101,7 @@ function extractRedfinData() {
         data.error = `Scraping failed critically: ${error.message}`;
     }
   
-    console.log(`[Scrape.js] FINAL: Returning data. Images found: ${data.images.length}. Price: ${data.price}`);
+    console.log(`[Scrape.js] FINAL: Returning data. Images: ${data.images.length}. Price: ${data.price}. SqFt: ${data.sqft}`);
     return data;
   }
 
