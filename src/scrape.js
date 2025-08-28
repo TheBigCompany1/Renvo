@@ -48,43 +48,49 @@ function extractRedfinData() {
   
     try {
         // --- 1. CORE DETAILS (Address, Beds, Baths, SqFt) ---
-        // Using more direct and reliable selectors for all core data.
+        // These selectors are more robust than meta tags for core details.
         data.address = document.querySelector('.address-section .homeAddress span')?.textContent || 'Address not found';
         data.beds = safeParseFloat(document.querySelector('[data-testid="beds-value"]')?.textContent);
         data.baths = safeParseFloat(document.querySelector('[data-testid="baths-value"]')?.textContent);
-        
-        // --- FIX FOR SQFT ---
-        // Prioritize the user-visible sqft value, then fall back to your old method.
         data.sqft = safeParseInt(document.querySelector('[data-testid="sqft-value"] span')?.textContent) || 
                     safeParseInt(document.querySelector('meta[name="twitter:text:sqft"]')?.content);
   
-        // --- FIX FOR PRICE ---
+        // --- 2. FIX FOR PRICE ---
+        // Prioritize the visible price element, falling back to your original method.
         const priceElement = document.querySelector('[data-testid="price-wrapper"] [data-testid="price"]');
         if (priceElement) {
             data.price = safeParseInt(priceElement.textContent);
         } else {
+            console.log("[Scrape.js] Primary price element not found, falling back to meta tag.");
             data.price = safeParseInt(document.querySelector('meta[name="twitter:text:price"]')?.content);
         }
   
-        // --- FIX FOR IMAGES ---
+        // --- 3. FIX FOR IMAGES ---
+        // Use a more direct method to get all images from the page.
         let collectedImages = new Set();
         try {
+            // Primary Method: Scrape the main photo carousel/gallery on the page.
             document.querySelectorAll('.ImageCarousel .carousel-photo img, .inline-gallery-photo-item img, .Photo-ScrollView img').forEach(img => {
                 if (img.src && !img.src.includes('maps.googleapis.com')) {
-                    collectedImages.add(img.src.replace('p_l.jpg', 'p_f.jpg'));
+                    // Request a full-size image instead of a thumbnail
+                    collectedImages.add(img.src.replace('p_l.jpg', 'p_f.jpg')); 
                 }
             });
+            console.log(`[Scrape.js] Found ${collectedImages.size} images from primary HTML carousels.`);
         } catch (e) { console.error("Error scraping carousels:", e); }
+        
+        // Fallback: If no images were found, try your original meta tag method.
         if (collectedImages.size === 0) {
+            console.warn("[Scrape.js] No images in carousel, falling back to meta tags.");
             document.querySelectorAll('meta[property="og:image"]').forEach(meta => {
                 if (meta.content && !meta.content.includes('logo')) {
                     collectedImages.add(meta.content);
                 }
             });
         }
-        data.images = Array.from(collectedImages).slice(0, 15);
+        data.images = Array.from(collectedImages).slice(0, 15); // Limit to 15 images
   
-        // --- 4. OTHER DETAILS (Stable Logic) ---
+        // --- 4. OTHER DETAILS (Using your existing stable logic) ---
         data.description = document.querySelector('.remarksContainer .remarks span')?.textContent.trim();
         document.querySelectorAll('.KeyDetailsTable .keyDetails-row').forEach(row => {
             const label = row.querySelector('.keyDetails-label')?.textContent.toLowerCase();
