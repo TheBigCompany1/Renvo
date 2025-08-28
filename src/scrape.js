@@ -20,7 +20,7 @@ function getDataSource(url) {
     return cleaned ? parseFloat(cleaned) : null;
   }
   
-  // ==========================================================================
+// ==========================================================================
 // REDFIN SCRAPER (REVISED v12 - FINAL)
 // ==========================================================================
 function extractRedfinData() {
@@ -110,7 +110,7 @@ function extractRedfinData() {
     console.log(`[Scrape.js] FINAL: Returning data. Images: ${data.images.length}. Price: ${data.price}. SqFt: ${data.sqft}`);
     return data;
   }
-  
+
   // ==========================================================================
   // ZILLOW SCRAPER
   // ==========================================================================
