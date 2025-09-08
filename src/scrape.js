@@ -30,10 +30,10 @@ function safeParseFloat(value) {
 }
 
 // ==========================================================================
-// REDFIN SCRAPER (REVISED v14 - JSON-First Waterfall)
+// REDFIN SCRAPER (REVISED v15 - More Robust Waterfall)
 // ==========================================================================
 function extractRedfinData() {
-    console.log("[Scrape.js] Starting extractRedfinData (v14 - JSON-First Waterfall)...");
+    console.log("[Scrape.js] Starting extractRedfinData (v15 - More Robust Waterfall)...");
     let data = {
         address: 'Address not found', price: null, beds: null, baths: null, sqft: null,
         yearBuilt: null, lotSize: null, homeType: null, description: null, images: [],
@@ -96,7 +96,11 @@ function extractRedfinData() {
         // Price Fallback
         if (!data.price) {
             console.log("[Scrape.js] Price not found in JSON, trying HTML selectors...");
-            const priceElement = document.querySelector('[data-testid="price-wrapper"] [data-testid="price"]') || document.querySelector('.statsValue .value');
+            // --- THIS IS THE FIX ---
+            // Adding another, more general selector to the waterfall as the third option.
+            const priceElement = document.querySelector('[data-testid="price-wrapper"] [data-testid="price"]') || 
+                                 document.querySelector('.statsValue .value') ||
+                                 document.querySelector('.key-details-info .stat-block-value'); // New, broader selector
             if (priceElement && priceElement.textContent) {
                 data.price = safeParseInt(priceElement.textContent);
                 console.log(`[Scrape.js] Price found via primary HTML selector: ${data.price}`);
@@ -145,8 +149,8 @@ function extractRedfinData() {
         data.error = `Scraping failed critically: ${error.message}`;
     }
 
-    // --- 5. FINAL VERIFICATION ---
-    console.log("[Scrape.js] Stage 5: Final data verification...");
+    // --- STAGE 3: FINAL VERIFICATION ---
+    console.log("[Scrape.js] Stage 3: Final data verification...");
     if (!data.price || data.price <= 0) {
         console.error(`[Scrape.js] FINAL CHECK FAILED: Price is invalid (${data.price}). Setting error.`);
         data.error = 'The scraper could not find a valid price for this property.';
