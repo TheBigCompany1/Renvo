@@ -38,7 +38,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-// This endpoint provides the correct Python API URL to the frontend.
 app.get('/api/config', (req, res) => {
   res.json({ pythonApiUrl: PYTHON_API_URL });
 });
@@ -71,14 +70,17 @@ app.post('/api/analyze-property', async (req, res) => {
     
     console.log(`[${reqId}] Navigating to:`, url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    
-    // --- THIS IS THE FIX ---
-    // Instead of an unreliable fixed delay, we now wait for a key UI element 
-    // (the price container) to be visible on the page. This confirms the dynamic
-    // content has loaded before we attempt to scrape it.
-    console.log(`[${reqId}] Waiting for dynamic content to render by looking for the price container...`);
-    await page.waitForSelector('.statsValue', { timeout: 20000 }); // Wait up to 20 seconds
-    console.log(`[${reqId}] Price container found. Page is ready for scraping.`);
+
+    // --- THIS IS THE FIX (v18) ---
+    // Wait for the "Key Details" table, which is present on all layouts and
+    // indicates that the core property data has been rendered.
+    console.log(`[${reqId}] Waiting for dynamic content to render by looking for the Key Details table...`);
+    await page.waitForFunction(
+      "document.querySelector('.KeyDetailsTable, .KeyDetails-Table')",
+      { timeout: 30000 } // Generous 30-second timeout
+    );
+    console.log(`[${reqId}] Key Details table found. Page is ready for scraping.`);
+    // --- END OF FIX ---
 
     console.log(`[${reqId}] Injecting and evaluating scrape script...`);
     const scriptContent = fs.readFileSync(path.join(__dirname, 'scrape.js'), 'utf8');
