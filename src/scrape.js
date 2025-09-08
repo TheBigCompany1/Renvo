@@ -30,96 +30,126 @@ function safeParseFloat(value) {
 }
 
 // ==========================================================================
-// REDFIN SCRAPER (REVISED v13 - THE FINAL FIX)
+// REDFIN SCRAPER (REVISED v14 - JSON-First Waterfall)
 // ==========================================================================
 function extractRedfinData() {
-    console.log("[Scrape.js] Starting extractRedfinData (v13 - Final)...");
+    console.log("[Scrape.js] Starting extractRedfinData (v14 - JSON-First Waterfall)...");
     let data = {
-        address: 'Address not found',
-        price: null,
-        beds: null,
-        baths: null,
-        sqft: null,
-        yearBuilt: null,
-        lotSize: null,
-        homeType: null,
-        description: null,
-        images: [],
-        source: 'redfin',
-        url: window.location.href,
-        timestamp: new Date().toISOString(),
+        address: 'Address not found', price: null, beds: null, baths: null, sqft: null,
+        yearBuilt: null, lotSize: null, homeType: null, description: null, images: [],
+        source: 'redfin', url: window.location.href, timestamp: new Date().toISOString(),
         error: null
     };
 
     try {
-        // --- 1. CORE DETAILS (Address, Beds, Baths, SqFt) ---
-        // These selectors are the most reliable for the main stats.
-        console.log("[Scrape.js] Stage 1: Scraping core details (Address, Beds, Baths, SqFt)...");
-        data.address = document.querySelector('.address-section .homeAddress span')?.textContent ||
-                       document.querySelector('h1[data-rf-test-id="abp-address"]')?.textContent ||
-                       'Address not found';
-        data.beds = safeParseFloat(document.querySelector('[data-testid="beds-value"]')?.textContent || document.querySelector('[data-rf-test-id="abp-beds"]')?.textContent);
-        data.baths = safeParseFloat(document.querySelector('[data-testid="baths-value"]')?.textContent || document.querySelector('[data-rf-test-id="abp-baths"]')?.textContent);
-        data.sqft = safeParseInt(document.querySelector('[data-testid="sqft-value"] span')?.textContent || document.querySelector('[data-rf-test-id="abp-sqFt"] .value')?.textContent);
-        console.log(`[Scrape.js] Found Address: ${data.address}, Beds: ${data.beds}, Baths: ${data.baths}, SqFt: ${data.sqft}`);
-
-        // --- 2. FIX FOR PRICE (Waterfall Approach) ---
-        console.log("[Scrape.js] Stage 2: Scraping price with waterfall strategy...");
-        const priceElement = document.querySelector('[data-testid="price-wrapper"] [data-testid="price"]') || document.querySelector('.statsValue .value');
-        if (priceElement && priceElement.textContent) {
-            data.price = safeParseInt(priceElement.textContent);
-            console.log(`[Scrape.js] Price found via primary selector: ${data.price}`);
-        } else {
-            console.log("[Scrape.js] Primary price element not found. Falling back to meta tag...");
-            data.price = safeParseInt(document.querySelector('meta[name="twitter:text:price"]')?.content);
-            console.log(`[Scrape.js] Price found via meta tag fallback: ${data.price}`);
+        // --- STAGE 1: ATTEMPT TO EXTRACT FROM EMBEDDED JSON (__reactServerState) ---
+        console.log("[Scrape.js] Stage 1: Searching for __reactServerState JSON data...");
+        let serverData = null;
+        try {
+            const scripts = document.querySelectorAll('script');
+            let serverStateJsonString = null;
+            scripts.forEach((script) => {
+                if (!serverData && script.textContent.includes('root.__reactServerState =')) {
+                    const match = script.textContent.match(/root\.__reactServerState\s*=\s*({.*);?\s*$/s);
+                    if (match && match[1]) {
+                        serverStateJsonString = match[1];
+                        if (serverStateJsonString.endsWith(';')) serverStateJsonString = serverStateJsonString.slice(0, -1);
+                    }
+                }
+            });
+            if (serverStateJsonString) {
+                serverData = JSON.parse(serverStateJsonString);
+                console.log("[Scrape.js] Successfully parsed __reactServerState JSON.");
+            } else {
+                console.log("[Scrape.js] __reactServerState JSON not found.");
+            }
+        } catch (jsonError) {
+             console.error('[Scrape.js] Error parsing Redfin JSON:', jsonError.message);
+             serverData = null;
         }
 
-        // --- 3. FIX FOR IMAGES (Multi-Selector Approach) ---
-        console.log("[Scrape.js] Stage 3: Scraping images from multiple selectors...");
-        let collectedImages = new Set();
-        try {
-            // Primary Method: Scrape all images from any visible carousel or gallery.
+        if (serverData) {
+            const dataCache = serverData?.InitialContext?.ReactServerAgent?.cache?.dataCache;
+            const getPayload = (apiPath) => dataCache?.[apiPath]?.res?.payload;
+            const aboveTheFoldPayload = getPayload("\u002Fstingray\u002Fapi\u002Fhome\u002Fdetails\u002FaboveTheFold");
+
+            if (aboveTheFoldPayload?.addressSectionInfo) {
+                const addrInfo = aboveTheFoldPayload.addressSectionInfo;
+                data.price = safeParseInt(addrInfo.priceInfo?.amount);
+                data.beds = addrInfo.beds;
+                data.baths = addrInfo.baths;
+                data.sqft = addrInfo.sqFt?.value;
+                data.address = addrInfo.streetAddress?.assembledAddress || data.address;
+                console.log(`[Scrape.js] Extracted from JSON - Price: ${data.price}, Beds: ${data.beds}, Baths: ${data.baths}`);
+            }
+             const photos = aboveTheFoldPayload?.mediaBrowserInfo?.photos;
+             if (photos && Array.isArray(photos) && photos.length > 0) {
+                const jsonImages = photos.map(p => p?.photoUrls?.fullScreenPhotoUrl?.replace(/p_[a-z]/, 'p_l')).filter(Boolean);
+                data.images = [...new Set(jsonImages)];
+                console.log(`[Scrape.js] Extracted ${data.images.length} images from JSON.`);
+             }
+        }
+
+        // --- STAGE 2: HTML FALLBACKS (if JSON failed or missed data) ---
+        console.log("[Scrape.js] Stage 2: Running HTML fallbacks for any missing data...");
+
+        // Price Fallback
+        if (!data.price) {
+            console.log("[Scrape.js] Price not found in JSON, trying HTML selectors...");
+            const priceElement = document.querySelector('[data-testid="price-wrapper"] [data-testid="price"]') || document.querySelector('.statsValue .value');
+            if (priceElement && priceElement.textContent) {
+                data.price = safeParseInt(priceElement.textContent);
+                console.log(`[Scrape.js] Price found via primary HTML selector: ${data.price}`);
+            } else {
+                console.log("[Scrape.js] Primary HTML price selectors failed, falling back to meta tag...");
+                data.price = safeParseInt(document.querySelector('meta[name="twitter:text:price"]')?.content);
+                console.log(`[Scrape.js] Price found via meta tag fallback: ${data.price}`);
+            }
+        }
+
+        // Other Core Details Fallback
+        if (data.address === 'Address not found') data.address = document.querySelector('.address-section .homeAddress span')?.textContent || document.querySelector('h1[data-rf-test-id="abp-address"]')?.textContent || 'Address not found';
+        if (!data.beds) data.beds = safeParseFloat(document.querySelector('[data-testid="beds-value"]')?.textContent || document.querySelector('[data-rf-test-id="abp-beds"]')?.textContent);
+        if (!data.baths) data.baths = safeParseFloat(document.querySelector('[data-testid="baths-value"]')?.textContent || document.querySelector('[data-rf-test-id="abp-baths"]')?.textContent);
+        if (!data.sqft) data.sqft = safeParseInt(document.querySelector('[data-testid="sqft-value"] span')?.textContent || document.querySelector('[data-rf-test-id="abp-sqFt"] .value')?.textContent);
+
+        // Images Fallback
+        if (data.images.length === 0) {
+            console.log("[Scrape.js] Images not found in JSON, trying HTML selectors...");
+            let collectedImages = new Set();
             document.querySelectorAll('.ImageCarousel img, .inline-gallery-photo-item img, .Photo-ScrollView img, .carousel-photo img').forEach(img => {
-                if (img.src && !img.src.includes('maps.googleapis.com') && !img.src.includes('rdncache.com/images/common')) {
-                    // Request a full-size image instead of a thumbnail by replacing the size parameter.
+                if (img.src && !img.src.includes('maps.googleapis.com')) {
                     collectedImages.add(img.src.replace(/p_[a-z]\.jpg/, 'p_f.jpg'));
                 }
             });
-            console.log(`[Scrape.js] Found ${collectedImages.size} unique images from HTML carousels.`);
-        } catch (e) {
-            console.error("[Scrape.js] Error during image carousel scraping:", e);
+            data.images = Array.from(collectedImages).slice(0, 15);
+            console.log(`[Scrape.js] Found ${data.images.length} images via HTML fallback.`);
         }
-        data.images = Array.from(collectedImages).slice(0, 15); // Limit to 15 images
 
-        // --- 4. OTHER DETAILS (Description & Key Facts Table) ---
-        console.log("[Scrape.js] Stage 4: Scraping other details...");
-        data.description = document.querySelector('.remarksContainer .remarks span')?.textContent.trim();
+        // Other Details
+        if (!data.description) data.description = document.querySelector('.remarksContainer .remarks span')?.textContent.trim();
         document.querySelectorAll('.KeyDetailsTable .keyDetails-row, .KeyDetails-Table .key-details-row').forEach(row => {
             const labelElement = row.querySelector('.keyDetails-label, .key-details-label');
             const valueElement = row.querySelector('.keyDetails-value, .key-details-value');
             if (labelElement && valueElement) {
                 const label = labelElement.textContent.toLowerCase();
                 const value = valueElement.textContent;
-                if (label.includes('year built')) data.yearBuilt = safeParseInt(value);
-                if (label.includes('lot size')) data.lotSize = value;
-                if (label.includes('property type')) data.homeType = value;
+                if (!data.yearBuilt && label.includes('year built')) data.yearBuilt = safeParseInt(value);
+                if (!data.lotSize && label.includes('lot size')) data.lotSize = value;
+                if (!data.homeType && label.includes('property type')) data.homeType = value;
             }
         });
-        console.log(`[Scrape.js] Found Year: ${data.yearBuilt}, Lot Size: ${data.lotSize}, Type: ${data.homeType}`);
 
     } catch (error) {
-        console.error('[Scrape.js] CRITICAL Error during extractRedfinData:', error.message);
+        console.error('[Scrape.js] CRITICAL Error during extractRedfinData:', error.message, error.stack);
         data.error = `Scraping failed critically: ${error.message}`;
     }
 
     // --- 5. FINAL VERIFICATION ---
-    // This is the crucial final check to prevent sending bad data to the backend.
     console.log("[Scrape.js] Stage 5: Final data verification...");
     if (!data.price || data.price <= 0) {
         console.error(`[Scrape.js] FINAL CHECK FAILED: Price is invalid (${data.price}). Setting error.`);
         data.error = 'The scraper could not find a valid price for this property.';
-        // We still return the data object so the failure is logged and handled gracefully.
     } else {
         console.log("[Scrape.js] FINAL CHECK PASSED: Price is valid.");
     }
@@ -144,7 +174,6 @@ function extractZillowData() {
         timestamp: new Date().toISOString(),
         estimate: null, estimatePerSqft: null,
         interiorFeatures: {}, parkingFeatures: {}, communityFeatures: {},
-        // --- NEW FIELDS ---
         priceHistory: [], taxHistory: [], daysOnMarket: null,
         constructionDetails: {}, utilityDetails: {},
         listingAgent: null, listingBrokerage: null,
@@ -165,21 +194,17 @@ function extractZillowData() {
                  console.log("[Scrape.js] Successfully parsed raw hdpApolloPreloadedData.");
   
                  // --- Find the actual property data object within the raw JSON ---
-                 // Heuristic: Look for an object containing 'zpid', 'streetAddress', etc.
                  const findPropertyData = (obj) => {
                      if (typeof obj !== 'object' || obj === null) return null;
-                     // More robust check for property object
                      if (obj.zpid && obj.streetAddress && obj.homeStatus && obj.price) {
                           console.log("[Scrape.js] Found likely property data object via zpid/address/status/price keys.");
                           return obj;
                      }
-                     // Check specific known paths (these change often!)
-                     if (obj?.gdpClientCache) { // Try drilling into client cache
+                     if (obj?.gdpClientCache) {
                          const cacheKey = Object.keys(obj.gdpClientCache).find(k => k.includes('Property') || k.includes('ForSale'));
                          if (cacheKey && obj.gdpClientCache[cacheKey]?.property) return obj.gdpClientCache[cacheKey].property;
                      }
   
-                     // Recursive search (can be slow on large JSON)
                      for(const key in obj) {
                          if (typeof obj[key] === 'object') {
                              const result = findPropertyData(obj[key]);
@@ -189,7 +214,7 @@ function extractZillowData() {
                      return null;
                  };
   
-                 hdpData = findPropertyData(rawHdpJson); // Find the nested property object
+                 hdpData = findPropertyData(rawHdpJson);
   
                  if (!hdpData) {
                      console.log("[Scrape.js] Could not automatically locate the main property data structure within hdpApolloPreloadedData. Will rely more on HTML.");
@@ -199,7 +224,7 @@ function extractZillowData() {
   
             } catch (jsonError) {
                  console.error('[Scrape.js] Error parsing/processing Zillow JSON (hdpApolloPreloadedData):', jsonError.message);
-                 hdpData = null; // Ensure it's null if parsing fails
+                 hdpData = null;
                  rawHdpJson = null;
             }
         } else {
@@ -209,24 +234,22 @@ function extractZillowData() {
         // --- Extract Data from Zillow JSON (hdpData) if available ---
         if (hdpData) {
              console.log("[Scrape.js] Processing parsed Zillow hdpData property object...");
-             const facts = hdpData.resoFacts || {}; // Use resoFacts sub-object frequently
+             const facts = hdpData.resoFacts || {};
   
-             // Address, Basic Facts (Keep previous logic, use facts object)
              data.address = hdpData.streetAddress ? `${hdpData.streetAddress}, ${hdpData.city}, ${hdpData.state} ${hdpData.zipcode}` : data.address;
              data.price = safeParseInt(hdpData.price) || data.price;
              data.beds = safeParseFloat(hdpData.bedrooms) || data.beds;
              data.baths = safeParseFloat(hdpData.bathrooms) || data.baths;
              data.sqft = safeParseInt(hdpData.livingArea || facts.livingArea) || data.sqft;
              data.yearBuilt = safeParseInt(hdpData.yearBuilt || facts.yearBuilt) || data.yearBuilt;
-             data.lotSize = hdpData.lotSize || facts.lotSize || data.lotSize; // Keep as string for now
+             data.lotSize = hdpData.lotSize || facts.lotSize || data.lotSize;
              if (facts.lotSizeUnit && data.lotSize) data.lotSize = `${data.lotSize} ${facts.lotSizeUnit}`;
              data.homeType = hdpData.homeType || facts.propertySubType || data.homeType;
              data.description = hdpData.description || data.description;
              data.hoaFee = facts.hoaFee || data.hoaFee;
              if (facts.hoaFeeUnit && data.hoaFee) data.hoaFee = `${data.hoaFee}/${facts.hoaFeeUnit}`;
-             data.propertyTax = safeParseInt(facts.taxAnnualAmount) || data.propertyTax; // Annual tax amount
+             data.propertyTax = safeParseInt(facts.taxAnnualAmount) || data.propertyTax;
   
-             // Estimate (Zestimate) (Keep previous)
              data.estimate = safeParseInt(hdpData.zestimate || facts.zestimate) || data.estimate;
              if (data.estimate && data.sqft) {
                  const numericSqft = safeParseInt(data.sqft);
@@ -234,7 +257,6 @@ function extractZillowData() {
                  console.log(`[Scrape.js] Zestimate / SqFt (JSON): ${data.estimate} / ${data.estimatePerSqft}`);
              } else { console.log("[Scrape.js] Zestimate not found in JSON."); }
   
-             // Images (Keep previous)
              const photos = hdpData.photos || hdpData.hugePhotos || hdpData.originalPhotos || [];
              if (photos.length > 0) {
                  const jsonImages = photos.map(p => p?.url || p?.mixedSources?.jpeg?.[p?.mixedSources?.jpeg?.length - 1]?.url).filter(Boolean);
@@ -242,38 +264,32 @@ function extractZillowData() {
                  console.log(`[Scrape.js] Total unique images after Zillow JSON: ${data.images.length}`);
              } else { console.log("[Scrape.js] No photos found in Zillow JSON."); }
   
-            // Interior Features (Keep previous, enhance from facts)
             if(facts) {
                  data.interiorFeatures.appliances = facts.appliances?.join(', ') || facts.appliancesIncluded;
                  data.interiorFeatures.flooring = facts.flooring?.join(', ');
                  data.interiorFeatures.cooling = facts.coolingSystems?.join(', ') || facts.cooling;
                  data.interiorFeatures.heating = facts.heatingSystems?.join(', ') || facts.heating;
-                 data.interiorFeatures.fireplace = facts.fireplaces || facts.fireplaceFeatures; // Use features string
+                 data.interiorFeatures.fireplace = facts.fireplaces || facts.fireplaceFeatures;
                  data.interiorFeatures.other = facts.interiorFeatures?.join(', ');
-                 // Parking Features (Keep previous)
                  data.parkingFeatures.details = facts.parkingFeatures?.join(', ');
                  data.parkingFeatures.garageSpaces = facts.garageSpaces;
                  data.parkingFeatures.totalSpaces = facts.parkingTotalSpaces || facts.parking?.spaces;
                  data.parkingFeatures.hasGarage = facts.parking?.hasGarage;
-                 // Construction Details (NEW - from facts)
                  data.constructionDetails.roof = facts.roofType?.join(', ');
                  data.constructionDetails.foundation = facts.foundationDetails?.join(', ');
                  data.constructionDetails.materials = facts.constructionMaterials?.join(', ');
                  data.constructionDetails.exterior = facts.exteriorFeatures?.join(', ');
-                 // Utility Details (NEW - from facts)
                  data.utilityDetails.water = facts.waterSource?.join(', ');
                  data.utilityDetails.sewer = facts.sewer?.join(', ');
-                  // Add other potentially useful facts to additionalDetails
                  const commonFactKeys = ['livingArea','yearBuilt','lotSize','propertySubType','hoaFee','taxAnnualAmount','zestimate','bedrooms','bathrooms', 'appliances','flooring','coolingSystems','heatingSystems','fireplaces','interiorFeatures','parkingFeatures','garageSpaces','parkingTotalSpaces','roofType','foundationDetails','constructionMaterials','exteriorFeatures','waterSource','sewer'];
                  Object.entries(facts).forEach(([key, value]) => {
-                     if (!commonFactKeys.includes(key) && value && typeof value !== 'object') { // Add simple values
+                     if (!commonFactKeys.includes(key) && value && typeof value !== 'object') {
                          data.additionalDetails[key] = value;
                      }
                  });
                  console.log("[Scrape.js] Extracted interior/parking/construction/utility features from resoFacts (JSON).");
             }
   
-             // Community Features (Keep previous)
              data.communityFeatures.walkScore = hdpData.walkScore?.walkscore;
              data.communityFeatures.transitScore = hdpData.transitScore?.transitScore;
              if(hdpData.schools?.length > 0) {
@@ -281,47 +297,39 @@ function extractZillowData() {
                  console.log(`[Scrape.js] Found ${data.communityFeatures.schools.length} schools (Zillow JSON).`);
              }
   
-             // Price History (NEW - from JSON)
              if (hdpData.priceHistory && Array.isArray(hdpData.priceHistory)) {
                  data.priceHistory = hdpData.priceHistory.map(e => ({
-                     date: e.date || e.time, // Time is often epoch ms
+                     date: e.date || e.time,
                      price: safeParseInt(e.price),
                      event: e.event || e.priceChangeReason
                  })).filter(e => e.date && e.price);
-                 // Convert epoch time if needed
                  data.priceHistory.forEach(e => {
-                     if (typeof e.date === 'number' && e.date > 1000000000) { // Likely epoch ms
+                     if (typeof e.date === 'number' && e.date > 1000000000) {
                          try { e.date = new Date(e.date).toISOString().split('T')[0]; } catch { /* ignore */ }
                      }
                  });
                  console.log(`[Scrape.js] Found ${data.priceHistory.length} price history events (Zillow JSON).`);
              } else { console.log("[Scrape.js] Price history not found in Zillow JSON."); }
   
-            // Tax History (NEW - from JSON)
              if (hdpData.taxHistory && Array.isArray(hdpData.taxHistory)) {
                  data.taxHistory = hdpData.taxHistory.map(t => ({
-                     year: safeParseInt(t.time), // Year might be in 'time'
+                     year: safeParseInt(t.time),
                      taxAmount: safeParseInt(t.taxPaid),
-                     assessment: safeParseInt(t.value) // Assessment might be 'value'
+                     assessment: safeParseInt(t.value)
                  })).filter(t => t.year && (t.taxAmount || t.assessment));
                  console.log(`[Scrape.js] Found ${data.taxHistory.length} tax history entries (Zillow JSON).`);
-                  // Update main tax field
                  if (!data.propertyTax && data.taxHistory.length > 0) {
                      const latestTax = data.taxHistory.sort((a, b) => b.year - a.year)[0];
-                     if (latestTax.taxAmount) data.propertyTax = latestTax.taxAmount; // Store as number if possible
+                     if (latestTax.taxAmount) data.propertyTax = latestTax.taxAmount;
                  }
              } else { console.log("[Scrape.js] Tax history not found in Zillow JSON."); }
   
-  
-             // Days on Market (DOM) (NEW - from JSON)
              data.daysOnMarket = safeParseInt(hdpData.daysOnZillow || facts.daysOnMarket);
              if (data.daysOnMarket !== null) {
                  console.log(`[Scrape.js] Found Days on Market (Zillow JSON): ${data.daysOnMarket}`);
              } else { console.log("[Scrape.js] Days on Market not found in Zillow JSON."); }
   
-             // Listing Agent/Brokerage (NEW - from JSON)
-             // Often deeply nested or in separate structures, paths are guesses
-              const attributionInfo = hdpData.attributionInfo || hdpData.listingProvider; // Common parent objects
+              const attributionInfo = hdpData.attributionInfo || hdpData.listingProvider;
               if (attributionInfo) {
                   data.listingAgent = attributionInfo.agentName || attributionInfo.listingAgentName;
                   data.listingBrokerage = attributionInfo.brokerName || attributionInfo.brokerageName || attributionInfo.listingBrokerageName;
@@ -331,23 +339,17 @@ function extractZillowData() {
         } else {
              console.log("[Scrape.js] Zillow hdpData property object not available. Relying heavily on HTML scraping.");
         }
-         // --- End Zillow JSON extraction attempt ---
   
+        console.log("[Scrape.js] Extracting/Supplementing Zillow details from HTML elements...");
   
-        // --- HTML ELEMENT SCRAPING (Zillow Fallback/Supplement) ---
-         console.log("[Scrape.js] Extracting/Supplementing Zillow details from HTML elements...");
-  
-        // Address Fallback (Keep previous)
         if (data.address === 'Address not found') {
             data.address = document.querySelector('[data-testid="address"]')?.textContent || document.querySelector('h1[class*="addr"]')?.textContent || document.title.split('|')[0].trim();
             if(data.address !== 'Address not found') console.log(`[Scrape.js] Address found via HTML: ${data.address}`);
         }
-        // Basic Facts Fallback (Keep previous)
         if (!data.beds) data.beds = safeParseFloat(document.querySelector('[data-testid="bed-bath-item"] span')?.textContent.split(' ')[0]);
         if (!data.baths) data.baths = safeParseFloat(document.querySelectorAll('[data-testid="bed-bath-item"] span')[1]?.textContent.split(' ')[0]);
         if (!data.sqft) data.sqft = safeParseInt(document.querySelectorAll('[data-testid="bed-bath-item"] span')[2]?.textContent.split(' ')[0]);
   
-        // Estimate (Zestimate) Fallback (Keep previous)
         if (!data.estimate) {
              data.estimate = safeParseInt(document.querySelector('[data-testid="zestimate-value"]')?.textContent);
              if(data.estimate) console.log(`[Scrape.js] Zestimate found via HTML: ${data.estimate}`);
@@ -357,7 +359,6 @@ function extractZillowData() {
              if(pricePerSqftText) {
                 data.estimatePerSqft = safeParseInt(pricePerSqftText);
                  if(data.estimatePerSqft) console.log(`[Scrape.js] Price/SqFt found via HTML: ${data.estimatePerSqft}`);
-                 // Recalculate estimate if needed
                  if (!data.estimate && data.estimatePerSqft && data.sqft) {
                      const numericSqft = safeParseInt(data.sqft);
                      if (numericSqft > 0) data.estimate = data.estimatePerSqft * numericSqft;
@@ -365,56 +366,47 @@ function extractZillowData() {
              }
         }
   
-        // Home Details Section Fallback (Enhance previous)
-        const detailItems = document.querySelectorAll('ul[class*="HomeDetails"] li, div[class*="fact-list"] div, .hdp__sc-details-list__item, [data-testid="facts-and-features"] ul li'); // Added facts-and-features
+        const detailItems = document.querySelectorAll('ul[class*="HomeDetails"] li, div[class*="fact-list"] div, .hdp__sc-details-list__item, [data-testid="facts-and-features"] ul li');
         if (detailItems.length > 0 && !hdpData) console.log(`[Scrape.js] Processing ${detailItems.length} detail list items from HTML...`);
         detailItems.forEach(item => {
              const textContent = item.textContent?.trim() || '';
-             const parts = textContent.split(':'); // Simple split by colon
+             const parts = textContent.split(':');
              const label = parts[0]?.trim().toLowerCase();
-             const value = parts.slice(1).join(':')?.trim(); // Join back potential colons in value
+             const value = parts.slice(1).join(':')?.trim();
   
-             if (!label || !value) return; // Skip if no label or value
+             if (!label || !value) return;
   
-             // Basic Info
              if (!data.yearBuilt && label.includes('built in')) data.yearBuilt = safeParseInt(value);
              if (!data.homeType && label === ('type')) data.homeType = value;
              if (!data.lotSize && label.includes('lot size')) data.lotSize = value;
              if (!data.hoaFee && label === ('hoa')) data.hoaFee = value;
-             if (!data.propertyTax && label.includes('annual tax amount')) data.propertyTax = safeParseInt(value); // Store number
-             // Interior
+             if (!data.propertyTax && label.includes('annual tax amount')) data.propertyTax = safeParseInt(value);
              if (!data.interiorFeatures.cooling && label.includes('cooling features')) data.interiorFeatures.cooling = value;
              if (!data.interiorFeatures.heating && label.includes('heating features')) data.interiorFeatures.heating = value;
              if (!data.interiorFeatures.appliances && label.includes('appliances included')) data.interiorFeatures.appliances = value;
              if (!data.interiorFeatures.flooring && label === ('flooring')) data.interiorFeatures.flooring = value;
-             // Parking
              if (!data.parkingFeatures.details && label.includes('parking features')) data.parkingFeatures.details = value;
              if (!data.parkingFeatures.garageSpaces && label.includes('garage spaces')) data.parkingFeatures.garageSpaces = value;
-             // Construction (NEW)
              if (!data.constructionDetails.roof && label.includes('roof')) data.constructionDetails.roof = value;
              if (!data.constructionDetails.foundation && label.includes('foundation')) data.constructionDetails.foundation = value;
              if (!data.constructionDetails.materials && label.includes('construction materials')) data.constructionDetails.materials = value;
              if (!data.constructionDetails.exterior && label.includes('exterior features')) data.constructionDetails.exterior = value;
-             // Utilities (NEW)
              if (!data.utilityDetails.water && label.includes('water source')) data.utilityDetails.water = value;
              if (!data.utilityDetails.sewer && label.includes('sewer information')) data.utilityDetails.sewer = value;
   
-             // Add other details
              const knownLabels = ['built in','type','lot size','hoa','annual tax amount','cooling','heating','appliances','flooring','parking','garage','roof','foundation','construction','exterior','water','sewer'];
              if (!knownLabels.some(kl => label.includes(kl))) {
                  data.additionalDetails[label.replace(/\s+/g, '_')] = value;
              }
         });
   
-        // Description Fallback (Keep previous)
         if (!data.description) {
-            data.description = document.querySelector('[data-testid="description"] span')?.textContent || // Inner span often has cleaner text
+            data.description = document.querySelector('[data-testid="description"] span')?.textContent ||
                                (document.querySelector('div[class*="Text-c11n-"]')?.textContent) ||
                                document.querySelector('meta[name="description"]')?.content;
             if(data.description) console.log(`[Scrape.js] Description found via HTML fallback.`);
         }
   
-         // Image Fallback (Keep previous)
          if (data.images.length === 0) {
              const imageElements = document.querySelectorAll('ul[class*="photo-tile-list"] img, div[class*="carousel-photo"] img, [data-testid="media-stream"] img');
              if(imageElements.length > 0) {
@@ -424,7 +416,6 @@ function extractZillowData() {
              }
          }
   
-        // Price History Fallback (HTML - NEW)
          if (data.priceHistory.length === 0) {
              const historyContainer = document.querySelector('[data-testid="price-history-container"]');
              if (historyContainer) {
@@ -433,7 +424,7 @@ function extractZillowData() {
                      console.log(`[Scrape.js] Attempting Price History extraction from HTML table (${historyRows.length} rows)...`);
                      historyRows.forEach(row => {
                          const cells = row.querySelectorAll('td');
-                         if (cells.length >= 3) { // Expect Date, Event, Price
+                         if (cells.length >= 3) {
                              data.priceHistory.push({
                                  date: cells[0]?.textContent?.trim(),
                                  event: cells[1]?.textContent?.trim(),
@@ -447,27 +438,24 @@ function extractZillowData() {
              }
          }
   
-         // Tax History Fallback (HTML - NEW)
          if (data.taxHistory.length === 0) {
-             const taxContainer = document.querySelector('[data-testid="TaxHistory"]'); // Look for specific container
+             const taxContainer = document.querySelector('[data-testid="TaxHistory"]');
              if (taxContainer) {
                   const taxRows = taxContainer.querySelectorAll('tbody tr');
                   if (taxRows.length > 0) {
                       console.log(`[Scrape.js] Attempting Tax History extraction from HTML table (${taxRows.length} rows)...`);
                       taxRows.forEach(row => {
                           const cells = row.querySelectorAll('td');
-                          if (cells.length >= 2) { // Expect Year, Amount (Assessment might be separate)
+                          if (cells.length >= 2) {
                                data.taxHistory.push({
                                    year: safeParseInt(cells[0]?.textContent),
                                    taxAmount: safeParseInt(cells[1]?.textContent),
-                                   // Try finding assessment if present
                                    assessment: cells.length > 2 ? safeParseInt(cells[2]?.textContent) : null
                                });
                           }
                       });
                       data.taxHistory = data.taxHistory.filter(t => t.year && (t.taxAmount || t.assessment));
                       if(data.taxHistory.length > 0) console.log(`[Scrape.js] Found ${data.taxHistory.length} tax history entries (HTML Fallback).`);
-                       // Update main tax field
                       if (!data.propertyTax && data.taxHistory.length > 0) {
                           const latestTax = data.taxHistory.sort((a, b) => b.year - a.year)[0];
                           if (latestTax.taxAmount) data.propertyTax = latestTax.taxAmount;
@@ -476,35 +464,28 @@ function extractZillowData() {
              }
          }
   
-        // DOM Fallback (HTML - NEW)
          if (data.daysOnMarket === null) {
-              const domElement = document.querySelector('[data-testid="DaysOnZillow"] .Text-c11n-8-101-0__sc-aiai24-0'); // More specific selector
+              const domElement = document.querySelector('[data-testid="DaysOnZillow"] .Text-c11n-8-101-0__sc-aiai24-0');
               if (domElement) {
                   data.daysOnMarket = safeParseInt(domElement.textContent);
                   if(data.daysOnMarket !== null) console.log(`[Scrape.js] Found Days on Market (HTML Fallback): ${data.daysOnMarket}`);
               }
          }
   
-        // Listing Agent/Brokerage Fallback (HTML - NEW)
          if (!data.listingAgent && !data.listingBrokerage) {
-             // Zillow often uses data-testid for attribution
              data.listingAgent = document.querySelector('[data-testid="attribution-agent-name"]')?.textContent?.trim();
              data.listingBrokerage = document.querySelector('[data-testid="attribution-broker-name"]')?.textContent?.trim();
-              // Fallback to less specific selectors if needed
              if (!data.listingAgent) data.listingAgent = document.querySelector('.listing-attribution__agent-name')?.textContent?.trim();
              if (!data.listingBrokerage) data.listingBrokerage = document.querySelector('.listing-attribution__broker-name')?.textContent?.trim();
   
              if(data.listingAgent || data.listingBrokerage) console.log(`[Scrape.js] Found Listing Agent/Brokerage (HTML Fallback).`);
          }
   
-  
-        // --- Final Data Cleaning ---
-        // beds, baths already parsed as float
         data.sqft = safeParseInt(data.sqft);
         data.yearBuilt = safeParseInt(data.yearBuilt);
         data.estimate = safeParseInt(data.estimate);
         data.estimatePerSqft = safeParseInt(data.estimatePerSqft);
-        data.propertyTax = safeParseInt(data.propertyTax); // Try parsing at the end
+        data.propertyTax = safeParseInt(data.propertyTax);
         data.daysOnMarket = safeParseInt(data.daysOnMarket);
         data.images = data.images.slice(0, 20);
   
@@ -515,11 +496,11 @@ function extractZillowData() {
     }
   
      console.log("[Scrape.js] Returning final data object from Zillow:", {
-         ...data, // Spread existing data
-         images: `[${data.images.length} images]`, // Avoid logging large arrays
+         ...data,
+         images: `[${data.images.length} images]`,
          priceHistory: `[${data.priceHistory.length} events]`,
          taxHistory: `[${data.taxHistory.length} entries]`,
-         interiorFeatures: JSON.stringify(data.interiorFeatures), // Log objects as strings
+         interiorFeatures: JSON.stringify(data.interiorFeatures),
          parkingFeatures: JSON.stringify(data.parkingFeatures),
          communityFeatures: JSON.stringify(data.communityFeatures),
          constructionDetails: JSON.stringify(data.constructionDetails),
