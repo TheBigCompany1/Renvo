@@ -3,9 +3,8 @@
  * to scrape property data from Redfin or Zillow. It determines the source
  * website and calls the appropriate extraction function.
  *
- * The key fix is within `extractRedfinData` which now uses a resilient
- * "waterfall" approach to find the property price and images, preventing
- * silent failures and ensuring valid data is sent to the backend.
+ * The key fix is within `extractRedfinData` which now uses a resilient,
+ * universal "waterfall" approach that can handle multiple Redfin page layouts.
  */
 
 // Function to determine the source website based on the URL.
@@ -30,10 +29,10 @@ function safeParseFloat(value) {
 }
 
 // ==========================================================================
-// REDFIN SCRAPER (REVISED v15 - More Robust Waterfall)
+// REDFIN SCRAPER (REVISED v17 - Universal Scraper for Multiple Layouts)
 // ==========================================================================
 function extractRedfinData() {
-    console.log("[Scrape.js] Starting extractRedfinData (v15 - More Robust Waterfall)...");
+    console.log("[Scrape.js] Starting extractRedfinData (v17 - Universal Scraper)...");
     let data = {
         address: 'Address not found', price: null, beds: null, baths: null, sqft: null,
         yearBuilt: null, lotSize: null, homeType: null, description: null, images: [],
@@ -42,87 +41,96 @@ function extractRedfinData() {
     };
 
     try {
-        // --- STAGE 1: ATTEMPT TO EXTRACT FROM EMBEDDED JSON (__reactServerState) ---
-        console.log("[Scrape.js] Stage 1: Searching for __reactServerState JSON data...");
-        let serverData = null;
+        // --- STAGE 1: ATTEMPT TO EXTRACT FROM EMBEDDED JSON (Most Reliable Method) ---
+        console.log("[Scrape.js] Stage 1: Searching for embedded JSON data (__reactServerState)...");
+        let jsonDataExtracted = false;
         try {
             const scripts = document.querySelectorAll('script');
             let serverStateJsonString = null;
             scripts.forEach((script) => {
-                if (!serverData && script.textContent.includes('root.__reactServerState =')) {
-                    const match = script.textContent.match(/root\.__reactServerState\s*=\s*({.*);?\s*$/s);
-                    if (match && match[1]) {
-                        serverStateJsonString = match[1];
+                const scriptContent = script.textContent || '';
+                if (scriptContent.includes('root.__reactServerState =') || scriptContent.includes('window.__INITIAL_STATE__')) {
+                    const match = scriptContent.match(/(root\.__reactServerState|window\.__INITIAL_STATE__)\s*=\s*({.*);?\s*$/s);
+                    if (match && match[2]) {
+                        serverStateJsonString = match[2];
                         if (serverStateJsonString.endsWith(';')) serverStateJsonString = serverStateJsonString.slice(0, -1);
                     }
                 }
             });
+
             if (serverStateJsonString) {
-                serverData = JSON.parse(serverStateJsonString);
-                console.log("[Scrape.js] Successfully parsed __reactServerState JSON.");
+                const serverData = JSON.parse(serverStateJsonString);
+                console.log("[Scrape.js] Successfully parsed embedded JSON.");
+                const dataCache = serverData?.InitialContext?.ReactServerAgent?.cache?.dataCache;
+                const getPayload = (apiPath) => dataCache?.[apiPath]?.res?.payload;
+                const aboveTheFoldPayload = getPayload("\u002Fstingray\u002Fapi\u002Fhome\u002Fdetails\u002FaboveTheFold");
+
+                if (aboveTheFoldPayload?.addressSectionInfo) {
+                    const addrInfo = aboveTheFoldPayload.addressSectionInfo;
+                    data.price = safeParseInt(addrInfo.priceInfo?.amount);
+                    data.beds = addrInfo.beds;
+                    data.baths = addrInfo.baths;
+                    data.sqft = addrInfo.sqFt?.value;
+                    data.address = addrInfo.streetAddress?.assembledAddress || data.address;
+                    jsonDataExtracted = true;
+                    console.log(`[Scrape.js] SUCCESS (JSON): Price=${data.price}, Beds=${data.beds}, Baths=${data.baths}`);
+                }
+                const photos = aboveTheFoldPayload?.mediaBrowserInfo?.photos;
+                if (photos && Array.isArray(photos) && photos.length > 0) {
+                    const jsonImages = photos.map(p => p?.photoUrls?.fullScreenPhotoUrl?.replace(/p_[a-z]/, 'p_l')).filter(Boolean);
+                    if (jsonImages.length > 0) data.images = [...new Set(jsonImages)];
+                    console.log(`[Scrape.js] SUCCESS (JSON): Extracted ${data.images.length} images.`);
+                }
             } else {
-                console.log("[Scrape.js] __reactServerState JSON not found.");
+                console.log("[Scrape.js] Embedded JSON block not found.");
             }
         } catch (jsonError) {
-             console.error('[Scrape.js] Error parsing Redfin JSON:', jsonError.message);
-             serverData = null;
+             console.error('[Scrape.js] Error processing embedded JSON:', jsonError.message);
         }
 
-        if (serverData) {
-            const dataCache = serverData?.InitialContext?.ReactServerAgent?.cache?.dataCache;
-            const getPayload = (apiPath) => dataCache?.[apiPath]?.res?.payload;
-            const aboveTheFoldPayload = getPayload("\u002Fstingray\u002Fapi\u002Fhome\u002Fdetails\u002FaboveTheFold");
+        // --- STAGE 2: HTML WATERFALL (Runs if JSON fails or for supplemental data) ---
+        console.log("[Scrape.js] Stage 2: Running HTML waterfall for any missing data...");
 
-            if (aboveTheFoldPayload?.addressSectionInfo) {
-                const addrInfo = aboveTheFoldPayload.addressSectionInfo;
-                data.price = safeParseInt(addrInfo.priceInfo?.amount);
-                data.beds = addrInfo.beds;
-                data.baths = addrInfo.baths;
-                data.sqft = addrInfo.sqFt?.value;
-                data.address = addrInfo.streetAddress?.assembledAddress || data.address;
-                console.log(`[Scrape.js] Extracted from JSON - Price: ${data.price}, Beds: ${data.beds}, Baths: ${data.baths}`);
-            }
-             const photos = aboveTheFoldPayload?.mediaBrowserInfo?.photos;
-             if (photos && Array.isArray(photos) && photos.length > 0) {
-                const jsonImages = photos.map(p => p?.photoUrls?.fullScreenPhotoUrl?.replace(/p_[a-z]/, 'p_l')).filter(Boolean);
-                data.images = [...new Set(jsonImages)];
-                console.log(`[Scrape.js] Extracted ${data.images.length} images from JSON.`);
-             }
-        }
-
-        // --- STAGE 2: HTML FALLBACKS (if JSON failed or missed data) ---
-        console.log("[Scrape.js] Stage 2: Running HTML fallbacks for any missing data...");
-
-        // Price Fallback
+        // Price Waterfall
         if (!data.price) {
-            console.log("[Scrape.js] Price not found in JSON, trying HTML selectors...");
-            // --- THIS IS THE FIX ---
-            // Adding another, more general selector to the waterfall as the third option.
-            const priceElement = document.querySelector('[data-testid="price-wrapper"] [data-testid="price"]') || 
-                                 document.querySelector('.statsValue .value') ||
-                                 document.querySelector('.key-details-info .stat-block-value'); // New, broader selector
-            if (priceElement && priceElement.textContent) {
+            console.log("[Scrape.js] Price not found in JSON, starting HTML price waterfall...");
+            // 1. For Sale Price (Primary active listing selector)
+            let priceElement = document.querySelector('div[data-testid="price"] > span') || document.querySelector('.price .statsValue');
+            if (priceElement) {
                 data.price = safeParseInt(priceElement.textContent);
-                console.log(`[Scrape.js] Price found via primary HTML selector: ${data.price}`);
-            } else {
-                console.log("[Scrape.js] Primary HTML price selectors failed, falling back to meta tag...");
-                data.price = safeParseInt(document.querySelector('meta[name="twitter:text:price"]')?.content);
-                console.log(`[Scrape.js] Price found via meta tag fallback: ${data.price}`);
+                console.log(`[Scrape.js] SUCCESS (HTML): Found 'For Sale' price: ${data.price}`);
+            }
+            // 2. Sold Price (Primary sold listing selector)
+            if (!data.price) {
+                const soldBanner = document.querySelector('.ListingStatusBannerSection');
+                if (soldBanner && soldBanner.textContent.includes('SOLD')) {
+                    const priceMatch = soldBanner.textContent.match(/FOR \$([0-9,]+)/);
+                    if (priceMatch && priceMatch[1]) {
+                        data.price = safeParseInt(priceMatch[1]);
+                        console.log(`[Scrape.js] SUCCESS (HTML): Found 'Sold' price: ${data.price}`);
+                    }
+                }
+            }
+            // 3. Meta Tag (Final fallback)
+            if (!data.price) {
+                 data.price = safeParseInt(document.querySelector('meta[name="twitter:text:price"]')?.content);
+                 console.log(`[Scrape.js] Found price via meta tag fallback: ${data.price}`);
             }
         }
 
-        // Other Core Details Fallback
-        if (data.address === 'Address not found') data.address = document.querySelector('.address-section .homeAddress span')?.textContent || document.querySelector('h1[data-rf-test-id="abp-address"]')?.textContent || 'Address not found';
-        if (!data.beds) data.beds = safeParseFloat(document.querySelector('[data-testid="beds-value"]')?.textContent || document.querySelector('[data-rf-test-id="abp-beds"]')?.textContent);
-        if (!data.baths) data.baths = safeParseFloat(document.querySelector('[data-testid="baths-value"]')?.textContent || document.querySelector('[data-rf-test-id="abp-baths"]')?.textContent);
-        if (!data.sqft) data.sqft = safeParseInt(document.querySelector('[data-testid="sqft-value"] span')?.textContent || document.querySelector('[data-rf-test-id="abp-sqFt"] .value')?.textContent);
-
+        // Core Details Fallback
+        if (data.address === 'Address not found') data.address = document.querySelector('h1 .homeAddress, .address-section .homeAddress span')?.textContent || 'Address not found';
+        if (!data.beds) data.beds = safeParseFloat(document.querySelector('[data-testid="beds-value"]')?.textContent);
+        if (!data.baths) data.baths = safeParseFloat(document.querySelector('[data-testid="baths-value"]')?.textContent);
+        if (!data.sqft) data.sqft = safeParseInt(document.querySelector('[data-testid="sqft-value"] span, .sqft-section .statsValue span')?.textContent);
+        if (!data.description) data.description = document.querySelector('.remarksContainer .remarks span, meta[name="description"]')?.content;
+        
         // Images Fallback
         if (data.images.length === 0) {
             console.log("[Scrape.js] Images not found in JSON, trying HTML selectors...");
             let collectedImages = new Set();
-            document.querySelectorAll('.ImageCarousel img, .inline-gallery-photo-item img, .Photo-ScrollView img, .carousel-photo img').forEach(img => {
-                if (img.src && !img.src.includes('maps.googleapis.com')) {
+            document.querySelectorAll('.ImageCarousel img, .InlinePhotoPreviewRedesign--large img, .photo-crousel-container img').forEach(img => {
+                if (img.src && !img.src.includes('maps.google.com')) {
                     collectedImages.add(img.src.replace(/p_[a-z]\.jpg/, 'p_f.jpg'));
                 }
             });
@@ -130,8 +138,7 @@ function extractRedfinData() {
             console.log(`[Scrape.js] Found ${data.images.length} images via HTML fallback.`);
         }
 
-        // Other Details
-        if (!data.description) data.description = document.querySelector('.remarksContainer .remarks span')?.textContent.trim();
+        // Other Details from Key Details Table (Universal Selector)
         document.querySelectorAll('.KeyDetailsTable .keyDetails-row, .KeyDetails-Table .key-details-row').forEach(row => {
             const labelElement = row.querySelector('.keyDetails-label, .key-details-label');
             const valueElement = row.querySelector('.keyDetails-value, .key-details-value');
@@ -143,7 +150,7 @@ function extractRedfinData() {
                 if (!data.homeType && label.includes('property type')) data.homeType = value;
             }
         });
-
+        
     } catch (error) {
         console.error('[Scrape.js] CRITICAL Error during extractRedfinData:', error.message, error.stack);
         data.error = `Scraping failed critically: ${error.message}`;
