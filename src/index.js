@@ -43,53 +43,54 @@ app.get('/api/config', (req, res) => {
 });
 
 app.get('/api/ping', (req, res) => {
-  res.setHeader('Content-Type', 'text/plain');
-  res.status(200).send('pong');
+  res.setHeader('Content-Type', 'application/json');
+  res.status(200).send({ message: 'renvo-node-staging is alive' });
 });
 
-/****************************************************
- * ENDPOINT: /api/analyze-property
- ****************************************************/
 app.post('/api/analyze-property', async (req, res) => {
-  const reqId = randomUUID().slice(0, 8);
-  console.log(`[${reqId}] --- Received new /api/analyze-property request ---`);
-  let browser = null;
+  const reqId = randomUUID();
+  console.log(`[${reqId}] Received new request for /api/analyze-property`);
+
+  let browser;
   try {
-    const { url } = req.body;
-    if (!url || (!url.includes("redfin") && !url.includes("zillow"))) {
-        return res.status(400).json({ error: "Please provide a valid Redfin or Zillow URL." });
+    const { propertyUrl } = req.body;
+    if (!propertyUrl) {
+      console.error(`[${reqId}] Missing propertyUrl in request body.`);
+      return res.status(400).json({ error: 'propertyUrl is required' });
     }
 
-    console.log(`[${reqId}] Launching browser...`);
+    console.log(`[${reqId}] Launching Puppeteer...`);
     browser = await puppeteer.launch({
-        executablePath: '/usr/bin/google-chrome-stable',
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1920,1080']
     });
     const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
-    // --- THIS IS THE FIX for the missing logs ---
-    // This code listens for console messages from within the browser page
-    // and prints them to the Node.js server's console. This is crucial for debugging.
+    // --- FIX 1, PART 1: ADD CONSOLE LOG VISIBILITY ---
+    // This is the critical fix to pipe browser logs to the server for debugging.
     page.on('console', msg => {
         const text = msg.text();
-        // Simple filter to ignore common favicon or image loading errors
-        if (!text.includes('Failed to load resource')) {
-            console.log(`[Browser Console] ${text}`);
+        // The scraper script prefixes logs with '[Scrape.js]', so we can filter.
+        if (text.startsWith('[Scrape.js]')) {
+            console.log(`[${reqId}] BROWSER_LOG: ${text}`);
         }
     });
-    // --- END OF FIX ---
-    
-    console.log(`[${reqId}] Navigating to:`, url);
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    console.log(`[${reqId}] Waiting for dynamic content to render by looking for a reliable content marker...`);
-    // This selector is more universal and present on all known layouts.
-    await page.waitForFunction(
-      "document.querySelector('.KeyDetailsTable, .KeyDetails-Table, .HomeInfo-property-facts')",
-      { timeout: 30000 }
-    );
-    console.log(`[${reqId}] Content marker found. Page is ready for scraping.`);
+    console.log(`[${reqId}] Navigating to URL: ${propertyUrl}`);
+    await page.goto(propertyUrl, { waitUntil: 'networkidle2' });
+
+    // --- FIX 1, PART 2: ADD A RESILIENT WAIT ---
+    // This waits for one of several possible content containers to appear,
+    // ensuring the scraper doesn't run on an empty or incomplete page.
+    try {
+        console.log(`[${reqId}] Waiting for a valid content container to load...`);
+        await page.waitForSelector('.key-detail-info, .HomeInfo, .dp-details-set, #property-details-scroll-container', { timeout: 15000 });
+        console.log(`[${reqId}] Content container found. Proceeding with scrape.`);
+    } catch (e) {
+        console.warn(`[${reqId}] Timed out waiting for primary content containers. The page may have a new layout or failed to load correctly. Attempting to scrape anyway.`);
+    }
+
 
     console.log(`[${reqId}] Injecting and evaluating scrape script...`);
     const scriptContent = fs.readFileSync(path.join(__dirname, 'scrape.js'), 'utf8');
@@ -98,7 +99,9 @@ app.post('/api/analyze-property', async (req, res) => {
     if (propertyDetails.error) {
         throw new Error(`Scraping script failed: ${propertyDetails.error}`);
     }
-    console.log(`[${reqId}] Scrape successful for address:`, propertyDetails.address);
+    
+    // ADDED: Log the full scraped data object for complete visibility.
+    console.log(`[${reqId}] Scrape successful. Full data received:\n`, JSON.stringify(propertyDetails, null, 2));
 
     if (browser) {
         await browser.close();
@@ -123,12 +126,17 @@ app.post('/api/analyze-property', async (req, res) => {
         try { await browser.close(); } catch (e) { /* ignore */ }
     }
     if (!res.headersSent) {
-        res.status(500).json({ error: error.message || "Internal server error." });
+        res.status(500).json({ error: error.message || "An internal server error occurred." });
     }
   }
 });
 
+
+/****************************************************
+ * SERVER START
+ ****************************************************/
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`renvo-node-staging server is running on port ${PORT}`);
 });
+
 
