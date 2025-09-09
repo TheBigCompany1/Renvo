@@ -29,10 +29,10 @@ function safeParseFloat(value) {
 }
 
 // ==========================================================================
-// REDFIN SCRAPER (REVISED - Universal & Complete w/ Enhanced Logging)
+// REDFIN SCRAPER (FINAL - Universal & Complete w/ All Fields)
 // ==========================================================================
 function extractRedfinData() {
-    console.log("[Scrape.js] Starting extractRedfinData (v19 - Resilient)...");
+    console.log("[Scrape.js] Starting extractRedfinData (v20 - Final)...");
     let data = {
         address: null, price: null, beds: null, baths: null, sqft: null,
         yearBuilt: null, lotSize: null, homeType: null, description: null, images: [],
@@ -40,6 +40,19 @@ function extractRedfinData() {
         error: null
     };
 
+    // Helper function to find text content by matching a label in sibling elements.
+    const findValueByLabelText = (containerSelector, labelSelector, valueSelector, labelText) => {
+        const containers = document.querySelectorAll(containerSelector);
+        for (const container of containers) {
+            const labelEl = container.querySelector(labelSelector);
+            if (labelEl && labelEl.textContent.toLowerCase().includes(labelText)) {
+                const valueEl = container.querySelector(valueSelector);
+                if (valueEl) return valueEl.textContent.trim();
+            }
+        }
+        return null;
+    };
+    
     try {
         // --- STAGE 1: ATTEMPT TO EXTRACT FROM EMBEDDED JSON (Primary Method) ---
         console.log("Attempting JSON parse from __INITIAL_STATE__ or __reactServerState...");
@@ -147,6 +160,33 @@ function extractRedfinData() {
              if (sqftEl) { data.sqft = safeParseInt(sqftEl.textContent); console.log(`SqFt found via HTML: ${data.sqft}`); }
         }
         
+        // Year Built Waterfall
+        if (!data.yearBuilt) {
+            console.log("Attempting to find Year Built in HTML...");
+            data.yearBuilt = safeParseInt(
+                findValueByLabelText('.key-detail-row', '.label', '.content', 'year built') ||
+                findValueByLabelText('.table-row', '.table-label', '.table-value', 'year built')
+            );
+            if(data.yearBuilt) console.log(`Year Built found via HTML helper: ${data.yearBuilt}`);
+        }
+
+        // Lot Size Waterfall
+        if (!data.lotSize) {
+            console.log("Attempting to find Lot Size in HTML...");
+            data.lotSize =
+                findValueByLabelText('.key-detail-row', '.label', '.content', 'lot size') ||
+                findValueByLabelText('.table-row', '.table-label', '.table-value', 'lot size');
+            if(data.lotSize) console.log(`Lot Size found via HTML helper: ${data.lotSize}`);
+        }
+
+        // Home Type Fallback
+        if (!data.homeType) {
+            data.homeType =
+                findValueByLabelText('.key-detail-row', '.label', '.content', 'property type') ||
+                findValueByLabelText('.table-row', '.table-label', '.table-value', 'property type');
+            if(data.homeType) console.log(`Home Type found via HTML helper: ${data.homeType}`);
+        }
+
         // Description Fallback
         if (!data.description) {
             const descEl = document.querySelector('.remarksContainer .remarks span, meta[name="description"]');
@@ -162,24 +202,7 @@ function extractRedfinData() {
             data.images = Array.from(collectedImages).slice(0, 15);
             console.log(`Found ${data.images.length} images via HTML fallback.`);
         }
-
-        // Details from Key Details Table (Universal Selector)
-        if (!data.yearBuilt || !data.lotSize || !data.homeType) {
-            console.log("Searching for details in Key Details table...");
-            const detailRows = document.querySelectorAll('.KeyDetailsTable .keyDetails-row, .KeyDetails-Table .key-details-row');
-            detailRows.forEach(row => {
-                const labelEl = row.querySelector('.keyDetails-label, .key-details-label');
-                const valueEl = row.querySelector('.keyDetails-value, .key-details-value');
-                if (labelEl && valueEl) {
-                    const label = labelEl.textContent.toLowerCase();
-                    const value = valueEl.textContent.trim();
-                    console.log(`Found Key Detail Row: Label='${label}', Value='${value}'`);
-                    if (!data.yearBuilt && label.includes('year built')) { data.yearBuilt = safeParseInt(value); }
-                    if (!data.lotSize && label.includes('lot size')) { data.lotSize = value; }
-                    if (!data.homeType && label.includes('property type')) { data.homeType = value; }
-                }
-            });
-        }
+        
     } catch (error) {
         console.error('[Scrape.js] CRITICAL Error during extractRedfinData:', error.message, error.stack);
         data.error = `Scraping failed critically: ${error.message}`;
