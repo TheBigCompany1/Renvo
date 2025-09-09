@@ -32,7 +32,7 @@ function safeParseFloat(value) {
 // REDFIN SCRAPER (REVISED - Universal & Complete w/ Enhanced Logging)
 // ==========================================================================
 function extractRedfinData() {
-    console.log("[Scrape.js] Starting extractRedfinData (Universal & Complete)...");
+    console.log("[Scrape.js] Starting extractRedfinData (v19 - Resilient)...");
     let data = {
         address: null, price: null, beds: null, baths: null, sqft: null,
         yearBuilt: null, lotSize: null, homeType: null, description: null, images: [],
@@ -143,7 +143,7 @@ function extractRedfinData() {
              if (bathsEl) { data.baths = safeParseFloat(bathsEl.textContent); console.log(`Baths found via HTML: ${data.baths}`); }
         }
         if (!data.sqft) {
-             const sqftEl = document.querySelector('[data-testid="sqft-value"] .value, .sqft-section .statsValue, [data-rf-test-id="abp-sqFt"] .statsValue');
+             const sqftEl = document.querySelector('[data-testid="sqft-value"] span, .sqft-section .statsValue, [data-rf-test-id="abp-sqFt"] .statsValue');
              if (sqftEl) { data.sqft = safeParseInt(sqftEl.textContent); console.log(`SqFt found via HTML: ${data.sqft}`); }
         }
         
@@ -577,4 +577,3 @@ function extractZillowData() {
         };
     }
 })();
-
