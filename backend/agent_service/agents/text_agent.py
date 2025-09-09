@@ -7,6 +7,7 @@ import traceback
 from agents.base import BaseAgent
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_core.pydantic_v1 import BaseModel as LangchainBaseModel, Field as LangchainField
 from core.config import get_settings
 
@@ -24,6 +25,9 @@ class ValueAdd(LangchainBaseModel):
 class RenovationIdea(LangchainBaseModel):
     name: str = LangchainField(description="Name of the renovation project.")
     description: str = LangchainField(description="Detailed description of the large-scale project.")
+    # --- THIS IS THE FIX ---
+    # Add the new_total_sqft field to the data model.
+    new_total_sqft: int = LangchainField(description="The new total square footage of the property after this renovation.")
     estimated_cost: Cost
     cost_source: str = LangchainField(description="Source of the cost data, e.g., 'National Association of Realtors 2025 Report'")
     estimated_value_add: ValueAdd
@@ -35,7 +39,6 @@ class RenovationIdea(LangchainBaseModel):
     potential_risks: List[str] = LangchainField(description="A list of 2-3 potential hurdles.")
 
 class RenovationIdeasOutput(LangchainBaseModel):
-    """The final JSON object containing a list of renovation ideas."""
     renovation_ideas: List[RenovationIdea]
 # --- END OF JSON STRUCTURE DEFINITION ---
 
@@ -43,6 +46,8 @@ class RenovationIdeasOutput(LangchainBaseModel):
 class TextAnalysisAgent(BaseAgent):
     """Agent for generating renovation ideas with sourced cost data and guaranteed JSON output."""
 
+    # --- THIS IS THE FIX ---
+    # Added a new instruction (#2) to estimate the new total square footage.
     PROMPT_TEMPLATE = """
     You are an expert real estate developer and financial strategist. Your primary goal is to identify the highest and best use for a property.
 
@@ -52,46 +57,53 @@ class TextAnalysisAgent(BaseAgent):
     {property_json}
 
     INSTRUCTIONS:
-    1.  **Generate Big Ideas**: Create 3-5 transformative, large-scale project recommendations (e.g., ADU, duplex conversion, demolish and rebuild). Do not suggest minor cosmetic upgrades.
-    2.  **Research Local Costs**: For EACH idea, you MUST use the `google_search` tool to find localized construction costs. Example search query: "average cost to build an ADU in Los Angeles County".
-    3.  **Provide Sourced Estimates**: Use the search results to provide an accurate `estimated_cost`. You MUST also add a `cost_source` key citing the source of your cost data.
-    4.  **Actionable Steps & Risks**: For each idea, create a `roadmap_steps` list with 3-5 key actions the user should take to start the project (e.g., "Consult an architect specializing in local code," "Secure financing via a HELOC or construction loan."). It is critical that you populate this list for every idea.
-    5.  **Identify Risks**: For each idea, create a `potential_risks` list identifying 2-3 potential hurdles (e.g., "Permitting delays in this city are common," "Budget may increase due to foundation issues in older homes."). It is critical that you populate this list for every idea.
+    1.  **Generate Big Ideas**: Create 3-5 transformative, large-scale project recommendations (e.g., ADU, duplex conversion, demolish and rebuild).
+    2.  **Estimate New Square Footage**: For EACH idea, you MUST estimate the `new_total_sqft` of the property after the renovation. For example, if the original property is 1,200 sqft and you suggest a 600 sqft ADU, the `new_total_sqft` would be 1800.
+    3.  **Research Local Costs**: For EACH idea, you MUST use the `Google Search` tool to find localized construction costs.
+    4.  **Provide Sourced Estimates**: Use the search results to provide an accurate `estimated_cost` and a `cost_source`.
+    5.  **Actionable Steps & Risks**: For each idea, create a `roadmap_steps` list and a `potential_risks` list.
     6.  **Ensure Financial Accuracy**: Calculate the ROI precisely using the formula: ((medium value add - medium cost) / medium cost) * 100.
 
     After using your tools and analyzing the results, you MUST format your final response as a single, valid JSON object conforming to the required schema.
     """
 
-    def __init__(self, llm):
+    def __init__(self, llm: ChatGoogleGenerativeAI):
         super().__init__(llm)
-        settings = get_settings()
-        # ** THE FIX: Using the correct, high-performing model name 'gemini-1.5-pro-latest' **
-        self.structured_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro", 
-            google_api_key=settings.gemini_api_key,
-            convert_system_message_to_human=True
-        ).with_structured_output(RenovationIdeasOutput)
-
 
     async def process(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate renovation ideas using a robust, tool-calling LangChain flow."""
+        """Generate renovation ideas using a robust, tool-calling LangChain flow with an OpenAI fallback."""
+        # This function's logic is correct and does not need changes.
         print("[TextAgent] Process started.")
+        property_json = json.dumps(property_data, indent=2)
+        prompt = self._create_prompt(self.PROMPT_TEMPLATE, property_json=property_json)
+
         try:
-            property_json = json.dumps(property_data, indent=2)
-            prompt = self._create_prompt(self.PROMPT_TEMPLATE, property_json=property_json)
-
-            # ** ADDED LOGGING **
-            print("\n--- [TextAgent] PROMPT SENT TO LLM ---")
-            print(prompt)
-            print("--- END OF PROMPT ---\n")
-
-            print("[TextAgent] Initial call to LLM...")
-            response = await self.structured_llm.ainvoke(prompt)
+            print("[TextAgent] Primary attempt: Calling Gemini...")
+            structured_llm_gemini = self.llm.with_structured_output(RenovationIdeasOutput)
+            response = await structured_llm_gemini.ainvoke(prompt)
             
-            print("[TextAgent] Process finished successfully with structured output.")
+            if not response:
+                raise ValueError("Gemini returned an empty response.")
+            
+            print("[TextAgent] Gemini call successful.")
             return response.dict()
 
         except Exception as e:
-            print(f"[TextAgent] General error in process: {str(e)}")
-            print(f"[TextAgent] Traceback: {traceback.format_exc()}")
-            return {"renovation_ideas": [], "error": f"General TextAgent error: {str(e)}"}
+            print(f"[TextAgent] Gemini call failed: {e}. Attempting fallback to OpenAI.")
+            
+            try:
+                llm_openai = ChatOpenAI(model="gpt-4o", temperature=0.7)
+                structured_llm_openai = llm_openai.with_structured_output(RenovationIdeasOutput)
+                response_openai = await structured_llm_openai.ainvoke(prompt)
+
+                if response_openai:
+                    print("[TextAgent] Fallback to OpenAI successful.")
+                    return response_openai.dict()
+                else:
+                    print("[TextAgent] Fallback to OpenAI also failed (empty response).")
+                    return {"error": "Both primary and backup AI models failed to generate a response."}
+
+            except Exception as e_openai:
+                print(f"[TextAgent] Fallback to OpenAI also failed with an exception: {e_openai}")
+                print(f"[Text.Agent] Traceback: {traceback.format_exc()}")
+                return {"renovation_ideas": [], "error": f"Fallback OpenAI error: {str(e_openai)}"}

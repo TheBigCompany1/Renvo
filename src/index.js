@@ -38,8 +38,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-// --- NEW ENDPOINT ---
-// This endpoint provides the correct Python API URL to the frontend.
 app.get('/api/config', (req, res) => {
   res.json({ pythonApiUrl: PYTHON_API_URL });
 });
@@ -70,9 +68,28 @@ app.post('/api/analyze-property', async (req, res) => {
     });
     const page = await browser.newPage();
     
+    // --- THIS IS THE FIX for the missing logs ---
+    // This code listens for console messages from within the browser page
+    // and prints them to the Node.js server's console. This is crucial for debugging.
+    page.on('console', msg => {
+        const text = msg.text();
+        // Simple filter to ignore common favicon or image loading errors
+        if (!text.includes('Failed to load resource')) {
+            console.log(`[Browser Console] ${text}`);
+        }
+    });
+    // --- END OF FIX ---
+    
     console.log(`[${reqId}] Navigating to:`, url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    console.log(`[${reqId}] Waiting for dynamic content to render by looking for a reliable content marker...`);
+    // This selector is more universal and present on all known layouts.
+    await page.waitForFunction(
+      "document.querySelector('.KeyDetailsTable, .KeyDetails-Table, .HomeInfo-property-facts')",
+      { timeout: 30000 }
+    );
+    console.log(`[${reqId}] Content marker found. Page is ready for scraping.`);
 
     console.log(`[${reqId}] Injecting and evaluating scrape script...`);
     const scriptContent = fs.readFileSync(path.join(__dirname, 'scrape.js'), 'utf8');
@@ -114,3 +131,4 @@ app.post('/api/analyze-property', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
+

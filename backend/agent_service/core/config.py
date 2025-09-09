@@ -13,7 +13,9 @@ load_dotenv(dotenv_path=dotenv_path)
 class Settings(BaseSettings):
     """Application settings."""
     app_name: str = "Renvo API"
-    # --- FIX: Removed the unused 'openai_api_key' setting ---
+    
+    # --- FIX: Re-added openai_api_key to support the fallback logic ---
+    openai_api_key: str = os.getenv("OPENAI_API_KEY")
     gemini_api_key: str = os.getenv("GEMINI_API_KEY")
     redis_url: str = os.getenv("REDIS_URL") 
     
