@@ -1,12 +1,13 @@
 document.addEventListener("DOMContentLoaded", function() {
-    const form = document.getElementById("address-form");
-    const input = document.getElementById("address-input");
+    // --- FIX: Use the correct IDs for the form and input elements ---
+    const form = document.getElementById("property-form");
+    const input = document.getElementById("url-input");
     const overlay = document.getElementById('progress-overlay');
     const progressText = document.getElementById('progress-text');
     let statusInterval;
   
     if (!form || !input || !overlay) {
-        console.error("[main.js] Essential HTML elements not found!");
+        console.error("[main.js] Essential HTML elements not found! Check that property-form, url-input, and progress-overlay exist.");
         return;
     }
   
@@ -25,10 +26,11 @@ document.addEventListener("DOMContentLoaded", function() {
         startStatusUpdates();
   
         try {
-            const response = await fetch("https://renvo-node-final.onrender.com/api/analyze-property", {
+            // --- FIX: Use a relative URL to allow local and deployed testing ---
+            const response = await fetch("/api/analyze-property", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url })
+                body: JSON.stringify({ url }) // This older version correctly sends { "url": ... }
             });
   
             if (!response.ok) {
@@ -42,8 +44,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 throw new Error("Server response did not include a valid report ID.");
             }
   
-            // Redirect to the Python service report page
-            const reportUrl = `https://renvo-python.onrender.com/report?reportId=${data.reportId}`;
+            // --- FIX: Use the correct staging URL for the Python service ---
+            const reportUrl = `https://renvo-python-staging.onrender.com/report?reportId=${data.reportId}`;
             window.location.href = reportUrl;
   
         } catch (error) {
@@ -83,4 +85,4 @@ document.addEventListener("DOMContentLoaded", function() {
     // We can slow down the text updates slightly to make each step feel more significant
     statusInterval = setInterval(updateText, 10000); // Update text every 10 seconds
   }
-  });
+  });  
