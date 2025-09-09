@@ -1,104 +1,86 @@
-// This variable will hold the correct API URL for the current environment.
-let PYTHON_API_URL = '';
-
-// This function runs first to get the configuration from the server.
-async function fetchConfig() {
-    try {
-        const response = await fetch('/api/config');
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const config = await response.json();
-        PYTHON_API_URL = config.pythonApiUrl;
-        console.log('Successfully fetched config. Python API URL:', PYTHON_API_URL);
-    } catch (error)
-{
-        console.error('CRITICAL: Could not fetch server configuration.', error);
-        const mainContent = document.getElementById('main-content');
-        if(mainContent) {
-            mainContent.innerHTML = `<div class="text-red-500 text-center p-8">Error: Could not connect to the server. Please refresh the page.</div>`;
+document.addEventListener("DOMContentLoaded", function() {
+    const form = document.getElementById("address-form");
+    const input = document.getElementById("address-input");
+    const overlay = document.getElementById('progress-overlay');
+    const progressText = document.getElementById('progress-text');
+    let statusInterval;
+  
+    if (!form || !input || !overlay) {
+        console.error("[main.js] Essential HTML elements not found!");
+        return;
+    }
+  
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const url = input.value.trim();
+        if (!url) {
+            alert("Please enter a valid Redfin URL");
+            return;
+        }
+  
+        // --- Show new progress overlay and start status updates ---
+        if (overlay) {
+            overlay.style.display = 'flex';
+        }
+        startStatusUpdates();
+  
+        try {
+            const response = await fetch("https://renvo-node-final.onrender.com/api/analyze-property", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url })
+            });
+  
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API Error: ${response.status} - ${errorText || response.statusText}`);
+            }
+  
+            const data = await response.json();
+  
+            if (!data || !data.reportId) {
+                throw new Error("Server response did not include a valid report ID.");
+            }
+  
+            // Redirect to the Python service report page
+            const reportUrl = `https://renvo-python.onrender.com/report?reportId=${data.reportId}`;
+            window.location.href = reportUrl;
+  
+        } catch (error) {
+            console.error("[main.js] Error in fetch/redirect process:", error);
+            alert(`An error occurred: ${error.message || 'Unknown fetch/processing error'}`);
+            // Hide overlay on error
+            if (overlay) {
+                overlay.style.display = 'none';
+            }
+            if (statusInterval) {
+                clearInterval(statusInterval);
+            }
+        }
+    });
+  
+    // Replace the existing startStatusUpdates function in main.js with this one.
+  
+  function startStatusUpdates() {
+    const messages = [
+        "Initializing Renvo AI analysis...",
+        "Analyzing property details & imagery...",
+        "Cross-referencing local market data...",
+        "Simulating renovation project outcomes...",
+        "Calculating financial projections & ROI...",
+        "Compiling your custom report..."
+    ];
+    let messageIndex = 0;
+  
+    function updateText() {
+        if (progressText && messageIndex < messages.length) {
+            progressText.textContent = messages[messageIndex];
+            messageIndex++;
         }
     }
-}
-
-// --- MAIN APPLICATION LOGIC ---
-document.addEventListener('DOMContentLoaded', async () => {
-    await fetchConfig();
-    const urlParams = new URLSearchParams(window.location.search);
-    const reportId = urlParams.get('reportId');
-
-    if (reportId) {
-        // We are on the results/polling page
-        const mainContent = document.getElementById('main-content');
-        if (mainContent) {
-            mainContent.innerHTML = `
-                <div class="text-center p-8">
-                    <h2 class="text-2xl font-semibold mb-4">Generating Your Report...</h2>
-                    <p class="text-gray-600 mb-6">This may take a few moments. We're analyzing the property details.</p>
-                    <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32 mx-auto"></div>
-                </div>
-            `;
-            pollForReport(reportId);
-        }
-    } 
-    // The form is handled by the onsubmit attribute in the HTML.
-});
-
-async function handleFormSubmit(event) {
-    event.preventDefault(); 
-    
-    const url = document.getElementById('url-input').value;
-    const resultsDiv = document.getElementById('results');
-    const submitButton = document.querySelector('#property-form button[type="submit"]');
-    const progressOverlay = document.getElementById('progress-overlay');
-
-    if (progressOverlay) {
-        progressOverlay.style.display = 'flex';
-    }
-
-    resultsDiv.innerHTML = ''; 
-    submitButton.disabled = true;
-
-    try {
-        const response = await fetch('/api/analyze-property', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // DEFINITIVE FIX: The key has been changed from 'url' to 'propertyUrl'
-            // to match what the Node.js server (index.js) expects in req.body.
-            body: JSON.stringify({ propertyUrl: url })
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.reportId) {
-            // This now correctly redirects to the results page, which handles polling.
-            window.location.href = `/results.html?reportId=${data.reportId}`;
-        } else {
-            throw new Error(data.error || 'An unknown error occurred.');
-        }
-    } catch (error) {
-        resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
-        if (progressOverlay) {
-            progressOverlay.style.display = 'none';
-        }
-    } finally {
-        submitButton.disabled = false;
-    }
-}
-
-async function pollForReport(reportId) {
-    try {
-        const statusResponse = await fetch(`${PYTHON_API_URL}/api/report/status?reportId=${reportId}`);
-        const statusData = await statusResponse.json();
-
-        if (statusData.status === 'complete') {
-            window.location.href = `${PYTHON_API_URL}/report?reportId=${reportId}`;
-        } else if (statusData.status === 'error') {
-            document.getElementById('main-content').innerHTML = `<div class="text-red-500 text-center p-8">An error occurred while generating your report.</div>`;
-        } else {
-            setTimeout(() => pollForReport(reportId), 3000);
-        }
-    } catch (error) {
-        console.error('Polling error:', error);
-        document.getElementById('main-content').innerHTML = `<div class="text-red-500 text-center p-8">Could not retrieve report status. Please check the console for errors.</div>`;
-    }
-}
-
+  
+    updateText();
+    // We can slow down the text updates slightly to make each step feel more significant
+    statusInterval = setInterval(updateText, 10000); // Update text every 10 seconds
+  }
+  });
