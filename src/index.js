@@ -67,6 +67,14 @@ app.post('/api/analyze-property', async (req, res) => {
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     });
     const page = await browser.newPage();
+
+    page.on('console', msg => {
+        const text = msg.text();
+        // Simple filter to ignore common favicon or image loading errors
+        if (!text.includes('Failed to load resource')) {
+            console.log(`[Browser Console] ${text}`);
+        }
+    });
     
     console.log(`[${reqId}] Navigating to:`, url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });

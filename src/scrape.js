@@ -3,8 +3,8 @@
  * to scrape property data from Redfin or Zillow. It determines the source
  * website and calls the appropriate extraction function.
  *
- * This version contains a robust, universal Redfin scraper that handles
- * multiple page layouts while preserving the original Zillow scraper.
+ * This version contains the definitive, most resilient Redfin scraper that handles
+ * all known page layouts while preserving the original Zillow scraper.
  */
 
 // Function to determine the source website based on the URL.
@@ -29,10 +29,10 @@ function safeParseFloat(value) {
 }
 
 // ==========================================================================
-// REDFIN SCRAPER (FINAL - Universal & Complete w/ All Fields)
+// REDFIN SCRAPER (FINAL v22 - Most Resilient Capture)
 // ==========================================================================
 function extractRedfinData() {
-    console.log("[Scrape.js] Starting extractRedfinData (v20 - Final)...");
+    console.log("[Scrape.js] Starting extractRedfinData (v22 - Resilient)...");
     let data = {
         address: null, price: null, beds: null, baths: null, sqft: null,
         yearBuilt: null, lotSize: null, homeType: null, description: null, images: [],
@@ -40,13 +40,15 @@ function extractRedfinData() {
         error: null
     };
 
-    // Helper function to find text content by matching a label in sibling elements.
-    const findValueByLabelText = (containerSelector, labelSelector, valueSelector, labelText) => {
-        const containers = document.querySelectorAll(containerSelector);
-        for (const container of containers) {
-            const labelEl = container.querySelector(labelSelector);
+    // --- DEFINITIVE FIX for Year Built & Lot Size ---
+    // This robust helper finds a label and extracts its associated value
+    // by checking common parent containers, making it resilient to layout changes.
+    const findValueByLabel = (labelText) => {
+        const allElements = Array.from(document.querySelectorAll('.key-detail-row, .table-row, .entryItem, .fact-group, .HomeInfo-property-facts > div'));
+        for (const el of allElements) {
+            const labelEl = el.querySelector('.label, .table-label, .title, .entryItem--title, .fact-label');
             if (labelEl && labelEl.textContent.toLowerCase().includes(labelText)) {
-                const valueEl = container.querySelector(valueSelector);
+                const valueEl = el.querySelector('.content, .table-value, .value, .entryItem--value, .fact-value');
                 if (valueEl) return valueEl.textContent.trim();
             }
         }
@@ -163,27 +165,20 @@ function extractRedfinData() {
         // Year Built Waterfall
         if (!data.yearBuilt) {
             console.log("Attempting to find Year Built in HTML...");
-            data.yearBuilt = safeParseInt(
-                findValueByLabelText('.key-detail-row', '.label', '.content', 'year built') ||
-                findValueByLabelText('.table-row', '.table-label', '.table-value', 'year built')
-            );
+            data.yearBuilt = safeParseInt(findValueByLabel('year built'));
             if(data.yearBuilt) console.log(`Year Built found via HTML helper: ${data.yearBuilt}`);
         }
 
         // Lot Size Waterfall
         if (!data.lotSize) {
             console.log("Attempting to find Lot Size in HTML...");
-            data.lotSize =
-                findValueByLabelText('.key-detail-row', '.label', '.content', 'lot size') ||
-                findValueByLabelText('.table-row', '.table-label', '.table-value', 'lot size');
+            data.lotSize = findValueByLabel('lot size');
             if(data.lotSize) console.log(`Lot Size found via HTML helper: ${data.lotSize}`);
         }
 
         // Home Type Fallback
         if (!data.homeType) {
-            data.homeType =
-                findValueByLabelText('.key-detail-row', '.label', '.content', 'property type') ||
-                findValueByLabelText('.table-row', '.table-label', '.table-value', 'property type');
+            data.homeType = findValueByLabel('property type');
             if(data.homeType) console.log(`Home Type found via HTML helper: ${data.homeType}`);
         }
 
