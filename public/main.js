@@ -9,7 +9,8 @@ async function fetchConfig() {
         const config = await response.json();
         PYTHON_API_URL = config.pythonApiUrl;
         console.log('Successfully fetched config. Python API URL:', PYTHON_API_URL);
-    } catch (error) {
+    } catch (error)
+{
         console.error('CRITICAL: Could not fetch server configuration.', error);
         const mainContent = document.getElementById('main-content');
         if(mainContent) {
@@ -38,44 +39,45 @@ document.addEventListener('DOMContentLoaded', async () => {
             pollForReport(reportId);
         }
     } 
-    // FIX: The event listener that was here has been removed. 
-    // The form is now handled by the onsubmit attribute in the HTML.
+    // The form is handled by the onsubmit attribute in the HTML.
 });
 
 async function handleFormSubmit(event) {
-    event.preventDefault(); // This is still good practice.
+    event.preventDefault(); 
     
     const url = document.getElementById('url-input').value;
     const resultsDiv = document.getElementById('results');
     const submitButton = document.querySelector('#property-form button[type="submit"]');
     const progressOverlay = document.getElementById('progress-overlay');
 
-    // Show the progress overlay
     if (progressOverlay) {
         progressOverlay.style.display = 'flex';
     }
 
-    resultsDiv.innerHTML = ''; // Clear previous results
+    resultsDiv.innerHTML = ''; 
     submitButton.disabled = true;
 
     try {
         const response = await fetch('/api/analyze-property', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
+            // DEFINITIVE FIX: The key has been changed from 'url' to 'propertyUrl'
+            // to match what the Node.js server (index.js) expects in req.body.
+            body: JSON.stringify({ propertyUrl: url })
         });
 
         const data = await response.json();
 
         if (response.ok && data.reportId) {
-            window.location.href = `${PYTHON_API_URL}/report?reportId=${data.reportId}`;
+            // This now correctly redirects to the results page, which handles polling.
+            window.location.href = `/results.html?reportId=${data.reportId}`;
         } else {
             throw new Error(data.error || 'An unknown error occurred.');
         }
     } catch (error) {
         resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
         if (progressOverlay) {
-            progressOverlay.style.display = 'none'; // Hide overlay on error
+            progressOverlay.style.display = 'none';
         }
     } finally {
         submitButton.disabled = false;
@@ -99,3 +101,4 @@ async function pollForReport(reportId) {
         document.getElementById('main-content').innerHTML = `<div class="text-red-500 text-center p-8">Could not retrieve report status. Please check the console for errors.</div>`;
     }
 }
+
