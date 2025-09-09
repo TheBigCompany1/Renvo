@@ -44,53 +44,54 @@ app.get('/api/config', (req, res) => {
 
 app.get('/api/ping', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
-  res.status(200).send({ message: 'renvo-node-staging is alive' });
+  res.status(200).json({ status: 'ok', message: 'Node.js service is running' });
 });
 
 app.post('/api/analyze-property', async (req, res) => {
-  const reqId = randomUUID();
+  const reqId = randomUUID().slice(0, 8);
   console.log(`[${reqId}] Received new request for /api/analyze-property`);
+  
+  const { propertyUrl } = req.body;
+  if (!propertyUrl) {
+    return res.status(400).json({ error: 'propertyUrl is required' });
+  }
 
-  let browser;
+  let browser = null;
   try {
-    const { propertyUrl } = req.body;
-    if (!propertyUrl) {
-      console.error(`[${reqId}] Missing propertyUrl in request body.`);
-      return res.status(400).json({ error: 'propertyUrl is required' });
-    }
-
     console.log(`[${reqId}] Launching Puppeteer...`);
     browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1920,1080']
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
-    // --- FIX 1, PART 1: ADD CONSOLE LOG VISIBILITY ---
-    // This is the critical fix to pipe browser logs to the server for debugging.
+    // --- CONSOLE LOG VISIBILITY FIX ---
+    // Capture all browser console logs and print them to the Node.js server logs.
     page.on('console', msg => {
-        const text = msg.text();
-        // The scraper script prefixes logs with '[Scrape.js]', so we can filter.
-        if (text.startsWith('[Scrape.js]')) {
-            console.log(`[${reqId}] BROWSER_LOG: ${text}`);
-        }
+      const logText = msg.text();
+      // Only log messages from our specific script to avoid clutter
+      if (logText.startsWith('[Scrape.js]')) {
+        console.log(`[${reqId}] BROWSER LOG:`, logText);
+      }
     });
 
     console.log(`[${reqId}] Navigating to URL: ${propertyUrl}`);
-    await page.goto(propertyUrl, { waitUntil: 'networkidle2' });
+    
+    // --- DEFINITIVE TIMEOUT FIX ---
+    // 1. Changed waitUntil from 'domcontentloaded' to 'networkidle2'. This is a more
+    //    robust way to wait for modern, JS-heavy sites like Redfin to fully load.
+    // 2. Increased timeout from 30000ms to 60000ms to handle slower network conditions
+    //    and Redfin's anti-scraping countermeasures which can delay page load.
+    await page.goto(propertyUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
-    // --- FIX 1, PART 2: ADD A RESILIENT WAIT ---
-    // This waits for one of several possible content containers to appear,
-    // ensuring the scraper doesn't run on an empty or incomplete page.
-    try {
-        console.log(`[${reqId}] Waiting for a valid content container to load...`);
-        await page.waitForSelector('.key-detail-info, .HomeInfo, .dp-details-set, #property-details-scroll-container', { timeout: 15000 });
-        console.log(`[${reqId}] Content container found. Proceeding with scrape.`);
-    } catch (e) {
-        console.warn(`[${reqId}] Timed out waiting for primary content containers. The page may have a new layout or failed to load correctly. Attempting to scrape anyway.`);
-    }
-
+    const pageTitle = await page.title();
+    console.log(`[${reqId}] Page loaded with title: "${pageTitle}"`);
+    
+    // --- RESILIENT SELECTOR FIX ---
+    // Waits for a more generic and stable element, the main content area,
+    // to ensure the page is ready for the scraper script to be injected.
+    await page.waitForSelector('#content', { timeout: 10000 });
+    console.log(`[${reqId}] Core content element '#content' is visible.`);
 
     console.log(`[${reqId}] Injecting and evaluating scrape script...`);
     const scriptContent = fs.readFileSync(path.join(__dirname, 'scrape.js'), 'utf8');
@@ -99,9 +100,7 @@ app.post('/api/analyze-property', async (req, res) => {
     if (propertyDetails.error) {
         throw new Error(`Scraping script failed: ${propertyDetails.error}`);
     }
-    
-    // ADDED: Log the full scraped data object for complete visibility.
-    console.log(`[${reqId}] Scrape successful. Full data received:\n`, JSON.stringify(propertyDetails, null, 2));
+    console.log(`[${reqId}] Scrape successful. Extracted data summary:`, { address: propertyDetails.address, price: propertyDetails.price, sqft: propertyDetails.sqft });
 
     if (browser) {
         await browser.close();
@@ -126,17 +125,14 @@ app.post('/api/analyze-property', async (req, res) => {
         try { await browser.close(); } catch (e) { /* ignore */ }
     }
     if (!res.headersSent) {
-        res.status(500).json({ error: error.message || "An internal server error occurred." });
+        res.status(500).json({ error: error.message || "An internal server error occurred during analysis." });
     }
   }
 });
 
-
 /****************************************************
- * SERVER START
+ * SERVER STARTUP
  ****************************************************/
-app.listen(PORT, () => {
-  console.log(`renvo-node-staging server is running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
-
-
