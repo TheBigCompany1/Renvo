@@ -65,11 +65,24 @@ app.post('/api/analyze-property', async (req, res) => {
     });
     const page = await browser.newPage();
     
-    // --- CONSOLE LOG VISIBILITY FIX ---
-    // Capture all browser console logs and print them to the Node.js server logs.
+    // --- DEFINITIVE ANTI-BLOCKING & TIMEOUT FIX ---
+    // 1. Set a realistic User-Agent and Viewport to mimic a real browser.
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1920, height: 1080 });
+
+    // 2. Intercept and block non-essential requests (images, fonts, stylesheets)
+    //    to drastically speed up page load time and evade detection.
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+        if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
+            req.abort();
+        } else {
+            req.continue();
+        }
+    });
+    
     page.on('console', msg => {
       const logText = msg.text();
-      // Only log messages from our specific script to avoid clutter
       if (logText.startsWith('[Scrape.js]')) {
         console.log(`[${reqId}] BROWSER LOG:`, logText);
       }
@@ -77,19 +90,11 @@ app.post('/api/analyze-property', async (req, res) => {
 
     console.log(`[${reqId}] Navigating to URL: ${propertyUrl}`);
     
-    // --- DEFINITIVE TIMEOUT FIX ---
-    // 1. Changed waitUntil from 'domcontentloaded' to 'networkidle2'. This is a more
-    //    robust way to wait for modern, JS-heavy sites like Redfin to fully load.
-    // 2. Increased timeout from 30000ms to 60000ms to handle slower network conditions
-    //    and Redfin's anti-scraping countermeasures which can delay page load.
     await page.goto(propertyUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
     const pageTitle = await page.title();
     console.log(`[${reqId}] Page loaded with title: "${pageTitle}"`);
     
-    // --- RESILIENT SELECTOR FIX ---
-    // Waits for a more generic and stable element, the main content area,
-    // to ensure the page is ready for the scraper script to be injected.
     await page.waitForSelector('#content', { timeout: 10000 });
     console.log(`[${reqId}] Core content element '#content' is visible.`);
 
@@ -97,11 +102,14 @@ app.post('/api/analyze-property', async (req, res) => {
     const scriptContent = fs.readFileSync(path.join(__dirname, 'scrape.js'), 'utf8');
     const propertyDetails = await page.evaluate(scriptContent);
 
+    // --- DEFINITIVE LOGGING FIX ---
+    // This log confirms exactly what data was captured (or if it was null).
+    console.log(`[${reqId}] DATA CAPTURED:`, JSON.stringify(propertyDetails, null, 2));
+
     if (propertyDetails.error) {
         throw new Error(`Scraping script failed: ${propertyDetails.error}`);
     }
-    console.log(`[${reqId}] Scrape successful. Extracted data summary:`, { address: propertyDetails.address, price: propertyDetails.price, sqft: propertyDetails.sqft });
-
+    
     if (browser) {
         await browser.close();
         console.log(`[${reqId}] Browser closed.`);
@@ -136,3 +144,4 @@ app.post('/api/analyze-property', async (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
+
