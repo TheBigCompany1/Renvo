@@ -12,7 +12,11 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://127.0.0.1:5000/api/analyze-property';
+const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL;
+if (!PYTHON_SERVICE_URL) {
+  console.error("FATAL ERROR: PYTHON_SERVICE_URL environment variable is not set.");
+  process.exit(1); // Exit if the URL is not configured
+}
 
 /****************************************************
  * MIDDLEWARE
