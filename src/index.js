@@ -67,7 +67,10 @@ app.post('/api/analyze-property', async (req, res) => {
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     });
     const page = await browser.newPage();
-
+    
+    // --- THIS IS THE FIX for the missing logs ---
+    // This code listens for console messages from within the browser page
+    // and prints them to the Node.js server's console. This is crucial for debugging.
     page.on('console', msg => {
         const text = msg.text();
         // Simple filter to ignore common favicon or image loading errors
@@ -75,20 +78,18 @@ app.post('/api/analyze-property', async (req, res) => {
             console.log(`[Browser Console] ${text}`);
         }
     });
+    // --- END OF FIX ---
     
     console.log(`[${reqId}] Navigating to:`, url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    // --- THIS IS THE FIX (v18) ---
-    // Wait for the "Key Details" table, which is present on all layouts and
-    // indicates that the core property data has been rendered.
-    console.log(`[${reqId}] Waiting for dynamic content to render by looking for the Key Details table...`);
+    console.log(`[${reqId}] Waiting for dynamic content to render by looking for a reliable content marker...`);
+    // This selector is more universal and present on all known layouts.
     await page.waitForFunction(
-      "document.querySelector('.KeyDetailsTable, .KeyDetails-Table')",
-      { timeout: 30000 } // Generous 30-second timeout
+      "document.querySelector('.KeyDetailsTable, .KeyDetails-Table, .HomeInfo-property-facts')",
+      { timeout: 30000 }
     );
-    console.log(`[${reqId}] Key Details table found. Page is ready for scraping.`);
-    // --- END OF FIX ---
+    console.log(`[${reqId}] Content marker found. Page is ready for scraping.`);
 
     console.log(`[${reqId}] Injecting and evaluating scrape script...`);
     const scriptContent = fs.readFileSync(path.join(__dirname, 'scrape.js'), 'utf8');
