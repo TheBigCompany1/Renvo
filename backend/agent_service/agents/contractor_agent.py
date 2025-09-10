@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional
 from .base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
-from models.contractor_model import Contractor
+from models.contractor import Contractor
 
 class Contractor(BaseModel):
     name: str = Field(description="The name of the contracting company.")
