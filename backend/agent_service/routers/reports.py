@@ -1,53 +1,76 @@
-from flask import Blueprint, request, jsonify, render_template
-from services.report_service import ReportService
+from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from services.report_service import ReportService, get_report_service
 from models.property_model import PropertyDetails
-import traceback
+import json
 
-reports_bp = Blueprint('reports', __name__)
-report_service = ReportService()
+router = APIRouter()
+templates = Jinja2Templates(directory="templates")
 
-@reports_bp.route('/api/analyze-property', methods=['POST'])
-def generate_report():
-    """Receives property data and starts the report generation process."""
-    try:
-        data = request.get_json()
-        if not data or 'property_data' not in data:
-            return jsonify({"error": "Invalid request. 'property_data' is required."}), 400
-        
-        # The main entry point for the background task
-        report_id = report_service.start_report_generation(data['property_data'])
-        
-        return jsonify({"reportId": report_id}), 202 # 202 Accepted
-        
-    except Exception as e:
-        print(f"CRITICAL ERROR in /api/analyze-property endpoint: {e}")
-        print(traceback.format_exc())
-        return jsonify({"error": "An internal error occurred."}), 500
+@router.post("/api/analyze-property")
+async def analyze_property(
+    property_data: PropertyDetails, 
+    service: ReportService = Depends(get_report_service)
+):
+    """Receives property data and starts the background analysis."""
+    report_id = await service.start_analysis(property_data)
+    return {"reportId": report_id}
 
-@reports_bp.route('/report', methods=['GET'])
-def get_report():
-    """Serves the final report HTML page."""
-    report_id = request.args.get('reportId')
-    if not report_id:
-        return "Report ID is required.", 400
+@router.get("/report")
+async def get_report_page(
+    reportId: str, 
+    request: Request, 
+    service: ReportService = Depends(get_report_service)
+):
+    """Serves the report page, showing processing status or the final report."""
+    status = await service.get_status(reportId)
+    
+    if not status:
+        raise HTTPException(status_code=404, detail="Report not found.")
 
-    report_data = report_service.get_report(report_id)
+    if status in ["processing", "pending"]:
+        return templates.TemplateResponse("processing.html", {
+            "request": request,
+            "report_id": reportId,
+            "status": status
+        })
+    
+    if status == "failed":
+        report_data = await service.get_report(reportId)
+        # Even on failure, we can show the property data that was submitted
+        return templates.TemplateResponse("report.html", {
+            "request": request,
+            "report": report_data,
+            "error": "An error occurred during analysis."
+        })
+
+    report_data = await service.get_report(reportId)
     if not report_data:
-        # This could be because the report is still processing or failed.
-        # The frontend will poll the status endpoint to know for sure.
-        return render_template('processing.html', reportId=report_id)
-        
-    # If the report is complete, render it.
-    # The ReportService now returns a Pydantic model, so we convert it to a dict.
-    return render_template('report.html', report=report_data.dict())
+        raise HTTPException(status_code=404, detail="Report data not found, though status was complete.")
 
-@reports_bp.route('/api/report/status', methods=['GET'])
-def get_report_status():
-    """Allows the frontend to poll for the report generation status."""
-    report_id = request.args.get('reportId')
-    if not report_id:
-        return jsonify({"error": "Report ID is required."}), 400
-        
-    status_data = report_service.get_report_status(report_id)
-    return jsonify(status_data)
+    return templates.TemplateResponse("report.html", {
+        "request": request, 
+        "report": report_data.dict() # Convert Pydantic model to dict for template
+    })
+
+@router.get("/api/report/status")
+async def get_report_status(
+    reportId: str, 
+    service: ReportService = Depends(get_report_service)
+):
+    """API endpoint for the frontend to poll for the report status."""
+    status = await service.get_status(reportId)
+    if not status:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    
+    final_report = None
+    if status == "completed":
+        final_report = await service.get_report(reportId)
+
+    return {
+        "reportId": reportId, 
+        "status": status,
+        "report": final_report.dict() if final_report else None
+    }
 
