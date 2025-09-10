@@ -8,6 +8,7 @@ from .base import BaseAgent
 from models.property_model import PropertyDetails
 from models.renovation import RenovationProject, RenovationCost, RenovationValueAdd
 
+
 def safe_parse_int(value: Any) -> int:
     """Best-effort parse of ints that may be strings like '$1,234' or None."""
     if value is None:
@@ -17,6 +18,7 @@ def safe_parse_int(value: Any) -> int:
         return int(cleaned) if cleaned else 0
     except (ValueError, TypeError):
         return 0
+
 
 class FinancialAnalysisAgent(BaseAgent):
     """Agent for performing financial analysis on renovation ideas."""
@@ -44,23 +46,9 @@ Return ONLY a JSON array, no commentary. Each item must include:
 - timeline (str)
 """
 
-    def _determine_property_value(
-        self, property_data: PropertyDetails, comps: List[Dict[str, Any]]
-    ) -> int:
-        """
-        Waterfall to determine subject property value:
-        1) List Price (property_data.price)
-        2) Recent Sale (within ~365 days) from priceHistory if present
-        3) Redfin estimate (property_data.estimate)
-        4) Average of comparable sale/list prices if available
-        """
-        # 1) List price
-        list_price = safe_parse_int(getattr(property_data, "price", None))
-        if list_price > 0:
-            print(f"[FinancialAgent] Using List Price: ${list_price:,}")
-            return list_price
-
-        # 2) Recent sale price
+    # --------------------------- pricing waterfall --------------------------- #
+    def _recent_sale_within_year(self, property_data: PropertyDetails) -> int:
+        """Return most-recent SOLD price within 365 days, else 0."""
         try:
             events = getattr(property_data, "priceHistory", None) or []
             latest_sale_price = 0
@@ -73,10 +61,8 @@ Return ONLY a JSON array, no commentary. Each item must include:
                 if not ev_date_raw:
                     continue
                 try:
-                    # Normalize date to timezone-aware
                     ev_date = datetime.fromisoformat(str(ev_date_raw).replace("Z", "+00:00"))
                 except Exception:
-                    # Fallback: attempt loose parsing (YYYY-MM-DD)
                     try:
                         ev_date = datetime.strptime(str(ev_date_raw)[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
                     except Exception:
@@ -86,55 +72,85 @@ Return ONLY a JSON array, no commentary. Each item must include:
                     latest_sale_price = safe_parse_int((ev or {}).get("price"))
             if latest_sale_date and latest_sale_date > datetime.now(timezone.utc) - timedelta(days=365):
                 if latest_sale_price > 0:
-                    print(f"[FinancialAgent] Using Recent Sale Price: ${latest_sale_price:,}")
+                    print(f"[FinancialAgent] Using Recent Sale Price (<=365d): ${latest_sale_price:,}")
                     return latest_sale_price
         except Exception as e:
             print(f"[FinancialAgent] priceHistory evaluation warning: {e}")
+        return 0
 
-        # 3) Redfin estimate
+    def _avg_ppsf_from_comps(self, comps: List[Dict[str, Any]]) -> float:
+        """Average price_per_sqft from comps list of dicts. Returns 0.0 if none."""
+        ppsf_vals: List[float] = []
+        for c in comps or []:
+            item = c if isinstance(c, dict) else getattr(c, "model_dump", lambda: {})()
+            try:
+                v = float(item.get("price_per_sqft"))
+                if v > 0:
+                    ppsf_vals.append(v)
+            except Exception:
+                continue
+        if ppsf_vals:
+            avg_ppsf = sum(ppsf_vals) / len(ppsf_vals)
+            print(f"[FinancialAgent] Using Avg PPSF from comps: ${avg_ppsf:,.2f}")
+            return avg_ppsf
+        return 0.0
+
+    def _determine_property_value(
+        self, property_data: PropertyDetails, comps: List[Dict[str, Any]]
+    ) -> int:
+        """
+        Waterfall to determine subject property value (off-market safe):
+
+        1) List Price (property_data.price) if present.
+        2) Last SOLD within the last 365 days (priceHistory).
+        3) Redfin estimate (property_data.estimate).
+        4) **User's rule** Avg PPSF from comps × subject livable sqft.
+        5) Fallback: subject sqft × estimatePerSqft.
+        6) Else 0.
+        """
+        # 1) List price (mostly for on-market, but cheap if already present)
+        list_price = safe_parse_int(getattr(property_data, "price", None))
+        if list_price > 0:
+            print(f"[FinancialAgent] Using List Price: ${list_price:,}")
+            return list_price
+
+        # 2) Recent sale within a year
+        recent_sale = self._recent_sale_within_year(property_data)
+        if recent_sale > 0:
+            return recent_sale
+
+        # 3) Redfin estimate (if available)
         redfin_estimate = safe_parse_int(getattr(property_data, "estimate", None))
         if redfin_estimate > 0:
             print(f"[FinancialAgent] Using Redfin Estimate: ${redfin_estimate:,}")
             return redfin_estimate
 
-        # 4) Average of comps (sale_price or price)
-        comp_prices: List[int] = []
-        for c in comps or []:
-            if isinstance(c, dict):
-                iterable = [c]
-            else:
-                # try to convert pydantic or other object to dict
-                try:
-                    iterable = [c.model_dump()]
-                except Exception:
-                    continue
-            for item in iterable:
-                for key in ("sale_price", "price", "list_price"):
-                    v = safe_parse_int((item or {}).get(key))
-                    if v > 0:
-                        comp_prices.append(v)
-                        break
-        if comp_prices:
-            avg = int(sum(comp_prices) / len(comp_prices))
-            print(f"[FinancialAgent] Using Average of Comps: ${avg:,}")
-            return avg
+        # 4) Avg PPSF from comps × subject livable sqft
+        subject_sqft = safe_parse_int(getattr(property_data, "sqft", None))
+        avg_ppsf = self._avg_ppsf_from_comps(comps)
+        if subject_sqft > 0 and avg_ppsf > 0:
+            derived = int(round(subject_sqft * avg_ppsf))
+            print(f"[FinancialAgent] Using Comps PPSF × Sqft: {subject_sqft} × ${avg_ppsf:,.2f} = ${derived:,}")
+            return derived
 
+        # 5) Fallback: estimatePerSqft × sqft (if available)
+        ppsf_fallback = safe_parse_int(getattr(property_data, "estimatePerSqft", None))
+        if subject_sqft > 0 and ppsf_fallback > 0:
+            derived = int(subject_sqft * ppsf_fallback)
+            print(f"[FinancialAgent] Using fallback PPSF × Sqft: {subject_sqft} × ${ppsf_fallback:,} = ${derived:,}")
+            return derived
+
+        # 6) Nothing usable
         print("[FinancialAgent] ERROR: Could not determine a valid property value.")
         return 0
+    # ------------------------- end pricing waterfall ------------------------ #
 
     def _extract_json_list(self, text: str) -> List[Dict[str, Any]]:
-        """
-        Extract a JSON array from LLM text. Supports fenced blocks or raw arrays/objects.
-        Always returns a list (wraps single objects).
-        """
+        """Extract a JSON array/object from LLM text. Always returns a list."""
         if not text:
             return []
-
-        # 1) fenced ```json ... ```
         m = re.search(r"```(?:json)?\s*(\[.*?\]|\{.*?\})\s*```", text, flags=re.DOTALL | re.IGNORECASE)
         candidate = m.group(1) if m else None
-
-        # 2) first JSON-looking region
         if not candidate:
             start = None
             for ch in ("[", "{"):
@@ -142,23 +158,17 @@ Return ONLY a JSON array, no commentary. Each item must include:
                 if idx != -1:
                     start = idx if start is None else min(start, idx)
             if start is not None:
-                # try to capture until last matching bracket/brace
                 tail = text[start:]
-                # crude trim to last closing bracket/brace
                 end_idx = max(tail.rfind("]"), tail.rfind("}"))
                 if end_idx != -1:
                     candidate = tail[: end_idx + 1]
-
         if not candidate:
             return []
-
         try:
             data = json.loads(candidate)
         except Exception:
-            # attempt to remove trailing commas
             candidate2 = re.sub(r",\s*([\]\}])", r"\1", candidate)
             data = json.loads(candidate2)
-
         if isinstance(data, dict):
             return [data]
         if isinstance(data, list):
@@ -175,7 +185,6 @@ Return ONLY a JSON array, no commentary. Each item must include:
         name = str(item.get("name") or "Renovation")
         description = str(item.get("description") or "")
 
-        # Accept both snake_case and camelCase for cost/value_add
         cost_raw = item.get("estimated_cost") or item.get("estimatedCost") or {}
         value_raw = item.get("estimated_value_add") or item.get("estimatedValueAdd") or {}
 
@@ -194,7 +203,6 @@ Return ONLY a JSON array, no commentary. Each item must include:
         try:
             roi = float(roi_medium)
         except Exception:
-            # compute if missing
             roi = 0.0
             if cost.medium > 0:
                 roi = max(0.0, round((value_add.medium - cost.medium) / float(cost.medium) * 100.0, 2))
@@ -202,13 +210,11 @@ Return ONLY a JSON array, no commentary. Each item must include:
         feasibility = item.get("feasibility") or None
         timeline = item.get("timeline") or None
 
-        # Derived fields expected by RenovationProject
         arv = float(max(0, property_value) + value_add.medium)
-        adjusted_roi = roi  # keep simple
         new_total_sqft = int(sqft or 0)
         new_price_per_sqft = float((arv / new_total_sqft) if new_total_sqft > 0 else 0.0)
 
-        normalized: Dict[str, Any] = {
+        return {
             "name": name,
             "description": description,
             "estimated_cost": cost,
@@ -216,19 +222,17 @@ Return ONLY a JSON array, no commentary. Each item must include:
             "roi": float(roi),
             "feasibility": feasibility,
             "timeline": timeline,
-            # Optional extras with defaults
             "buyer_profile": item.get("buyer_profile"),
             "roadmap_steps": item.get("roadmap_steps") or [],
             "potential_risks": item.get("potential_risks") or [],
             "after_repair_value": arv,
-            "adjusted_roi": adjusted_roi,
+            "adjusted_roi": roi,
             "market_demand": item.get("market_demand"),
             "local_trends": item.get("local_trends"),
             "estimated_monthly_rent": safe_parse_int(item.get("estimated_monthly_rent")),
             "new_total_sqft": new_total_sqft,
             "new_price_per_sqft": new_price_per_sqft,
         }
-        return normalized
 
     async def process(
         self,
@@ -236,26 +240,22 @@ Return ONLY a JSON array, no commentary. Each item must include:
         renovation_ideas: List[Dict[str, Any]],
         comps: List[Dict[str, Any]],
     ) -> List[RenovationProject]:
-        """
-        Analyze renovation ideas and return validated RenovationProject objects.
-        """
+        """Analyze renovation ideas and return validated RenovationProject objects."""
         print("[FinancialAgent] Process started.")
         property_value = self._determine_property_value(property_data, comps)
         if property_value <= 0:
             print("[FinancialAgent] ERROR: No property value. Skipping financial analysis.")
             return []
 
-        # ensure list of dicts
         ideas_dicts: List[Dict[str, Any]] = []
         for idea in renovation_ideas or []:
             if isinstance(idea, dict):
                 ideas_dicts.append(idea)
             else:
-                try:
-                    ideas_dicts.append(idea.model_dump())
-                except Exception:
+                for getter in ("model_dump", "dict"):
                     try:
-                        ideas_dicts.append(idea.dict())
+                        ideas_dicts.append(getattr(idea, getter)())
+                        break
                     except Exception:
                         pass
 
@@ -267,7 +267,6 @@ Return ONLY a JSON array, no commentary. Each item must include:
             renovation_json=renovation_json,
         )
 
-        # Invoke LLM
         try:
             ai_msg = await self.llm.ainvoke(prompt)
             response_text = getattr(ai_msg, "content", "") or ""
