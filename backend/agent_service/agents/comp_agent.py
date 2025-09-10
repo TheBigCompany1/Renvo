@@ -3,6 +3,7 @@ from typing import Dict, Any, List, Optional
 from .base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
+from models.comp_model import ComparableProperty
 
 class ComparableProperty(BaseModel):
     address: str = Field(description="The full street address of the comparable property.")
