@@ -1,6 +1,6 @@
 import json
 from agents.base import BaseAgent
-from models.property import Property
+from models.property_model import Property
 from models.renovation import RenovationProject, RenovationCost, RenovationValueAdd
 import re
 from datetime import datetime, timedelta, timezone
@@ -133,4 +133,8 @@ class FinancialAnalysisAgent(BaseAgent):
         )
 
         response_text = self.llm.invoke(prompt).content.strip()
-        # TODO: Implement JSON extraction and parsing logic here
+        
+        try:
+            # First, try to find a JSON block wrapped in markdown
+            json_match = re.search(r'
+
