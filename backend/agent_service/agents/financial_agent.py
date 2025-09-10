@@ -1,94 +1,136 @@
-# backend/agent_service/agents/financial_agent.py
-from typing import Dict, Any, List, Optional
-from .base import BaseAgent
-from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel, Field
-import traceback
 import json
+from agents.base import BaseAgent
+from models.property import Property
+from models.renovation import RenovationProject, RenovationCost, RenovationValueAdd
+import re
+from datetime import datetime, timedelta, timezone
 
-# Pydantic models remain the same
-class Cost(BaseModel):
-    low: int
-    medium: int
-    high: int
-
-class ValueAdd(BaseModel):
-    low: int
-    medium: int
-    high: int
-
-class MarketAdjustedIdea(BaseModel):
-    name: str
-    description: str
-    estimated_cost: Cost
-    cost_source: Optional[str]
-    estimated_value_add: ValueAdd
-    roi: float
-    feasibility: Optional[str]
-    timeline: Optional[str]
-    buyer_profile: Optional[str]
-    roadmap_steps: List[str]
-    potential_risks: List[str]
-    after_repair_value: float
-    adjusted_roi: float
-    market_demand: Optional[str]
-    local_trends: Optional[str]
-    estimated_monthly_rent: Optional[int]
-    new_total_sqft: int
-    new_price_per_sqft: float
-
-class FinancialAnalysisOutput(BaseModel):
-    market_adjusted_ideas: List[MarketAdjustedIdea]
-    average_price_per_sqft: float
+def safe_parse_int(value):
+    if value is None:
+        return 0
+    try:
+        cleaned_string = re.sub(r'[^\d-]', '', str(value))
+        return int(cleaned_string) if cleaned_string else 0
+    except (ValueError, TypeError):
+        return 0
 
 class FinancialAnalysisAgent(BaseAgent):
-    """An agent specialized in financial calculations for renovation projects."""
-    
+    """Agent for performing financial analysis on renovation ideas."""
+
     PROMPT_TEMPLATE = """
-    You are a precise financial analyst for real estate investments. Your sole task is to perform financial calculations on the provided data.
+    Analyze the financial viability of these renovation ideas for a property valued at ${property_value:,.2f}.
+    The property's current estimated value is ${current_estimate:,.2f} and the price per square foot is ${price_per_sqft:,.2f}.
 
-    **List Price:** ${price}
-    **Comparable Properties Found:**
-    {comps_json}
-
-    **Renovation Ideas to Analyze:**
+    Renovation Ideas:
     {renovation_json}
 
-    **Instructions:**
-    1.  **Calculate Average Price/SqFt**: From the provided comparable properties, calculate the single average price per square foot (use $1,100 if no comps are provided).
-    2.  **Analyze Each Idea**: For each renovation idea, you MUST perform the following calculations with precision:
-        a. Calculate the `after_repair_value` (ARV) using the formula: `ARV = (Average Price Per Square Foot) * (New Total Square Footage)`.
-        b. Calculate the `estimated_value_add` (medium value) using the formula: `Value Add = ARV - List Price`. Populate the `estimated_value_add` field with this.
-        c. Recalculate the ROI and place it in the `adjusted_roi` field using the formula: `(ARV - List Price - Medium Cost) / Medium Cost`.
-    3.  **Format Output**: Return a single, valid JSON object that perfectly matches the `FinancialAnalysisOutput` schema. Do NOT use any tools.
+    Your tasks:
+    1. For each idea, provide a detailed cost breakdown (low, medium, high).
+    2. Estimate the value add for each (low, medium, high).
+    3. Calculate the Return on Investment (ROI) for the medium estimates.
+    4. Provide a feasibility score (Easy, Moderate, Difficult) and an estimated timeline.
+
+    Return a JSON object containing a list of financially analyzed renovation ideas.
+    Example for ONE idea:
+    {{
+      "name": "Kitchen Remodel",
+      "description": "...",
+      "estimated_cost": {{"low": 15000, "medium": 25000, "high": 35000}},
+      "estimated_value_add": {{"low": 30000, "medium": 50000, "high": 70000}},
+      "roi": 100,
+      "feasibility": "Moderate",
+      "timeline": "4-6 weeks"
+    }}
     """
+    
+    def _determine_property_value(self, property_data: Property, comps: list[dict]) -> int:
+        """
+        Determines the property value using a waterfall logic:
+        1. List Price
+        2. Last Sold Price (if within 1 year)
+        3. Comps-based Estimate
+        4. Redfin Estimate
+        """
+        # 1. Check for a valid list price first
+        list_price = safe_parse_int(property_data.price)
+        if list_price > 0:
+            print(f"[FinancialAgent] Using List Price as property value: ${list_price:,}")
+            return list_price
 
-    def __init__(self, llm: ChatGoogleGenerativeAI):
-        super().__init__(llm)
-        self.structured_llm = self.llm.with_structured_output(FinancialAnalysisOutput)
+        # 2. If no list price, check for a recent sale
+        if property_data.priceHistory:
+            sold_events = [event for event in property_data.priceHistory if event.get('event', '').lower() == 'sold' and event.get('date')]
+            if sold_events:
+                latest_sale = None
+                latest_sale_date = datetime.min.replace(tzinfo=timezone.utc)
 
-    async def process(self, property_data: Dict[str, Any], renovation_ideas: List[Dict[str, Any]], comps: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Performs financial analysis on renovation ideas."""
-        print("[FinancialAgent] Process started.")
-        try:
-            price = property_data.get('price', 0)
+                for event in sold_events:
+                    try:
+                        # Ensure date string is in the correct ISO format and timezone-aware
+                        date_str = event['date'].replace('Z', '+00:00')
+                        current_sale_date = datetime.fromisoformat(date_str)
+                        if current_sale_date.tzinfo is None:
+                            current_sale_date = current_sale_date.replace(tzinfo=timezone.utc)
+                        
+                        if current_sale_date > latest_sale_date:
+                            latest_sale_date = current_sale_date
+                            latest_sale = event
+                    except (ValueError, KeyError, TypeError):
+                        print(f"[FinancialAgent] Warning: Skipping price history event with invalid date format: {event.get('date')}")
+                        continue
+                
+                if latest_sale:
+                    # Compare timezone-aware dates
+                    if latest_sale_date > datetime.now(timezone.utc) - timedelta(days=365):
+                        sold_price = safe_parse_int(latest_sale.get('price'))
+                        if sold_price > 0:
+                            print(f"[FinancialAgent] Using recent Sale Price as property value: ${sold_price:,}")
+                            return sold_price
+
+        # 3. If no recent sale, use comps to calculate value
+        if comps and property_data.sqft and property_data.sqft > 0:
+            total_price_per_sqft = 0
+            valid_comps = 0
+            for comp in comps:
+                price = safe_parse_int(comp.get('price'))
+                sqft = safe_parse_int(comp.get('sqft'))
+                if price > 0 and sqft > 0:
+                    total_price_per_sqft += price / sqft
+                    valid_comps += 1
             
-            # --- THIS IS THE FIX ---
-            # Add a safety check to ensure the price is valid before proceeding.
-            if not price or price == 0:
-                raise ValueError("Cannot perform financial analysis on a property with a $0 list price.")
+            if valid_comps > 0:
+                avg_price_per_sqft = total_price_per_sqft / valid_comps
+                comps_based_value = int(avg_price_per_sqft * property_data.sqft)
+                print(f"[FinancialAgent] Using Comps-Based Value as property value: ${comps_based_value:,}")
+                return comps_based_value
 
-            prompt = self._create_prompt(
-                self.PROMPT_TEMPLATE,
-                price=price,
-                renovation_json=json.dumps(renovation_ideas, indent=2),
-                comps_json=json.dumps(comps, indent=2)
-            )
-            response = await self.structured_llm.ainvoke(prompt)
-            print("[FinancialAgent] Process finished.")
-            return response.dict()
-        except Exception as e:
-            print(f"[FinancialAgent] Error: {e}")
-            print(traceback.format_exc())
-            # Return the error so the orchestrator can handle it.
-            return {"error": f"FinancialAgent error: {str(e)}"}
+        # 4. As a final fallback, use the property's own estimate
+        estimate = safe_parse_int(property_data.estimate)
+        if estimate > 0:
+            print(f"[FinancialAgent] WARNING: Using property estimate as a fallback: ${estimate:,}")
+            return estimate
+
+        print("[FinancialAgent] ERROR: Could not determine a valid property value.")
+        return 0
+
+    def process(self, property_data: Property, renovation_ideas: list[dict], comps: list[dict]) -> list[RenovationProject]:
+        print("[FinancialAgent] Process started.")
+        
+        property_value = self._determine_property_value(property_data, comps)
+
+        if property_value <= 0:
+            print("[FinancialAgent] ERROR: Could not determine property value. Cannot perform financial analysis.")
+            return []
+
+        renovation_ideas_dicts = [idea.dict() if isinstance(idea, RenovationProject) else idea for idea in renovation_ideas]
+        renovation_json = json.dumps(renovation_ideas_dicts, indent=2)
+        
+        prompt = self.PROMPT_TEMPLATE.format(
+            property_value=property_value,
+            current_estimate=safe_parse_int(property_data.estimate),
+            price_per_sqft=safe_parse_int(property_data.estimatePerSqft),
+            renovation_json=renovation_json
+        )
+
+        response_text = self.llm.invoke(prompt).content.strip()
+        # TODO: Implement JSON extraction and parsing logic here
