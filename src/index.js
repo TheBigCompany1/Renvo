@@ -12,10 +12,19 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL;
+// --- Production-Ready Dynamic URL Configuration ---
+let PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL;
+
+// In production, the URL MUST be set. We should not fall back to a staging URL.
+if (process.env.NODE_ENV === 'production' && !PYTHON_SERVICE_URL) {
+  console.error("FATAL ERROR: In production, PYTHON_SERVICE_URL environment variable must be set.");
+  process.exit(1);
+}
+
+// For non-production environments (like staging or local), we can provide a safe fallback.
 if (!PYTHON_SERVICE_URL) {
-  console.error("FATAL ERROR: PYTHON_SERVICE_URL environment variable is not set.");
-  process.exit(1); // Exit if the URL is not configured
+  PYTHON_SERVICE_URL = 'https://renvo-python-staging.onrender.com/api/analyze-property';
+  console.warn(`WARNING: PYTHON_SERVICE_URL not set. Falling back to STAGING URL: ${PYTHON_SERVICE_URL}`);
 }
 
 /****************************************************
