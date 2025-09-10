@@ -1,67 +1,91 @@
+# backend/agent_service/models/renovation.py
+from __future__ import annotations
+
+from typing import List, Optional
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
 
-# --- Models from your existing file (untouched to prevent regressions) ---
 
+# -----------------------------------------------------------------------------
+# Back-compat model kept from your previous code
+# -----------------------------------------------------------------------------
 class RenovationOpportunity(BaseModel):
-    """Model for a single renovation opportunity, likely for an external API."""
+    """
+    Lightweight opportunity object some older code paths referenced.
+    Kept for backward compatibility; not used by the structured pipeline.
+    """
     name: str
+    # These used to be camelCase in some places; alias to snake_case for v2 style.
     estimatedCost: int = Field(..., alias="estimated_cost")
     estimatedValueAdd: int = Field(..., alias="estimated_value_add")
     estimatedRoi: float = Field(..., alias="estimated_roi")
-    
+
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
 
 
-class QuickInsights(BaseModel):
-    """Model for quick insights, likely for an external API."""
-    potentialScore: float = Field(..., alias="potential_score")
-    estimatedBudget: int = Field(..., alias="estimated_budget")
-    potentialValueAdd: int = Field(..., alias="potential_value_add")
-    topOpportunities: List[RenovationOpportunity] = Field(..., alias="top_opportunities")
-    
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
+# -----------------------------------------------------------------------------
+# Canonical cost/value-add blocks used by RenovationProject
+# -----------------------------------------------------------------------------
+class RenovationCost(BaseModel):
+    """Tri-band cost estimate in dollars."""
+    low: int = 0
+    medium: int = 0
+    high: int = 0
 
 
-# --- NEW Models required by the internal AI agent pipeline ---
+class RenovationValueAdd(BaseModel):
+    """Tri-band value-add estimate in dollars."""
+    low: int = 0
+    medium: int = 0
+    high: int = 0
 
-class Cost(BaseModel):
-    """Data model for estimated cost ranges."""
-    low: int
-    medium: int
-    high: int
 
-class ValueAdd(BaseModel):
-    """Data model for estimated value-add ranges."""
-    low: int
-    medium: int
-    high: int
+# Aliases to cover previous type names used in annotations (e.g., ValueAdd/Cost)
+Cost = RenovationCost
+ValueAdd = RenovationValueAdd
 
+
+# -----------------------------------------------------------------------------
+# Main model validated downstream by the agents/orchestrator
+# -----------------------------------------------------------------------------
 class RenovationProject(BaseModel):
-    """
-    The definitive, final data model for a single, financially analyzed renovation project.
-    This is the missing blueprint that the FullReport model depends on.
-    """
+    # Core fields
     name: str
-    description: str
-    estimated_cost: Cost
-    cost_source: Optional[str] = None
-    estimated_value_add: ValueAdd
-    roi: float
-    feasibility: Optional[str] = None
-    timeline: Optional[str] = None
+    description: str = ""
+
+    # Structured estimates
+    estimated_cost: RenovationCost
+    estimated_value_add: RenovationValueAdd
+
+    # Summary metrics
+    roi: float = 0.0
+    feasibility: Optional[str] = None               # e.g., "Easy", "Moderate", "Difficult"
+    timeline: Optional[str] = None                  # e.g., "3–6 months"
+
+    # Narrative / optional context
     buyer_profile: Optional[str] = None
     roadmap_steps: List[str] = Field(default_factory=list)
     potential_risks: List[str] = Field(default_factory=list)
-    after_repair_value: float
-    adjusted_roi: float
+
+    # Derived / downstream-calculated fields
+    after_repair_value: float = 0.0                 # ARV
+    adjusted_roi: float = 0.0
     market_demand: Optional[str] = None
     local_trends: Optional[str] = None
     estimated_monthly_rent: Optional[int] = None
-    new_total_sqft: int
-    new_price_per_sqft: float
 
+    # For scenarios that model sqft changes or price-per-sqft outputs
+    new_total_sqft: int = 0
+    new_price_per_sqft: float = 0.0
+
+
+# Optional: explicit export control
+__all__ = [
+    "RenovationOpportunity",
+    "RenovationCost",
+    "RenovationValueAdd",
+    "Cost",
+    "ValueAdd",
+    "RenovationProject",
+]
