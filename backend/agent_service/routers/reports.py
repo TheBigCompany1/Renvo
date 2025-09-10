@@ -1,87 +1,53 @@
-# app/routers/reports.py
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from typing import Dict, Any
-from models.property_model import PropertyDetails
-from models.report import ReportStatus, DetailedReport
+from flask import Blueprint, request, jsonify, render_template
 from services.report_service import ReportService
-from dependencies import get_report_service
-import uuid
-from pathlib import Path
+from models.property_model import PropertyDetails
+import traceback
 
-router = APIRouter(tags=["reports"])
+reports_bp = Blueprint('reports', __name__)
+report_service = ReportService()
 
-@router.post("/quickreport", response_model=Dict[str, Any])
-async def generate_quick_report(
-    property_details: PropertyDetails,
-    background_tasks: BackgroundTasks,
-    report_service: ReportService = Depends(get_report_service)
-):
-    print(f"Received request with data: {property_details.dict()}")
-    """Generate a quick renovation ROI report."""
-    # Generate report ID
-    report_id = f"r_{uuid.uuid4().hex[:12]}"
-    
+@reports_bp.route('/api/analyze-property', methods=['POST'])
+def generate_report():
+    """Receives property data and starts the report generation process."""
     try:
-        # Generate quick insights
-        quick_insights = await report_service.generate_quick_insights(property_details)
+        data = request.get_json()
+        if not data or 'property_data' not in data:
+            return jsonify({"error": "Invalid request. 'property_data' is required."}), 400
         
-        # Store report status
-        await report_service.create_report(
-            report_id=report_id,
-            property_details=property_details,
-            quick_insights=quick_insights
-        )
+        # The main entry point for the background task
+        report_id = report_service.start_report_generation(data['property_data'])
         
-        # Schedule detailed report generation in background
-        background_tasks.add_task(
-            report_service.generate_detailed_report_background,
-            report_id,
-            property_details
-        )
-        
-        return {
-            "success": True,
-            "reportId": report_id,
-            "quickInsights": quick_insights
-        }
+        return jsonify({"reportId": report_id}), 202 # 202 Accepted
         
     except Exception as e:
-        # Log the error
-        print(f"Error generating quick report: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate report: {str(e)}")
+        print(f"CRITICAL ERROR in /api/analyze-property endpoint: {e}")
+        print(traceback.format_exc())
+        return jsonify({"error": "An internal error occurred."}), 500
 
-BASE_DIR = Path(__file__).resolve().parent.parent  # This gets the agent_service directory
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+@reports_bp.route('/report', methods=['GET'])
+def get_report():
+    """Serves the final report HTML page."""
+    report_id = request.args.get('reportId')
+    if not report_id:
+        return "Report ID is required.", 400
 
-# Modify the existing report endpoint
-@router.get("/report/{report_id}", response_class=HTMLResponse)
-async def get_report(request: Request, report_id: str, report_service: ReportService = Depends(get_report_service)):
-    """Get a report by ID."""
-    report = await report_service.get_report(report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    
-    # Check if detailed report is still processing
-    if report.status == "processing":
-        return templates.TemplateResponse(
-            "processing.html",  # Create a processing page template
-            {
-                "request": request,
-                "report_id": report_id,
-                "property": report.property,
-                "quick_insights": report.quick_insights,
-                "progress": report.progress if hasattr(report, "progress") else "Generating detailed analysis..."
-            }
-        )
-    
-    # Return the complete report
-    return templates.TemplateResponse(
-        "report.html",
-        {
-            "request": request,
-            "report": report,
-            "report_id": report_id
-        }
-    )
+    report_data = report_service.get_report(report_id)
+    if not report_data:
+        # This could be because the report is still processing or failed.
+        # The frontend will poll the status endpoint to know for sure.
+        return render_template('processing.html', reportId=report_id)
+        
+    # If the report is complete, render it.
+    # The ReportService now returns a Pydantic model, so we convert it to a dict.
+    return render_template('report.html', report=report_data.dict())
+
+@reports_bp.route('/api/report/status', methods=['GET'])
+def get_report_status():
+    """Allows the frontend to poll for the report generation status."""
+    report_id = request.args.get('reportId')
+    if not report_id:
+        return jsonify({"error": "Report ID is required."}), 400
+        
+    status_data = report_service.get_report_status(report_id)
+    return jsonify(status_data)
+
