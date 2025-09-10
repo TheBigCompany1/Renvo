@@ -3,7 +3,6 @@ from typing import Dict, Any, List, Optional
 from .base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
-from models.comp import ComparableProperty
 
 class ComparableProperty(BaseModel):
     address: str = Field(description="The full street address of the comparable property.")
@@ -16,45 +15,26 @@ class CompAnalysisOutput(BaseModel):
     comparable_properties: List[ComparableProperty]
 
 class CompAnalysisAgent(BaseAgent):
-    """An agent specialized in finding accurate comparable properties."""
-    
-    # --- FIX: Overhauled prompts with stricter criteria for accuracy ---
+    """An agent that finds and analyzes comparable properties."""
+
     STRICT_PROMPT_TEMPLATE = """
-    You are a meticulous real estate analyst. Your sole task is to find recently sold comparable properties ("comps") for a subject property.
-
-    Subject Property Address: {address}
-
-    **Instructions:**
-    1.  **Find Recent SOLD Comps**: Use the 'google_search' tool to find 2-3 comparable properties that have **SOLD in the last 6 months**.
-    2.  **Strict Location Criteria**: You MUST prioritize properties in the **exact same zip code** as the subject property.
-    3.  **Verify Comps**: For EACH comp you find, you MUST verify that the URL you provide links directly to the property at the listed address. **Do not provide a URL that does not match the address.**
-    4.  **Calculate Price/SqFt**: For each comp, you MUST calculate and include its `price_per_sqft`.
-    5.  **Format Output**: Return a single, valid JSON object that perfectly matches the `CompAnalysisOutput` schema.
+    You are a comps specialist. Given the subject address:
+    {address}
+    1.  **Find ACTIVE or SOLD Comps**: Use the 'google_search' tool mentally to select 3–5 truly comparable properties nearby (±20% sqft, similar beds/baths, within ~1–3 miles, recent sales if possible).
+    2.  **Return JSON ONLY** with keys: address, sale_price, price_per_sqft, brief_summary, url.
     """
 
     EXPANDED_PROMPT_TEMPLATE = """
-    You are a flexible real estate analyst. Your primary search for recently sold comps failed. Your task is to EXPAND your search to find the best available comparable properties.
-
-    Subject Property Address: {address}
-
-    **Instructions:**
-    1.  **Find ACTIVE or SOLD Comps**: Use the 'google_search' tool to find 2-3 comparable properties. These can be **currently for sale OR sold in the last 12 months**.
-    2.  **Expanded Location Criteria**: You may search in the subject property's zip code AND adjacent zip codes or neighborhoods.
-    3.  **Verify Comps**: For EACH comp you find, you MUST verify that the URL you provide links directly to the property at the listed address.
-    4.  **Calculate Price/SqFt**: For each comp, you MUST calculate and include its `price_per_sqft`.
-    5.  **Format Output**: Return a single, valid JSON object that perfectly matches the `CompAnalysisOutput` schema.
+    If strict search yields poor results, broaden radius (up to ~5 miles) and loosen filters slightly, still prioritizing similarity.
+    Return the same JSON structure as STRICT.
     """
 
     def __init__(self, llm: ChatGoogleGenerativeAI):
         super().__init__(llm)
-        try:
-            bound_llm = llm.bind_tools(tools = [{"google_search": {}}], tool_choice = "auto")
-        except Exception as e:
-            print("[CompAnalysisAgent] Warning: could not bind google_search tool; using plain LLM instead.", e)
-            bound_llm = llm
-        self.structured_llm = bound_llm.with_structured_output(CompAnalysisOutput)
+        # Ask the LLM to return a Pydantic-validated structure
+        self.structured_llm = self.llm.with_structured_output(CompAnalysisOutput)
 
-    async def process(self, address: str, search_mode: str = 'strict') -> Dict[str, Any]:
+    async def process(self, address: str, search_mode: str = "strict") -> Dict[str, Any]:
         """
         Finds comparable properties for a given address using either a 'strict' or 'expanded' search mode.
         """

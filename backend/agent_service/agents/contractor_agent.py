@@ -3,7 +3,6 @@ from typing import Dict, Any, List, Optional
 from .base import BaseAgent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
-from models.contractor import Contractor
 
 class Contractor(BaseModel):
     name: str = Field(description="The name of the contracting company.")
@@ -15,20 +14,15 @@ class ContractorOutput(BaseModel):
     recommended_contractors: List[Contractor]
 
 class ContractorSearchAgent(BaseAgent):
-    """An agent specialized in finding local contractors."""
+    """An agent that finds local contractors for the top-ranked renovation."""
+
     PROMPT_TEMPLATE = """
-    You are a local business researcher. Your sole task is to find 2-3 reputable, local contractors for a specific renovation project.
-
-    **Project Type:** {project_name}
-    **Location:** {address}
-
-    **Instructions:**
-    1.  Use the 'google_search' tool to find contractors who specialize in the given project type in the specified location.
-    2.  For each contractor, provide their name, specialty, and contact information.
-    3.  Format the output as a single, valid JSON object that perfectly matches the `ContractorOutput` schema.
-
-    **Example Search Query:**
-    - "ADU construction contractors in Los Angeles CA"
+    You are a contractor matchmaker. For the project type:
+    "{project_name}"
+    near the property at:
+    "{address}"
+    return 2–3 reputable local contractors as pure JSON ONLY with keys:
+    name, specialty, contact_info, url.
     """
 
     def __init__(self, llm: ChatGoogleGenerativeAI):
