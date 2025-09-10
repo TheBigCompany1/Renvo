@@ -1,6 +1,6 @@
 import json
 from agents.base import BaseAgent
-from models.property_model import Property
+from models.property_model import PropertyDetails
 from models.renovation import RenovationProject, RenovationCost, RenovationValueAdd
 import re
 from datetime import datetime, timedelta, timezone
@@ -43,7 +43,7 @@ class FinancialAnalysisAgent(BaseAgent):
     }}
     """
     
-    def _determine_property_value(self, property_data: Property, comps: list[dict]) -> int:
+    def _determine_property_value(self, property_data: PropertyDetails, comps: list[dict]) -> int:
         """
         Determines the property value using a waterfall logic:
         1. List Price
@@ -113,7 +113,7 @@ class FinancialAnalysisAgent(BaseAgent):
         print("[FinancialAgent] ERROR: Could not determine a valid property value.")
         return 0
 
-    def process(self, property_data: Property, renovation_ideas: list[dict], comps: list[dict]) -> list[RenovationProject]:
+    def process(self, property_data: PropertyDetails, renovation_ideas: list[dict], comps: list[dict]) -> list[RenovationProject]:
         print("[FinancialAgent] Process started.")
         
         property_value = self._determine_property_value(property_data, comps)

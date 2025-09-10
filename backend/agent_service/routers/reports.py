@@ -3,7 +3,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from typing import Dict, Any
-from models.property import PropertyDetails
+from models.property_model import PropertyDetails
 from models.report import ReportStatus, DetailedReport
 from services.report_service import ReportService
 from dependencies import get_report_service

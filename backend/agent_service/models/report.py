@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
-from models.property import PropertyDetails
+from models.property_model import PropertyDetails
 from models.renovation import QuickInsights, RenovationOpportunity
 from datetime import datetime
 
