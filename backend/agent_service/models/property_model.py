@@ -1,52 +1,79 @@
-# backend/agent_service/models/property.py
-from pydantic import BaseModel, Field, HttpUrl
-from typing import Optional, List, Dict, Any, Union
+# backend/agent_service/models/property_model.py
+from __future__ import annotations
 
-# Define structures for history entries
+from typing import Optional, List, Dict, Any, Union
+from pydantic import BaseModel, Field, ConfigDict
+
+
+# ---- History entry types -----------------------------------------------------
+
 class PriceHistoryEntry(BaseModel):
-    date: Optional[str] = None # Keep date flexible (YYYY-MM-DD or other formats)
-    price: Optional[int] = None
-    event: Optional[str] = None
+    date: Optional[str] = None  # ISO string preferred, keep flexible
+    price: Optional[Union[int, str]] = None
+    event: Optional[str] = None  # e.g., "Sold", "Listed", etc.
+
 
 class TaxHistoryEntry(BaseModel):
     year: Optional[int] = None
-    taxAmount: Optional[int] = None
-    assessment: Optional[int] = None
+    taxAmount: Optional[Union[int, str]] = None
+    assessment: Optional[Union[int, str]] = None
+
+
+# ---- Core property payload ---------------------------------------------------
 
 class PropertyDetails(BaseModel):
-    """Data model for the core property details. Renamed from Property to PropertyDetails."""
-    # --- Existing & Previously Added Fields ---
+    """
+    Canonical model for property details coming from the Node scraper.
+    IMPORTANT:
+      - We declare all known fields the scraper may send so Pydantic v2
+        doesn't drop them.
+      - We also allow extra fields to avoid future truncation.
+    """
+    # Primary facts
     address: Optional[str] = None
-    price: Optional[Union[int, str]] = None # Allow int or formatted string
-    beds: Optional[float] = None
-    baths: Optional[float] = None
-    sqft: Optional[int] = None
+    price: Optional[Union[int, str]] = None           # on-market price (may be null/off-market)
+    beds: Optional[Union[int, float]] = None
+    baths: Optional[Union[int, float]] = None
+    sqft: Optional[Union[int, str]] = None            # livable sqft
     yearBuilt: Optional[int] = None
-    lotSize: Optional[str] = None
+    lotSize: Optional[Union[int, str]] = None
     homeType: Optional[str] = None
     description: Optional[str] = None
-    hoaFee: Optional[str] = None
-    propertyTax: Optional[Union[int, str]] = None # Latest tax amount (allow int or formatted string)
-    images: List[HttpUrl] = Field(default_factory=list)
-    source: Optional[str] = None
-    url: Optional[HttpUrl] = None
-    timestamp: Optional[str] = None
-    error: Optional[str] = None
-    estimate: Optional[int] = None
-    estimatePerSqft: Optional[int] = None
+
+    # Images and source
+    images: List[str] = Field(default_factory=list)
+    source: Optional[str] = None                      # e.g., "redfin"
+    url: Optional[str] = None
+    timestamp: Optional[str] = None                   # ISO string from scraper
+
+    # Estimates
+    estimate: Optional[Union[int, str]] = None        # site estimate value (may be null)
+    estimatePerSqft: Optional[Union[int, float, str]] = None
+
+    # Nested/auxiliary details
     interiorFeatures: Optional[Dict[str, Any]] = Field(default_factory=dict)
     parkingFeatures: Optional[Dict[str, Any]] = Field(default_factory=dict)
     communityFeatures: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    additionalDetails: Optional[Dict[str, Any]] = Field(default_factory=dict) # Keep this catch-all
+    constructionDetails: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    utilityDetails: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    additionalDetails: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
-    # --- NEW FIELDS ---
-    priceHistory: List[PriceHistoryEntry] = Field(default_factory=list)
-    taxHistory: List[TaxHistoryEntry] = Field(default_factory=list)
+    # Financial/timeline details
+    hoaFee: Optional[Union[int, str]] = None
+    propertyTax: Optional[Union[int, str]] = None
     daysOnMarket: Optional[int] = None
-    constructionDetails: Optional[Dict[str, Any]] = Field(default_factory=dict) # Roof, Foundation, Materials, Exterior
-    utilityDetails: Optional[Dict[str, Any]] = Field(default_factory=dict) # Water, Sewer
+
+    # Agent/broker info
     listingAgent: Optional[str] = None
     listingBrokerage: Optional[str] = None
 
-    class Config:
-        pass # Keep previous config settings if any
+    # Histories
+    priceHistory: List[PriceHistoryEntry] = Field(default_factory=list)
+    taxHistory: List[TaxHistoryEntry] = Field(default_factory=list)
+
+    # Pydantic v2 config: keep unknown fields rather than dropping them
+    model_config = ConfigDict(
+        extra="allow",
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+    )

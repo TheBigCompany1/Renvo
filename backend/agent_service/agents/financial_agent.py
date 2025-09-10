@@ -1,7 +1,7 @@
 # backend/agent_service/agents/financial_agent.py
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta, timezone
 
 from .base import BaseAgent
@@ -9,8 +9,10 @@ from models.property_model import PropertyDetails
 from models.renovation import RenovationProject, RenovationCost, RenovationValueAdd
 
 
+# ------------------------ parsing helpers ------------------------ #
+
 def safe_parse_int(value: Any) -> int:
-    """Best-effort parse of ints that may be strings like '$1,234' or None."""
+    """Parse ints from numbers/strings like '1,234' or '$1,234'."""
     if value is None:
         return 0
     try:
@@ -18,6 +20,49 @@ def safe_parse_int(value: Any) -> int:
         return int(cleaned) if cleaned else 0
     except (ValueError, TypeError):
         return 0
+
+def safe_parse_float(value: Any) -> float:
+    """Parse floats from numbers/strings like '1,447.75' or '1,447'."""
+    if value is None:
+        return 0.0
+    try:
+        cleaned = re.sub(r"[^\d\.\-]", "", str(value))
+        return float(cleaned) if cleaned not in ("", ".", "-", "-.") else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+def _as_dict(obj: Any) -> Dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+    for attr in ("model_dump", "dict"):
+        try:
+            return getattr(obj, attr)()
+        except Exception:
+            pass
+    try:
+        return json.loads(json.dumps(obj, default=lambda o: getattr(o, "__dict__", str(o))))
+    except Exception:
+        return {}
+
+def get_field(obj: Union[Dict[str, Any], Any], *names: str) -> Any:
+    """
+    Robustly fetch a field from either a dict or a Pydantic model
+    trying multiple candidate names (synonyms).
+    """
+    # direct attribute checks
+    for n in names:
+        try:
+            v = getattr(obj, n)
+            if v is not None:
+                return v
+        except Exception:
+            pass
+    # dict-based checks
+    data = obj if isinstance(obj, dict) else _as_dict(obj)
+    for n in names:
+        if n in data and data[n] is not None:
+            return data[n]
+    return None
 
 
 class FinancialAnalysisAgent(BaseAgent):
@@ -50,14 +95,14 @@ Return ONLY a JSON array, no commentary. Each item must include:
     def _recent_sale_within_year(self, property_data: PropertyDetails) -> int:
         """Return most-recent SOLD price within 365 days, else 0."""
         try:
-            events = getattr(property_data, "priceHistory", None) or []
+            events = get_field(property_data, "priceHistory") or []
             latest_sale_price = 0
             latest_sale_date: Optional[datetime] = None
             for ev in events:
-                ev_event = (ev or {}).get("event", "") or ""
-                if ev_event.lower() != "sold":
+                ev = _as_dict(ev)
+                if (ev.get("event") or "").lower() != "sold":
                     continue
-                ev_date_raw = (ev or {}).get("date")
+                ev_date_raw = ev.get("date")
                 if not ev_date_raw:
                     continue
                 try:
@@ -69,7 +114,7 @@ Return ONLY a JSON array, no commentary. Each item must include:
                         continue
                 if latest_sale_date is None or ev_date > latest_sale_date:
                     latest_sale_date = ev_date
-                    latest_sale_price = safe_parse_int((ev or {}).get("price"))
+                    latest_sale_price = safe_parse_int(ev.get("price"))
             if latest_sale_date and latest_sale_date > datetime.now(timezone.utc) - timedelta(days=365):
                 if latest_sale_price > 0:
                     print(f"[FinancialAgent] Using Recent Sale Price (<=365d): ${latest_sale_price:,}")
@@ -79,16 +124,27 @@ Return ONLY a JSON array, no commentary. Each item must include:
         return 0
 
     def _avg_ppsf_from_comps(self, comps: List[Dict[str, Any]]) -> float:
-        """Average price_per_sqft from comps list of dicts. Returns 0.0 if none."""
+        """
+        Average price_per_sqft from comps.
+        If missing, derive PPSF as price/sqft when both present.
+        """
         ppsf_vals: List[float] = []
         for c in comps or []:
-            item = c if isinstance(c, dict) else getattr(c, "model_dump", lambda: {})()
-            try:
-                v = float(item.get("price_per_sqft"))
-                if v > 0:
-                    ppsf_vals.append(v)
-            except Exception:
+            item = c if isinstance(c, dict) else _as_dict(c)
+
+            # direct PPSF
+            v = item.get("price_per_sqft") or item.get("ppsf") or item.get("pricePerSqft")
+            p = safe_parse_float(v)
+            if p > 0:
+                ppsf_vals.append(p)
                 continue
+
+            # derive PPSF from price and sqft if available
+            price = safe_parse_float(item.get("sale_price") or item.get("price") or item.get("list_price"))
+            sqft = safe_parse_int(item.get("sqft") or item.get("livingArea") or item.get("livableSqft"))
+            if price > 0 and sqft > 0:
+                ppsf_vals.append(price / float(sqft))
+
         if ppsf_vals:
             avg_ppsf = sum(ppsf_vals) / len(ppsf_vals)
             print(f"[FinancialAgent] Using Avg PPSF from comps: ${avg_ppsf:,.2f}")
@@ -101,15 +157,15 @@ Return ONLY a JSON array, no commentary. Each item must include:
         """
         Waterfall to determine subject property value (off-market safe):
 
-        1) List Price (property_data.price) if present.
-        2) Last SOLD within the last 365 days (priceHistory).
-        3) Redfin estimate (property_data.estimate).
-        4) **User's rule** Avg PPSF from comps × subject livable sqft.
-        5) Fallback: subject sqft × estimatePerSqft.
-        6) Else 0.
+        1) List Price (property_data.price)
+        2) Last SOLD within the last 365 days (priceHistory)
+        3) Redfin estimate (property_data.estimate)
+        4) Avg PPSF from comps × subject livable sqft
+        5) Fallback: estimatePerSqft (or pricePerSqft) × subject sqft
+        6) Else 0
         """
-        # 1) List price (mostly for on-market, but cheap if already present)
-        list_price = safe_parse_int(getattr(property_data, "price", None))
+        # 1) List price
+        list_price = safe_parse_int(get_field(property_data, "price"))
         if list_price > 0:
             print(f"[FinancialAgent] Using List Price: ${list_price:,}")
             return list_price
@@ -119,28 +175,35 @@ Return ONLY a JSON array, no commentary. Each item must include:
         if recent_sale > 0:
             return recent_sale
 
-        # 3) Redfin estimate (if available)
-        redfin_estimate = safe_parse_int(getattr(property_data, "estimate", None))
+        # 3) Redfin estimate
+        redfin_estimate = safe_parse_int(get_field(property_data, "estimate"))
         if redfin_estimate > 0:
             print(f"[FinancialAgent] Using Redfin Estimate: ${redfin_estimate:,}")
             return redfin_estimate
 
-        # 4) Avg PPSF from comps × subject livable sqft
-        subject_sqft = safe_parse_int(getattr(property_data, "sqft", None))
+        # Subject sqft and PPSF (with synonyms)
+        subject_sqft = safe_parse_int(
+            get_field(
+                property_data,
+                "sqft", "livingArea", "livableSqft", "interiorSqft", "totalLivableArea", "floorArea",
+            )
+        )
+
+        # 4) Avg PPSF from comps × subject sqft
         avg_ppsf = self._avg_ppsf_from_comps(comps)
         if subject_sqft > 0 and avg_ppsf > 0:
             derived = int(round(subject_sqft * avg_ppsf))
             print(f"[FinancialAgent] Using Comps PPSF × Sqft: {subject_sqft} × ${avg_ppsf:,.2f} = ${derived:,}")
             return derived
 
-        # 5) Fallback: estimatePerSqft × sqft (if available)
-        ppsf_fallback = safe_parse_int(getattr(property_data, "estimatePerSqft", None))
+        # 5) Fallback PPSF from property: estimatePerSqft / pricePerSqft / estPpsf × sqft
+        ppsf_fallback = safe_parse_float(get_field(property_data, "estimatePerSqft", "pricePerSqft", "estPpsf"))
         if subject_sqft > 0 and ppsf_fallback > 0:
-            derived = int(subject_sqft * ppsf_fallback)
-            print(f"[FinancialAgent] Using fallback PPSF × Sqft: {subject_sqft} × ${ppsf_fallback:,} = ${derived:,}")
+            derived = int(round(subject_sqft * ppsf_fallback))
+            print(f"[FinancialAgent] Using fallback PPSF × Sqft: {subject_sqft} × ${ppsf_fallback:,.2f} = ${derived:,}")
             return derived
 
-        # 6) Nothing usable
+        print(f"[FinancialAgent] DEBUG: subject_sqft={subject_sqft}, avg_ppsf={avg_ppsf}, ppsf_fallback={ppsf_fallback}")
         print("[FinancialAgent] ERROR: Could not determine a valid property value.")
         return 0
     # ------------------------- end pricing waterfall ------------------------ #
@@ -247,6 +310,7 @@ Return ONLY a JSON array, no commentary. Each item must include:
             print("[FinancialAgent] ERROR: No property value. Skipping financial analysis.")
             return []
 
+        # Normalize ideas to dicts
         ideas_dicts: List[Dict[str, Any]] = []
         for idea in renovation_ideas or []:
             if isinstance(idea, dict):
@@ -262,11 +326,12 @@ Return ONLY a JSON array, no commentary. Each item must include:
         renovation_json = json.dumps(ideas_dicts, indent=2)
         prompt = self.PROMPT_TEMPLATE.format(
             property_value=property_value,
-            current_estimate=safe_parse_int(getattr(property_data, "estimate", None)),
-            price_per_sqft=safe_parse_int(getattr(property_data, "estimatePerSqft", None)),
+            current_estimate=safe_parse_int(get_field(property_data, "estimate")),
+            price_per_sqft=safe_parse_float(get_field(property_data, "estimatePerSqft", "pricePerSqft", "estPpsf")),
             renovation_json=renovation_json,
         )
 
+        # Invoke LLM
         try:
             ai_msg = await self.llm.ainvoke(prompt)
             response_text = getattr(ai_msg, "content", "") or ""
@@ -275,7 +340,9 @@ Return ONLY a JSON array, no commentary. Each item must include:
             response_text = ""
 
         raw_items = self._extract_json_list(response_text)
-        sqft = getattr(property_data, "sqft", None)
+        sqft = safe_parse_int(
+            get_field(property_data, "sqft", "livingArea", "livableSqft", "interiorSqft", "totalLivableArea", "floorArea")
+        )
 
         projects: List[RenovationProject] = []
         for item in raw_items:
