@@ -8,7 +8,7 @@ import traceback
 import json
 import threading
 import redis
-from typing import Any, Dict
+from typing import Any, Dict, List, Union
 
 from dotenv import load_dotenv
 from agents.orchestrator import OrchestratorAgent
@@ -40,8 +40,10 @@ except Exception as e:
 def now_iso() -> str:
     return dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc).isoformat()
 
-def pydantic_to_dict(obj: Any) -> Dict[str, Any]:
+def _as_dict(obj: Any) -> Dict[str, Any]:
     """Convert Pydantic v2/v1 models or plain objects to a Python dict."""
+    if isinstance(obj, dict):
+        return obj
     for attr in ("model_dump", "dict"):
         try:
             return getattr(obj, attr)()
@@ -52,12 +54,95 @@ def pydantic_to_dict(obj: Any) -> Dict[str, Any]:
     except Exception:
         return {}
 
+def _coerce_list(v: Any) -> List[Any]:
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return v
+    return [v]
+
+def build_template_from_property(report_id: str, created_at: str, updated_at: str, status: str, prop_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Shape the raw incoming property payload into what the Jinja template expects."""
+    prop = _as_dict(prop_payload) or {}
+    address = prop.get("address") or prop.get("fullAddress") or ""
+    images = prop.get("images") or prop.get("imageUrls") or []
+    description = prop.get("description") or ""
+    property_block = {
+        "address": address,
+        "price": prop.get("price"),             # may be None for off-market
+        "beds": prop.get("beds"),
+        "baths": prop.get("baths"),
+        "sqft": prop.get("sqft"),
+        "yearBuilt": prop.get("yearBuilt") or prop.get("year_built"),
+        "lotSize": prop.get("lotSize") or prop.get("lot_size"),
+        "images": images,
+        "description": description,
+    }
+    return {
+        "report_id": report_id,
+        "status": status,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "property": property_block,
+        "detailed_report": {
+            "renovation_ideas": [],
+            "comparable_properties": [],
+            "recommended_contractors": [],
+            "market_summary": "",
+            "investment_thesis": "",
+        },
+    }
+
+def build_template_from_fullreport(report_id: str, created_at: str, updated_at: str, status: str, full: Union[Dict[str, Any], Any]) -> Dict[str, Any]:
+    """Shape a FullReport (dict or Pydantic) into the template structure."""
+    body = _as_dict(full)
+    # property_details -> property
+    prop = _as_dict(body.get("property_details") or {})
+    property_block = {
+        "address": prop.get("address") or "",
+        "price": prop.get("price"),
+        "beds": prop.get("beds"),
+        "baths": prop.get("baths"),
+        "sqft": prop.get("sqft"),
+        "yearBuilt": prop.get("yearBuilt") or prop.get("year_built"),
+        "lotSize": prop.get("lotSize") or prop.get("lot_size"),
+        "images": prop.get("images") or [],
+        "description": prop.get("description") or "",
+    }
+
+    ideas = [_as_dict(x) for x in _coerce_list(body.get("renovation_projects"))]
+    comps = [_as_dict(x) for x in _coerce_list(body.get("comparable_properties"))]
+    pros  = [_as_dict(x) for x in _coerce_list(body.get("recommended_contractors"))]
+
+    # Ensure nested Pydantic submodels are plain dicts
+    for it in ideas:
+        it["estimated_cost"] = _as_dict(it.get("estimated_cost") or {})
+        it["estimated_value_add"] = _as_dict(it.get("estimated_value_add") or {})
+
+    tmpl = {
+        "report_id": report_id,
+        "status": status,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "property": property_block,
+        "detailed_report": {
+            "renovation_ideas": ideas,
+            "comparable_properties": comps,
+            "recommended_contractors": pros,
+            "market_summary": body.get("market_summary", ""),
+            "investment_thesis": body.get("investment_thesis", ""),
+        },
+    }
+    if body.get("error"):
+        tmpl["error"] = body.get("error")
+    return tmpl
+
 def json_dumps(data: Dict[str, Any]) -> str:
     def default(o):
         if isinstance(o, (dt.datetime,)):
             return o.isoformat()
         try:
-            return pydantic_to_dict(o)
+            return _as_dict(o)
         except Exception:
             return str(o)
     return json.dumps(data, default=default)
@@ -73,36 +158,29 @@ def run_orchestrator_in_background(report_id: str, property_data: Dict[str, Any]
         orchestrator = OrchestratorAgent()
         full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
 
-        # Serialize FullReport (Pydantic) to plain dict
-        report_body = pydantic_to_dict(full_report)
-        payload = {
-            "status": "complete" if not report_body.get("error") else "failed",
-            "created_at": now_iso(),
-            "updated_at": now_iso(),
-            "report": report_body,
-        }
+        template_payload = build_template_from_fullreport(
+            report_id=report_id,
+            created_at=now_iso(),
+            updated_at=now_iso(),
+            status="complete",
+            full=full_report,
+        )
         if report_storage:
-            report_storage.set(report_id, json_dumps(payload))
+            report_storage.set(report_id, json_dumps(template_payload))
             print(f"[{report_id}] ✅ Stored completed report in Redis.")
         else:
             print(f"[{report_id}] ⚠ No Redis; report not persisted.")
     except Exception as e:
         print(f"[{report_id}] ❌ CRITICAL EXCEPTION during background orchestration: {e}")
         print(traceback.format_exc())
-        fail_payload = {
-            "status": "failed",
-            "created_at": now_iso(),
-            "updated_at": now_iso(),
-            "report": {
-                "error": str(e),
-                "property_details": property_data,
-                "renovation_projects": [],
-                "comparable_properties": [],
-                "recommended_contractors": [],
-                "market_summary": "",
-                "investment_thesis": "",
-            },
-        }
+        fail_payload = build_template_from_property(
+            report_id=report_id,
+            created_at=now_iso(),
+            updated_at=now_iso(),
+            status="failed",
+            prop_payload=property_data,
+        )
+        fail_payload["error"] = str(e)
         if report_storage:
             report_storage.set(report_id, json_dumps(fail_payload))
             print(f"[{report_id}] ❌ Stored 'failed' report in Redis due to critical exception.")
@@ -127,20 +205,14 @@ def analyze_property():
 
     report_id = str(uuid.uuid4())
     print(f"[{report_id}] Received /api/analyze-property request. Generated ID.")
-    initial = {
-        "status": "processing",
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-        "report": {
-            "error": None,
-            "property_details": payload,
-            "renovation_projects": [],
-            "comparable_properties": [],
-            "recommended_contractors": [],
-            "market_summary": "",
-            "investment_thesis": "",
-        },
-    }
+    # Write initial status in the exact shape the template expects
+    initial = build_template_from_property(
+        report_id=report_id,
+        created_at=now_iso(),
+        updated_at=now_iso(),
+        status="processing",
+        prop_payload=payload,
+    )
     print(f"[{report_id}] Attempting to write initial 'processing' status to Redis...")
     report_storage.set(report_id, json_dumps(initial))
     print(f"[{report_id}] ✅ Successfully wrote initial status to Redis.")
@@ -162,6 +234,8 @@ def get_report():
         abort(404)
 
     report_data = json.loads(report_str)
+
+    # Convert timestamps to datetime for Jinja .strftime usage
     for key in ("created_at", "updated_at"):
         v = report_data.get(key)
         if isinstance(v, str):
