@@ -49,7 +49,7 @@ def get_field(obj: Union[Dict[str, Any], Any], *names: str) -> Any:
     Robustly fetch a field from either a dict or a Pydantic model
     trying multiple candidate names (synonyms).
     """
-    # direct attribute checks
+    # attribute access
     for n in names:
         try:
             v = getattr(obj, n)
@@ -57,7 +57,7 @@ def get_field(obj: Union[Dict[str, Any], Any], *names: str) -> Any:
                 return v
         except Exception:
             pass
-    # dict-based checks
+    # dict access
     data = obj if isinstance(obj, dict) else _as_dict(obj)
     for n in names:
         if n in data and data[n] is not None:
@@ -91,7 +91,7 @@ Return ONLY a JSON array, no commentary. Each item must include:
 - timeline (str)
 """
 
-    # --------------------------- pricing waterfall --------------------------- #
+    # --------------------------- pricing helpers --------------------------- #
     def _recent_sale_within_year(self, property_data: PropertyDetails) -> int:
         """Return most-recent SOLD price within 365 days, else 0."""
         try:
@@ -126,7 +126,7 @@ Return ONLY a JSON array, no commentary. Each item must include:
     def _avg_ppsf_from_comps(self, comps: List[Dict[str, Any]]) -> float:
         """
         Average price_per_sqft from comps.
-        If missing, derive PPSF as price/sqft when both present.
+        If missing, derive PPSF as price/sqft when both are present.
         """
         ppsf_vals: List[float] = []
         for c in comps or []:
@@ -147,7 +147,7 @@ Return ONLY a JSON array, no commentary. Each item must include:
 
         if ppsf_vals:
             avg_ppsf = sum(ppsf_vals) / len(ppsf_vals)
-            print(f"[FinancialAgent] Using Avg PPSF from comps: ${avg_ppsf:,.2f}")
+            print(f"[FinancialAgent] Avg PPSF from comps: ${avg_ppsf:,.2f}")
             return avg_ppsf
         return 0.0
 
@@ -159,10 +159,11 @@ Return ONLY a JSON array, no commentary. Each item must include:
 
         1) List Price (property_data.price)
         2) Last SOLD within the last 365 days (priceHistory)
-        3) Redfin estimate (property_data.estimate)
-        4) Avg PPSF from comps × subject livable sqft
-        5) Fallback: estimatePerSqft (or pricePerSqft) × subject sqft
-        6) Else 0
+        3) Decide between:
+           - Avg PPSF from comps × subject sqft
+           - Redfin estimatePerSqft × subject sqft
+           Prefer Redfin PPSF if comps deviate by >40% from Redfin's PPSF.
+        4) Else 0
         """
         # 1) List price
         list_price = safe_parse_int(get_field(property_data, "price"))
@@ -175,38 +176,57 @@ Return ONLY a JSON array, no commentary. Each item must include:
         if recent_sale > 0:
             return recent_sale
 
-        # 3) Redfin estimate
-        redfin_estimate = safe_parse_int(get_field(property_data, "estimate"))
-        if redfin_estimate > 0:
-            print(f"[FinancialAgent] Using Redfin Estimate: ${redfin_estimate:,}")
-            return redfin_estimate
-
-        # Subject sqft and PPSF (with synonyms)
+        # Subject sqft and PPSF candidates
         subject_sqft = safe_parse_int(
             get_field(
                 property_data,
                 "sqft", "livingArea", "livableSqft", "interiorSqft", "totalLivableArea", "floorArea",
             )
         )
+        comps_ppsf = self._avg_ppsf_from_comps(comps)
+        redfin_ppsf = safe_parse_float(get_field(property_data, "estimatePerSqft", "pricePerSqft", "estPpsf"))
 
-        # 4) Avg PPSF from comps × subject sqft
-        avg_ppsf = self._avg_ppsf_from_comps(comps)
-        if subject_sqft > 0 and avg_ppsf > 0:
-            derived = int(round(subject_sqft * avg_ppsf))
-            print(f"[FinancialAgent] Using Comps PPSF × Sqft: {subject_sqft} × ${avg_ppsf:,.2f} = ${derived:,}")
-            return derived
+        # If we lack sqft, we cannot use PPSF-based derivations
+        if subject_sqft <= 0:
+            print(f"[FinancialAgent] DEBUG: subject_sqft={subject_sqft} (<=0) → cannot derive value from PPSF.")
+            return 0
 
-        # 5) Fallback PPSF from property: estimatePerSqft / pricePerSqft / estPpsf × sqft
-        ppsf_fallback = safe_parse_float(get_field(property_data, "estimatePerSqft", "pricePerSqft", "estPpsf"))
-        if subject_sqft > 0 and ppsf_fallback > 0:
-            derived = int(round(subject_sqft * ppsf_fallback))
-            print(f"[FinancialAgent] Using fallback PPSF × Sqft: {subject_sqft} × ${ppsf_fallback:,.2f} = ${derived:,}")
-            return derived
+        value_from_comps = int(round(subject_sqft * comps_ppsf)) if comps_ppsf > 0 else 0
+        value_from_redfin = int(round(subject_sqft * redfin_ppsf)) if redfin_ppsf > 0 else 0
 
-        print(f"[FinancialAgent] DEBUG: subject_sqft={subject_sqft}, avg_ppsf={avg_ppsf}, ppsf_fallback={ppsf_fallback}")
+        # Decision logic with sanity check:
+        # If both available, prefer Redfin if comps deviate >40% from Redfin.
+        chosen = 0
+        reason = ""
+        if value_from_comps and value_from_redfin:
+            # Avoid division by zero
+            ratio = (comps_ppsf / redfin_ppsf) if redfin_ppsf > 0 else 0.0
+            if ratio < 0.6 or ratio > 1.6:
+                chosen = value_from_redfin
+                reason = f"Redfin PPSF chosen over outlier comps (comps_ppsf=${comps_ppsf:,.2f}, redfin_ppsf=${redfin_ppsf:,.2f}, ratio={ratio:.2f})"
+            else:
+                chosen = value_from_comps
+                reason = f"Comps PPSF within sane range (comps_ppsf=${comps_ppsf:,.2f}, redfin_ppsf=${redfin_ppsf:,.2f}, ratio={ratio:.2f})"
+        elif value_from_comps:
+            chosen = value_from_comps
+            reason = f"Only comps PPSF available (comps_ppsf=${comps_ppsf:,.2f})"
+        elif value_from_redfin:
+            chosen = value_from_redfin
+            reason = f"Only Redfin PPSF available (redfin_ppsf=${redfin_ppsf:,.2f})"
+
+        print(
+            "[FinancialAgent] DEBUG: "
+            f"subject_sqft={subject_sqft}, comps_ppsf=${comps_ppsf:,.2f}, redfin_ppsf=${redfin_ppsf:,.2f}, "
+            f"value_from_comps=${value_from_comps:,}, value_from_redfin=${value_from_redfin:,}, chosen=${chosen:,} ({reason or 'none'})"
+        )
+
+        if chosen > 0:
+            print(f"[FinancialAgent] Using Derived Property Value: ${chosen:,}")
+            return chosen
+
         print("[FinancialAgent] ERROR: Could not determine a valid property value.")
         return 0
-    # ------------------------- end pricing waterfall ------------------------ #
+    # ------------------------- end pricing helpers ------------------------ #
 
     def _extract_json_list(self, text: str) -> List[Dict[str, Any]]:
         """Extract a JSON array/object from LLM text. Always returns a list."""

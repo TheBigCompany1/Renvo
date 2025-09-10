@@ -41,7 +41,6 @@ def now_iso() -> str:
     return dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc).isoformat()
 
 def _as_dict(obj: Any) -> Dict[str, Any]:
-    """Convert Pydantic v2/v1 models or plain objects to a Python dict."""
     if isinstance(obj, dict):
         return obj
     for attr in ("model_dump", "dict"):
@@ -57,26 +56,20 @@ def _as_dict(obj: Any) -> Dict[str, Any]:
 def _coerce_list(v: Any) -> List[Any]:
     if v is None:
         return []
-    if isinstance(v, list):
-        return v
-    return [v]
+    return v if isinstance(v, list) else [v]
 
 def build_template_from_property(report_id: str, created_at: str, updated_at: str, status: str, prop_payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Shape the raw incoming property payload into what the Jinja template expects."""
     prop = _as_dict(prop_payload) or {}
-    address = prop.get("address") or prop.get("fullAddress") or ""
-    images = prop.get("images") or prop.get("imageUrls") or []
-    description = prop.get("description") or ""
     property_block = {
-        "address": address,
-        "price": prop.get("price"),             # may be None for off-market
+        "address": prop.get("address") or prop.get("fullAddress") or "",
+        "price": prop.get("price"),
         "beds": prop.get("beds"),
         "baths": prop.get("baths"),
         "sqft": prop.get("sqft"),
         "yearBuilt": prop.get("yearBuilt") or prop.get("year_built"),
         "lotSize": prop.get("lotSize") or prop.get("lot_size"),
-        "images": images,
-        "description": description,
+        "images": prop.get("images") or prop.get("imageUrls") or [],
+        "description": prop.get("description") or "",
     }
     return {
         "report_id": report_id,
@@ -94,9 +87,7 @@ def build_template_from_property(report_id: str, created_at: str, updated_at: st
     }
 
 def build_template_from_fullreport(report_id: str, created_at: str, updated_at: str, status: str, full: Union[Dict[str, Any], Any]) -> Dict[str, Any]:
-    """Shape a FullReport (dict or Pydantic) into the template structure."""
     body = _as_dict(full)
-    # property_details -> property
     prop = _as_dict(body.get("property_details") or {})
     property_block = {
         "address": prop.get("address") or "",
@@ -114,7 +105,6 @@ def build_template_from_fullreport(report_id: str, created_at: str, updated_at: 
     comps = [_as_dict(x) for x in _coerce_list(body.get("comparable_properties"))]
     pros  = [_as_dict(x) for x in _coerce_list(body.get("recommended_contractors"))]
 
-    # Ensure nested Pydantic submodels are plain dicts
     for it in ideas:
         it["estimated_cost"] = _as_dict(it.get("estimated_cost") or {})
         it["estimated_value_add"] = _as_dict(it.get("estimated_value_add") or {})
@@ -205,7 +195,6 @@ def analyze_property():
 
     report_id = str(uuid.uuid4())
     print(f"[{report_id}] Received /api/analyze-property request. Generated ID.")
-    # Write initial status in the exact shape the template expects
     initial = build_template_from_property(
         report_id=report_id,
         created_at=now_iso(),
@@ -222,6 +211,24 @@ def analyze_property():
 
     return jsonify({"reportId": report_id})
 
+@app.route("/api/report/status", methods=["GET"])
+def report_status():
+    """Small JSON endpoint so the Node client can poll progress."""
+    if not report_storage:
+        return jsonify({"error": "Report storage not available"}), 503
+    report_id = request.args.get("reportId")
+    if not report_id:
+        return jsonify({"error": "reportId required"}), 400
+    data_str = report_storage.get(report_id)
+    if not data_str:
+        return jsonify({"status": "not_found"}), 404
+    data = json.loads(data_str)
+    return jsonify({
+        "status": data.get("status", "unknown"),
+        "reportId": data.get("report_id", report_id),
+        "updated_at": data.get("updated_at"),
+    })
+
 @app.route("/report", methods=["GET"])
 def get_report():
     if not report_storage:
@@ -234,8 +241,6 @@ def get_report():
         abort(404)
 
     report_data = json.loads(report_str)
-
-    # Convert timestamps to datetime for Jinja .strftime usage
     for key in ("created_at", "updated_at"):
         v = report_data.get(key)
         if isinstance(v, str):
