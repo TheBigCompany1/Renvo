@@ -3,170 +3,371 @@ from flask import Flask, request, jsonify, render_template, abort
 import asyncio
 import uuid
 import os
-import datetime
+import datetime as dt
 import traceback
-import re
 import json
 import threading
 import redis
+from typing import Any, Dict, List, Union
 
 from dotenv import load_dotenv
 from agents.orchestrator import OrchestratorAgent
 
 load_dotenv()
 
-app = Flask(__name__, template_folder="templates")
+app = Flask(__name__, template_folder="templates", static_folder="static")
 
-# --- Redis Connection with Enhanced Logging & Error Handling ---
-report_storage = None
-try:
-    redis_url = os.getenv("REDIS_URL")
-    if not redis_url:
-        raise RuntimeError("FATAL: REDIS_URL environment variable not set.")
-    
-    print(f"Attempting to connect to Redis at: {redis_url}")
-    # decode_responses=True is crucial for getting strings back from Redis instead of bytes
-    report_storage = redis.from_url(redis_url, decode_responses=True)
-    report_storage.ping()
-    print("✅ Successfully connected to Redis!")
-except Exception as e:
-    print(f"❌ FATAL: Could not connect to Redis. The application will be non-functional. Error: {e}")
-    # report_storage remains None if connection fails
+# --------------------------- Redis setup --------------------------- #
 
-# --- Health Check Endpoint ---
-@app.route("/healthz")
-def health_check():
-    return jsonify({"status": "ok"}), 200
-
-# --- Helper Functions ---
-def safe_float_from_price(price_str):
-    if price_str is None: return 0.0
-    if isinstance(price_str, (int, float)): return float(price_str)
+def get_redis_client() -> redis.Redis | None:
+    url = os.getenv("REDIS_URL") or os.getenv("REDIS_INTERNAL_URL") or "redis://localhost:6379"
     try:
-        return float(re.sub(r'[$,\s]', '', str(price_str)))
-    except (ValueError, TypeError):
-        return 0.0
+        print(f"Attempting to connect to Redis at: {url}")
+        client = redis.from_url(url, decode_responses=True)
+        client.ping()
+        print("✅ Successfully connected to Redis!")
+        return client
+    except Exception as e:
+        print(f"❌ Redis connection failed: {e}")
+        return None
 
-def run_orchestrator_in_background(report_id, property_data):
-    # This function contains the critical fix for error handling
+report_storage = get_redis_client()
+
+# --------------------------- Helpers --------------------------- #
+
+def now_iso() -> str:
+    return dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc).isoformat()
+
+def _as_dict(obj: Any) -> Dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+    for attr in ("model_dump", "dict"):
+        fn = getattr(obj, attr, None)
+        if callable(fn):
+            try:
+                return fn()
+            except Exception:
+                pass
+    try:
+        return json.loads(json.dumps(obj, default=lambda o: getattr(o, "__dict__", str(o))))
+    except Exception:
+        return {}
+
+def _coerce_list(v: Any) -> List[Any]:
+    if v is None:
+        return []
+    return v if isinstance(v, list) else [v]
+
+def _mask(v: str | None) -> str | None:
+    """Return masked preview of a secret, or None/'' if missing."""
+    if not v:
+        return None
+    if len(v) <= 6:
+        return "*" * len(v)
+    return f"{v[:3]}***{v[-3:]}"
+
+def choose_llm_env_summary() -> Dict[str, Any]:
+    """
+    Summarize what the service would use for LLM based on env vars.
+    We don't actually start the LLM here—just report visibility.
+    """
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    gemini_api_key = os.getenv("GEMINI_API_KEY")  # common alias people set
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+
+    # model names (we just echo what's set; orchestrator will use its own default if empty)
+    google_gemini_model = os.getenv("GOOGLE_GEMINI_MODEL")
+    gemini_model_alias  = os.getenv("GEMINI_MODEL")
+
+    # simple selection logic summary
+    provider = "none"
+    if google_api_key or gemini_api_key:
+        provider = "gemini"
+    elif openai_api_key:
+        provider = "openai"
+
+    model = google_gemini_model or gemini_model_alias or "gemini-1.5-flash"
+
+    return {
+        "provider_selected_if_started": provider,
+        "model_name_if_started": model,
+        "keys_present": {
+            "GOOGLE_API_KEY": bool(google_api_key),
+            "GEMINI_API_KEY": bool(gemini_api_key),
+            "OPENAI_API_KEY": bool(openai_api_key),
+            "REDIS_URL": bool(os.getenv("REDIS_URL")),
+            "REDIS_INTERNAL_URL": bool(os.getenv("REDIS_INTERNAL_URL")),
+        },
+        # optional masked previews to prove the process can read them
+        "masked_values": {
+            "GOOGLE_API_KEY": _mask(google_api_key),
+            "GEMINI_API_KEY": _mask(gemini_api_key),
+            "OPENAI_API_KEY": _mask(openai_api_key),
+            "GOOGLE_GEMINI_MODEL": google_gemini_model or None,
+            "GEMINI_MODEL": gemini_model_alias or None,
+        },
+        "env_name": os.getenv("ENV_NAME") or os.getenv("RENDER_SERVICE_NAME"),
+        "flask_debug": app.debug,
+    }
+
+def _unwrap_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Handle the two shapes we've seen from Node:
+      A) flat: {address, price, sqft, ...}
+      B) wrapped: { property_data: {address, price, sqft, ...} }
+    """
+    if "property_data" in payload and isinstance(payload["property_data"], dict):
+        return payload["property_data"]
+    return payload
+
+def build_template_from_property(report_id: str, created_at: str, updated_at: str, status: str, prop_payload: Dict[str, Any]) -> Dict[str, Any]:
+    prop = _as_dict(prop_payload) or {}
+    property_block = {
+        "address": prop.get("address") or prop.get("fullAddress") or "",
+        "price": prop.get("price"),
+        "beds": prop.get("beds"),
+        "baths": prop.get("baths"),
+        "sqft": prop.get("sqft"),
+        "yearBuilt": prop.get("yearBuilt") or prop.get("year_built"),
+        "lotSize": prop.get("lotSize") or prop.get("lot_size"),
+        "images": prop.get("images") or prop.get("imageUrls") or [],
+        "description": prop.get("description") or "",
+    }
+    return {
+        "report_id": report_id,
+        "status": status,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "property": property_block,
+        "detailed_report": {
+            "renovation_ideas": [],
+            "comparable_properties": [],
+            "recommended_contractors": [],
+            "market_summary": "",
+            "investment_thesis": "",
+        },
+    }
+
+def build_template_from_fullreport(report_id: str, created_at: str, updated_at: str, status: str, full: Union[Dict[str, Any], Any]) -> Dict[str, Any]:
+    body = _as_dict(full)
+    prop = _as_dict(body.get("property_details") or {})
+    property_block = {
+        "address": prop.get("address") or "",
+        "price": prop.get("price"),
+        "beds": prop.get("beds"),
+        "baths": prop.get("baths"),
+        "sqft": prop.get("sqft"),
+        "yearBuilt": prop.get("yearBuilt") or prop.get("year_built"),
+        "lotSize": prop.get("lotSize") or prop.get("lot_size"),
+        "images": prop.get("images") or [],
+        "description": prop.get("description") or "",
+    }
+
+    ideas = [_as_dict(x) for x in _coerce_list(body.get("renovation_projects"))]
+    comps = [_as_dict(x) for x in _coerce_list(body.get("comparable_properties"))]
+    pros  = [_as_dict(x) for x in _coerce_list(body.get("recommended_contractors"))]
+
+    for it in ideas:
+        it["estimated_cost"] = _as_dict(it.get("estimated_cost") or {})
+        it["estimated_value_add"] = _as_dict(it.get("estimated_value_add") or {})
+
+    tmpl = {
+        "report_id": report_id,
+        "status": status,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "property": property_block,
+        "detailed_report": {
+            "renovation_ideas": ideas,
+            "comparable_properties": comps,
+            "recommended_contractors": pros,
+            "market_summary": body.get("market_summary", ""),
+            "investment_thesis": body.get("investment_thesis", ""),
+        },
+    }
+    if body.get("error"):
+        tmpl["error"] = body.get("error")
+    return tmpl
+
+def json_dumps(data: Dict[str, Any]) -> str:
+    def default(o):
+        if isinstance(o, (dt.datetime,)):
+            return o.isoformat()
+        try:
+            return _as_dict(o)
+        except Exception:
+            return str(o)
+    return json.dumps(data, default=default)
+
+# --------------------------- Background task --------------------------- #
+
+def run_orchestrator_in_background(report_id: str, property_data: Dict[str, Any]) -> None:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
+
     try:
         print(f"[{report_id}] Background orchestration thread started.")
-        orchestrator = OrchestratorAgent() 
-        
+
+        # Instantiate the orchestrator (this may read env to choose the LLM)
+        orchestrator = OrchestratorAgent()
+
+        # Run the pipeline
         full_report = loop.run_until_complete(orchestrator.generate_full_report(property_data))
-        
-        report_data = json.loads(report_storage.get(report_id) or '{}')
 
-        # --- THIS IS THE FIX ---
-        # We now check if the orchestrator returned an error.
-        if "error" in full_report and full_report["error"]:
-            print(f"[{report_id}] ❌ Orchestration failed with error: {full_report['error']}")
-            report_data.update({
-                "status": "failed",
-                "error": full_report["error"],
-                "updated_at": datetime.datetime.now().isoformat()
-            })
-            report_storage.set(report_id, json.dumps(report_data))
-            print(f"[{report_id}] ❌ Stored 'failed' report in Redis.")
-            return  # Stop execution
-        # --- END OF FIX ---
-
-        # This part only runs if there was no error
-        report_data.update({
-             "status": "completed",
-             "property": full_report.get("property", property_data),
-             "updated_at": datetime.datetime.now().isoformat(),
-             "detailed_report": full_report.get("detailed_report"),
-             "market_summary": full_report.get("market_summary"),
-             "error": None
-        })
-        report_storage.set(report_id, json.dumps(report_data))
-        print(f"[{report_id}] ✅ Stored 'completed' report in Redis.")
-
+        # Persist a completed report
+        template_payload = build_template_from_fullreport(
+            report_id=report_id,
+            created_at=now_iso(),
+            updated_at=now_iso(),
+            status="complete",
+            full=full_report,
+        )
+        if report_storage:
+            report_storage.set(report_id, json_dumps(template_payload))
+            print(f"[{report_id}] ✅ Stored completed report in Redis.")
+        else:
+            print(f"[{report_id}] ⚠ No Redis; report not persisted.")
     except Exception as e:
+        # Persist a failed report
         print(f"[{report_id}] ❌ CRITICAL EXCEPTION during background orchestration: {e}")
         print(traceback.format_exc())
-        report_data = json.loads(report_storage.get(report_id) or '{}')
-        report_data.update({
-            "status": "failed", "error": str(e), "updated_at": datetime.datetime.now().isoformat()
-        })
-        report_storage.set(report_id, json.dumps(report_data))
-        print(f"[{report_id}] ❌ Stored 'failed' report in Redis due to critical exception.")
-    finally:
-        loop.close()
+        fail_payload = build_template_from_property(
+            report_id=report_id,
+            created_at=now_iso(),
+            updated_at=now_iso(),
+            status="failed",
+            prop_payload=property_data,
+        )
+        fail_payload["error"] = str(e)
+        if report_storage:
+            report_storage.set(report_id, json_dumps(fail_payload))
+            print(f"[{report_id}] ❌ Stored 'failed' report in Redis due to critical exception.")
+        else:
+            print(f"[{report_id}] ⚠ No Redis; failed report not persisted.")
 
-# --- API Endpoints ---
+# --------------------------- Routes --------------------------- #
+
+@app.route("/", methods=["GET"])
+def root():
+    abort(404)
+
+# --- Debug endpoints ---
+
+@app.route("/debug/ping", methods=["GET"])
+def debug_ping():
+    return jsonify({"ok": True, "ts": now_iso()})
+
+@app.route("/debug/env", methods=["GET"])
+def debug_env():
+    """Introspect what the app can see from its environment."""
+    summary = choose_llm_env_summary()
+    # also report whether Redis is connected
+    summary["redis_connected"] = bool(report_storage)
+    return jsonify(summary)
+
+# --- Primary API ---
+
 @app.route("/api/analyze-property", methods=["POST"])
 def analyze_property():
     if not report_storage:
-        print("API call failed: Redis is not connected.")
-        return jsonify({"error": "Service is temporarily unavailable due to a database connection issue."}), 503
+        return jsonify({"error": "Report storage not available"}), 503
 
+    # Unique report id first so all logs are traceable
     report_id = str(uuid.uuid4())
     print(f"[{report_id}] Received /api/analyze-property request. Generated ID.")
 
-    property_data = (request.get_json() or {}).get("property_data", {})
-    property_data['price'] = safe_float_from_price(property_data.get('price'))
-    property_data['estimate'] = safe_float_from_price(property_data.get('estimate'))
-
-    initial_report = {
-        "report_id": report_id, "status": "processing", "property": property_data,
-        "created_at": datetime.datetime.now().isoformat(), "updated_at": datetime.datetime.now().isoformat(), "error": None
-    }
-    
+    # Parse JSON safely
     try:
-        print(f"[{report_id}] Attempting to write initial 'processing' status to Redis...")
-        report_storage.set(report_id, json.dumps(initial_report))
-        report_storage.expire(report_id, 86400) # Expire key after 24 hours
-        print(f"[{report_id}] ✅ Successfully wrote initial status to Redis.")
+        raw = request.get_json(force=True) or {}
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    # DEBUG: log raw POST shape
+    try:
+        wrapper = "property_data" if isinstance(raw.get("property_data"), dict) else None
+        print(f"[{report_id}] [DEBUG] Incoming POST keys: {sorted(list(raw.keys()))}" +
+              (f" (wrapper: {wrapper})" if wrapper else ""))
+        print(f"[{report_id}] [DEBUG] POST.sqft={raw.get('sqft')}  POST.estimatePerSqft={raw.get('estimatePerSqft')}")
+        if wrapper:
+            inner = raw["property_data"]
+            print(f"[{report_id}] [DEBUG] POST.property_data.sqft={inner.get('sqft')}  "
+                  f"POST.property_data.estimatePerSqft={inner.get('estimatePerSqft')}")
     except Exception as e:
-        print(f"[{report_id}] ❌ CRITICAL: Failed to write initial status to Redis. Error: {e}")
-        return jsonify({"error": "Failed to initialize report in the database."}), 500
-    
-    threading.Thread(target=run_orchestrator_in_background, args=(report_id, property_data)).start()
+        print(f"[{report_id}] [DEBUG] Error logging incoming payload: {e}")
+
+    # Normalize payload (unwrap if nested)
+    property_payload = _unwrap_payload(raw)
+    # Another DEBUG after normalization
+    try:
+        keys = sorted(list(property_payload.keys()))
+        print(f"[{report_id}] [DEBUG] Normalized payload keys: {keys}")
+        print(f"[{report_id}] [DEBUG] Normalized payload values → sqft={property_payload.get('sqft')} "
+              f"estimatePerSqft={property_payload.get('estimatePerSqft')}")
+    except Exception as e:
+        print(f"[{report_id}] [DEBUG] Error logging normalized payload: {e}")
+
+    # Write initial processing record
+    initial = build_template_from_property(
+        report_id=report_id,
+        created_at=now_iso(),
+        updated_at=now_iso(),
+        status="processing",
+        prop_payload=property_payload,
+    )
+    print(f"[{report_id}] Attempting to write initial 'processing' status to Redis...")
+    report_storage.set(report_id, json_dumps(initial))
+    print(f"[{report_id}] ✅ Successfully wrote initial status to Redis.")
+
+    # kick off background orchestration
+    threading.Thread(
+        target=run_orchestrator_in_background,
+        args=(report_id, property_payload),
+        daemon=True
+    ).start()
     print(f"[{report_id}] Started background thread and sending immediate response.")
-    return jsonify({ "reportId": report_id })
+
+    return jsonify({"reportId": report_id})
 
 @app.route("/api/report/status", methods=["GET"])
-def get_report_status():
+def report_status():
+    """Small JSON endpoint so the Node client can poll progress."""
     if not report_storage:
-        return jsonify({"error": "Service is temporarily unavailable due to a database connection issue."}), 503
-
+        return jsonify({"error": "Report storage not available"}), 503
     report_id = request.args.get("reportId")
-    print(f"Polling for status of report ID: {report_id}")
-    
-    try:
-        report_str = report_storage.get(report_id)
-        if not report_str:
-            print(f"[{report_id}] ❓ Report not found in Redis during status check.")
-            return jsonify({"status": "not_found"}), 404
-        
-        report = json.loads(report_str)
-        status = report.get('status')
-        print(f"[{report_id}] ✅ Found report. Current status: '{status}'.")
-        return jsonify({"status": status, "error": report.get("error")})
-
-    except Exception as e:
-        print(f"[{report_id}] ❌ Error during status check. Error: {e}")
-        return jsonify({"error": "Failed to retrieve report status."}), 500
+    if not report_id:
+        return jsonify({"error": "reportId required"}), 400
+    data_str = report_storage.get(report_id)
+    if not data_str:
+        return jsonify({"status": "not_found"}), 404
+    data = json.loads(data_str)
+    return jsonify({
+        "status": data.get("status", "unknown"),
+        "reportId": data.get("report_id", report_id),
+        "updated_at": data.get("updated_at"),
+    })
 
 @app.route("/report", methods=["GET"])
-def report():
-    if not report_storage: abort(503)
-        
+def get_report():
+    if not report_storage:
+        abort(503)
     report_id = request.args.get("reportId")
+    if not report_id:
+        abort(400)
     report_str = report_storage.get(report_id)
-    if not report_str: abort(404)
+    if not report_str:
+        abort(404)
 
     report_data = json.loads(report_str)
-    for key in ['created_at', 'updated_at']:
-        if key in report_data and isinstance(report_data[key], str):
-            report_data[key] = datetime.datetime.fromisoformat(report_data[key])
-    
+    for key in ("created_at", "updated_at"):
+        v = report_data.get(key)
+        if isinstance(v, str):
+            try:
+                report_data[key] = dt.datetime.fromisoformat(v.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
     return render_template("report.html", report=report_data)
 
 if __name__ == "__main__":
+    # Local dev only; Render uses gunicorn app:app
     app.run(host="0.0.0.0", port=5000, debug=False)

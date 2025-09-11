@@ -1,52 +1,43 @@
-from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Any
-from models.property import PropertyDetails
-from models.renovation import QuickInsights, RenovationOpportunity
-from datetime import datetime
+from pydantic import BaseModel, Field, HttpUrl
+from typing import List, Optional
 
-class DetailedRenovationIdea(BaseModel):
-    """Model for a detailed renovation idea."""
+# Import the foundational models from their correct locations
+from .property_model import PropertyDetails
+from .renovation import RenovationProject
+
+# --- DEFINITIVE FIX: Define all dependent models in one place for simplicity ---
+
+class ComparableProperty(BaseModel):
+    """Data model for a single comparable property."""
+    address: str
+    url: Optional[HttpUrl] = None
+    price: int
+    beds: float
+    baths: float
+    sqft: int
+    year_built: Optional[int] = None
+    property_type: Optional[str] = None
+
+class Contractor(BaseModel):
+    """Data model for a single recommended contractor."""
     name: str
-    description: str
-    estimated_cost: Dict[str, float]
-    estimated_value_add: Dict[str, float]
-    adjusted_roi: float
-    feasibility: str
-    timeline: str
-    market_demand: Optional[str] = None
-    local_trends: Optional[str] = None
-    image_insights: Optional[str] = None
-    buyer_profile: Optional[str] = None
+    specialty: str
+    url: Optional[HttpUrl] = None
+    phone: Optional[str] = None
 
-class DetailedReport(BaseModel):
-    """Model for a complete renovation report."""
-    property: PropertyDetails
-    renovation_ideas: List[DetailedRenovationIdea]
-    additional_suggestions: Optional[List[Dict[str, Any]]] = None
-    market_summary: Optional[str] = None
-    total_budget: Dict[str, float]
-    potential_value_increase: Dict[str, float]
-    average_roi: float
+class FullReport(BaseModel):
+    """
+    The final, validated data structure for a complete renovation report.
+    This model ensures data integrity from the AI pipeline to the user-facing template.
+    """
+    property_details: PropertyDetails
+    renovation_projects: List[RenovationProject] = Field(default_factory=list)
+    comparable_properties: List[ComparableProperty] = Field(default_factory=list)
+    recommended_contractors: List[Contractor] = Field(default_factory=list)
+    market_summary: str = ""
+    investment_thesis: str = ""
+    error: Optional[str] = None
 
-class ReportStatus(BaseModel):
-    """Model for tracking report status."""
-    report_id: str
-    status: str = "processing"  # processing, completed, failed
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
-    property: PropertyDetails
-    quick_insights: Optional[QuickInsights] = None
-    detailed_report: Optional[DetailedReport] = None
-    error: Optional[str] = None
-    
-class ReportStatus(BaseModel):
-    """Model for tracking report status."""
-    report_id: str
-    status: str = "processing"  # processing, completed, failed
-    progress: Optional[str] = None  # To track processing stage
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
-    property: PropertyDetails
-    quick_insights: Optional[QuickInsights] = None
-    detailed_report: Optional[DetailedReport] = None
-    error: Optional[str] = None
+    class Config:
+        arbitrary_types_allowed = True
+

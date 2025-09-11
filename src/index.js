@@ -8,27 +8,39 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const cors = require('cors');
-const { randomUUID } = require('crypto');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+// --- Production-Ready Dynamic URL Configuration ---
+let PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL;
 
-puppeteer.use(StealthPlugin());
-
-const PYTHON_API_URL = process.env.PYTHON_API_URL;
-if (!PYTHON_API_URL) {
-  console.error("FATAL ERROR: PYTHON_API_URL environment variable is not set.");
+// In production, the URL MUST be set. We should not fall back to a staging URL.
+if (process.env.NODE_ENV === 'production' && !PYTHON_SERVICE_URL) {
+  console.error("FATAL ERROR: In production, PYTHON_SERVICE_URL environment variable must be set.");
   process.exit(1);
 }
-const PYTHON_SERVICE_URL = `${PYTHON_API_URL}/api/analyze-property`;
+
+// For non-production environments (like staging or local), we can provide a safe fallback.
+if (!PYTHON_SERVICE_URL) {
+  PYTHON_SERVICE_URL = 'https://renvo-python-staging.onrender.com/api/analyze-property';
+  console.warn(`WARNING: PYTHON_SERVICE_URL not set. Falling back to STAGING URL: ${PYTHON_SERVICE_URL}`);
+}
 
 /****************************************************
  * MIDDLEWARE
  ****************************************************/
 app.use(express.json());
-app.use(cors());
-app.options('*', cors());
+
+const corsOptions = {
+  origin: 'https://renvo.ai',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 /****************************************************
@@ -38,11 +50,17 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-app.get('/api/config', (req, res) => {
-  res.json({ pythonApiUrl: PYTHON_API_URL });
+app.get('/report', (req, res) => {
+  const reportPath = path.join(__dirname, '../backend/agent_service/templates/report.html');
+  if (fs.existsSync(reportPath)) {
+      res.sendFile(reportPath);
+  } else {
+      res.status(404).send('Report template not found at expected Node path.');
+  }
 });
 
 app.get('/api/ping', (req, res) => {
+  console.log("Received GET /api/ping request");
   res.setHeader('Content-Type', 'text/plain');
   res.status(200).send('pong');
 });
@@ -51,84 +69,165 @@ app.get('/api/ping', (req, res) => {
  * ENDPOINT: /api/analyze-property
  ****************************************************/
 app.post('/api/analyze-property', async (req, res) => {
-  const reqId = randomUUID().slice(0, 8);
-  console.log(`[${reqId}] --- Received new /api/analyze-property request ---`);
   let browser = null;
   try {
     const { url } = req.body;
     if (!url || (!url.includes("redfin") && !url.includes("zillow"))) {
+        console.log("Invalid URL received:", url);
         return res.status(400).json({ error: "Please provide a valid Redfin or Zillow URL." });
     }
 
-    console.log(`[${reqId}] Launching browser...`);
+    // === START DEBUGGING ===
+    console.log("--- Filesystem Debugging ---");
+    const chromePath = '/usr/bin/google-chrome-stable';
+    try {
+        const chromeExists = fs.existsSync(chromePath);
+        console.log(`Does ${chromePath} exist? ${chromeExists}`);
+        if (!chromeExists) {
+            const usrBinContents = fs.readdirSync('/usr/bin');
+            const chromeLikeFiles = usrBinContents.filter(f => f.toLowerCase().includes('chrome'));
+            console.log("Found chrome-like files in /usr/bin/:", chromeLikeFiles);
+        }
+    } catch (e) {
+        console.log("Error during filesystem check:", e.message);
+    }
+    console.log("--- End Filesystem Debugging ---");
+    // === END DEBUGGING ===
+
+    console.log("Launching browser with Docker's native Chrome...");
     browser = await puppeteer.launch({
         executablePath: '/usr/bin/google-chrome-stable',
+        protocolTimeout: 120000,
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
+        ]
     });
     const page = await browser.newPage();
-    
-    // --- THIS IS THE FIX for the missing logs ---
-    // This code listens for console messages from within the browser page
-    // and prints them to the Node.js server's console. This is crucial for debugging.
+
     page.on('console', msg => {
-        const text = msg.text();
-        // Simple filter to ignore common favicon or image loading errors
-        if (!text.includes('Failed to load resource')) {
-            console.log(`[Browser Console] ${text}`);
-        }
+        const type = msg.type().substr(0, 3).toUpperCase();
+        const colors = { LOG: '\x1b[37m', ERR: '\x1b[31m', WAR: '\x1b[33m', INF: '\x1b[34m' };
+        const color = colors[type] || '\x1b[37m';
+        console.log(`${color}[Browser Console - ${type}]\x1b[0m`, msg.text());
     });
-    // --- END OF FIX ---
-    
-    console.log(`[${reqId}] Navigating to:`, url);
+    page.on('pageerror', error => {
+        console.error('\x1b[31m[Browser Page Error]\x1b[0m', error.message);
+    });
+    page.on('requestfailed', request => {
+         const failureText = request.failure()?.errorText;
+         if (failureText && failureText !== 'net::ERR_ABORTED') {
+            console.warn(`\x1b[33m[Browser Request Failed]\x1b[0m ${failureText} ${request.url()}`);
+         }
+    });
+
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
+    console.log("Waiting 3 seconds before navigation...");
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    console.log("Navigating to:", url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    console.log(`[${reqId}] Waiting for dynamic content to render by looking for a reliable content marker...`);
-    // This selector is more universal and present on all known layouts.
-    await page.waitForFunction(
-      "document.querySelector('.KeyDetailsTable, .KeyDetails-Table, .HomeInfo-property-facts')",
-      { timeout: 30000 }
-    );
-    console.log(`[${reqId}] Content marker found. Page is ready for scraping.`);
+    console.log("Page DOM loaded, waiting 10 seconds for dynamic content...");
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    console.log("Finished waiting 10 seconds.");
 
-    console.log(`[${reqId}] Injecting and evaluating scrape script...`);
-    const scriptContent = fs.readFileSync(path.join(__dirname, 'scrape.js'), 'utf8');
-    const propertyDetails = await page.evaluate(scriptContent);
+    console.log("Injecting and evaluating scrape script...");
+    const scrapeScriptPath = path.join(__dirname, 'scrape.js');
+    if (!fs.existsSync(scrapeScriptPath)) {
+        console.error("CRITICAL: scrape.js not found at path:", scrapeScriptPath);
+        throw new Error("Scraping script file is missing.");
+    }
+    const scriptContent = fs.readFileSync(scrapeScriptPath, 'utf8');
+
+    const propertyDetails = await page.evaluate(scriptToEvaluate => {
+        try {
+            return eval(scriptToEvaluate);
+        } catch (e) {
+             return {
+                 address: 'Address not found', price: null, beds: null, baths: null, sqft: null, yearBuilt: null, lotSize: null, homeType: null, description: null, hoaFee: null, propertyTax: null, images: [], source: 'unknown', url: window.location.href, timestamp: new Date().toISOString(), estimate: null, estimatePerSqft: null, interiorFeatures: {}, parkingFeatures: {}, communityFeatures: {}, priceHistory: [], taxHistory: [], daysOnMarket: null, constructionDetails: {}, utilityDetails: {}, listingAgent: null, listingBrokerage: null, additionalDetails: {},
+                 error: `Error evaluating scrape script in browser: ${e.message}`
+             };
+        }
+    }, scriptContent);
+
+    console.log('Property details received from browser:', propertyDetails);
 
     if (propertyDetails.error) {
-        throw new Error(`Scraping script failed: ${propertyDetails.error}`);
+        console.error('Error reported by scrape script:', propertyDetails.error);
+        throw new Error(propertyDetails.error);
     }
-    console.log(`[${reqId}] Scrape successful for address:`, propertyDetails.address);
+    if (!propertyDetails || Object.keys(propertyDetails).length === 0) {
+        console.error('Scraping returned empty or null data.');
+        throw new Error('Failed to scrape property details: No data returned.');
+    }
 
     if (browser) {
-        await browser.close();
-        console.log(`[${reqId}] Browser closed.`);
+        console.log("Closing browser BEFORE calling Python service...");
+        try {
+            await browser.close();
+            browser = null;
+        } catch (closeErr) {
+            console.error("Error closing browser early:", closeErr);
+            browser = null;
+        }
     }
 
-    console.log(`[${reqId}] Forwarding data to Python service at ${PYTHON_SERVICE_URL}`);
-    const pythonResponse = await axios.post(PYTHON_SERVICE_URL, { property_data: propertyDetails });
+    console.log("Forwarding data to Python service...");
+    let pythonResponse;
+    try {
+        pythonResponse = await axios.post(PYTHON_SERVICE_URL, {
+            property_data: propertyDetails
+        }, { timeout: 10 * 60 * 1000 });
 
-    const { reportId } = pythonResponse.data;
-    if (!reportId) {
-         throw new Error("Python service did not return the expected reportId.");
+        console.log("Python service response:", pythonResponse.data);
+
+        if (!pythonResponse.data || !pythonResponse.data.reportId) {
+             throw new Error("Python service did not return the expected reportId.");
+        }
+
+    } catch (axiosError) {
+        console.error("Error calling Python service:", axiosError.message);
+        if (axiosError.response) {
+            console.error("Python service response status:", axiosError.response.status);
+            console.error("Python service response data:", axiosError.response.data);
+        } else if (axiosError.request) {
+            console.error("Python service made no response.");
+        }
+        throw new Error(`Failed to communicate with analysis service: ${axiosError.message}`);
     }
-    console.log(`[${reqId}] Python service responded with reportId: ${reportId}`);
-    
-    res.json({ reportId });
-    console.log(`[${reqId}] --- Final success response sent to client. ---`);
+
+    if (!res.headersSent) {
+        res.json(pythonResponse.data);
+        console.log("Final success response sent.");
+    } else {
+         console.log("Headers already sent, cannot send final success response.");
+    }
 
   } catch (error) {
-    console.error(`[${reqId}] CRITICAL ERROR in /api/analyze-property:`, error.message);
+    console.error("Error in /api/analyze-property endpoint:", error.message, error.stack);
     if (browser) {
-        try { await browser.close(); } catch (e) { /* ignore */ }
+        console.warn("Ensuring browser is closed in main catch block...");
+        try { await browser.close(); browser = null; } catch (closeErr) { console.error("Error closing browser in main catch:", closeErr); }
     }
     if (!res.headersSent) {
-        res.status(500).json({ error: error.message || "Internal server error." });
+        res.status(500).json({ error: error.message || "Internal server error during analysis process." });
+    } else {
+        console.log("Headers already sent, cannot send error response from main catch block.");
     }
+  } finally {
+      if (browser) {
+          console.warn("Closing browser in FINALLY block (should have closed earlier)...");
+          try { await browser.close(); } catch (closeErr) { console.error("Error closing browser in finally:", closeErr); }
+      }
+      console.log("--- /api/analyze-property request finished ---");
   }
 });
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
-

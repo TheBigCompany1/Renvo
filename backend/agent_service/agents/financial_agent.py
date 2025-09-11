@@ -1,94 +1,141 @@
 # backend/agent_service/agents/financial_agent.py
-from typing import Dict, Any, List, Optional
-from .base import BaseAgent
-from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel, Field
-import traceback
-import json
+from __future__ import annotations
+from typing import Any, Dict, List, Optional, Tuple
+from pydantic import BaseModel
+from models.property_model import PropertyDetails
 
-# Pydantic models remain the same
-class Cost(BaseModel):
-    low: int
-    medium: int
-    high: int
+def _num(v: Any) -> Optional[float]:
+    try:
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        s = str(v).replace(",", "")
+        return float(s)
+    except Exception:
+        return None
 
-class ValueAdd(BaseModel):
-    low: int
-    medium: int
-    high: int
+def _avg_ppsf_from_comps(comps: List[Dict[str, Any]]) -> Optional[float]:
+    ppsf_vals: List[float] = []
+    for c in comps or []:
+        # Accept either 'price_per_sqft' or compute from price & sqft
+        ppsf = _num(c.get("price_per_sqft") or c.get("ppsf"))
+        price = _num(c.get("price") or c.get("sale_price"))
+        sqft = _num(c.get("sqft") or c.get("livingArea") or c.get("living_sqft"))
+        if ppsf is None and price and sqft and sqft > 0:
+            ppsf = price / sqft
+        if ppsf and ppsf > 0:
+            ppsf_vals.append(ppsf)
+    if not ppsf_vals:
+        return None
+    return sum(ppsf_vals) / len(ppsf_vals)
 
-class MarketAdjustedIdea(BaseModel):
+class RenovationValueAdd(BaseModel):
+    low: Optional[float] = None
+    high: Optional[float] = None
+
+class RenovationCost(BaseModel):
+    low: Optional[float] = None
+    high: Optional[float] = None
+
+class RenovationProject(BaseModel):
     name: str
-    description: str
-    estimated_cost: Cost
-    cost_source: Optional[str]
-    estimated_value_add: ValueAdd
-    roi: float
-    feasibility: Optional[str]
-    timeline: Optional[str]
-    buyer_profile: Optional[str]
-    roadmap_steps: List[str]
-    potential_risks: List[str]
-    after_repair_value: float
-    adjusted_roi: float
-    market_demand: Optional[str]
-    local_trends: Optional[str]
-    estimated_monthly_rent: Optional[int]
-    new_total_sqft: int
-    new_price_per_sqft: float
+    description: Optional[str] = None
+    estimated_cost: RenovationCost = RenovationCost()
+    estimated_value_add: RenovationValueAdd = RenovationValueAdd()
+    priority: Optional[str] = None
 
 class FinancialAnalysisOutput(BaseModel):
-    market_adjusted_ideas: List[MarketAdjustedIdea]
-    average_price_per_sqft: float
+    property_value: Optional[float] = None
+    assumed_ppsf: Optional[float] = None
+    rationale: str = ""
+    renovation_projects: List[RenovationProject] = []
 
-class FinancialAnalysisAgent(BaseAgent):
-    """An agent specialized in financial calculations for renovation projects."""
-    
-    PROMPT_TEMPLATE = """
-    You are a precise financial analyst for real estate investments. Your sole task is to perform financial calculations on the provided data.
+class FinancialAnalysisAgent:
+    """
+    Computes a property value using the following hierarchy:
 
-    **List Price:** ${price}
-    **Comparable Properties Found:**
-    {comps_json}
+    1) price (if present)
+    2) estimate (if present)
+    3) sqft * estimatePerSqft (if both present)
+    4) sqft * avg_ppsf_from_comps (if comps present and sqft present)
 
-    **Renovation Ideas to Analyze:**
-    {renovation_json}
-
-    **Instructions:**
-    1.  **Calculate Average Price/SqFt**: From the provided comparable properties, calculate the single average price per square foot (use $1,100 if no comps are provided).
-    2.  **Analyze Each Idea**: For each renovation idea, you MUST perform the following calculations with precision:
-        a. Calculate the `after_repair_value` (ARV) using the formula: `ARV = (Average Price Per Square Foot) * (New Total Square Footage)`.
-        b. Calculate the `estimated_value_add` (medium value) using the formula: `Value Add = ARV - List Price`. Populate the `estimated_value_add` field with this.
-        c. Recalculate the ROI and place it in the `adjusted_roi` field using the formula: `(ARV - List Price - Medium Cost) / Medium Cost`.
-    3.  **Format Output**: Return a single, valid JSON object that perfectly matches the `FinancialAnalysisOutput` schema. Do NOT use any tools.
+    If nothing is available, returns no ideas but does NOT raise.
     """
 
-    def __init__(self, llm: ChatGoogleGenerativeAI):
-        super().__init__(llm)
-        self.structured_llm = self.llm.with_structured_output(FinancialAnalysisOutput)
+    async def process(
+        self,
+        property_details: PropertyDetails,
+        comps: List[Dict[str, Any]],
+        initial_ideas: List[Dict[str, Any]],
+    ) -> FinancialAnalysisOutput:
+        pd = property_details.model_dump() if hasattr(property_details, "model_dump") else dict(property_details)
+        subject_sqft = _num(pd.get("sqft")) or 0
+        epsf = _num(pd.get("estimatePerSqft"))
+        price = _num(pd.get("price"))
+        estimate = _num(pd.get("estimate"))
 
-    async def process(self, property_data: Dict[str, Any], renovation_ideas: List[Dict[str, Any]], comps: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Performs financial analysis on renovation ideas."""
-        print("[FinancialAgent] Process started.")
-        try:
-            price = property_data.get('price', 0)
-            
-            # --- THIS IS THE FIX ---
-            # Add a safety check to ensure the price is valid before proceeding.
-            if not price or price == 0:
-                raise ValueError("Cannot perform financial analysis on a property with a $0 list price.")
+        avg_ppsf = _avg_ppsf_from_comps(comps)
+        assumed_ppsf = None
+        value = None
+        rationale_lines = []
 
-            prompt = self._create_prompt(
-                self.PROMPT_TEMPLATE,
-                price=price,
-                renovation_json=json.dumps(renovation_ideas, indent=2),
-                comps_json=json.dumps(comps, indent=2)
+        if price and price > 0:
+            value = price
+            rationale_lines.append("Used current list price.")
+        elif estimate and estimate > 0:
+            value = estimate
+            rationale_lines.append("Used property estimate.")
+        elif subject_sqft and subject_sqft > 0 and epsf and epsf > 0:
+            value = subject_sqft * epsf
+            assumed_ppsf = epsf
+            rationale_lines.append("Used subject sqft × estimatePerSqft.")
+        elif subject_sqft and subject_sqft > 0 and avg_ppsf and avg_ppsf > 0:
+            value = subject_sqft * avg_ppsf
+            assumed_ppsf = avg_ppsf
+            rationale_lines.append("Used subject sqft × avg PPSF from comps.")
+        else:
+            rationale_lines.append(
+                "Insufficient data to compute property value (missing price, estimate, and PPSF/sqft combination)."
             )
-            response = await self.structured_llm.ainvoke(prompt)
-            print("[FinancialAgent] Process finished.")
-            return response.dict()
-        except Exception as e:
-            print(f"[FinancialAgent] Error: {e}")
-            print(traceback.format_exc())
-            # Return the error so the orchestrator can handle it.
-            return {"error": f"FinancialAgent error: {str(e)}"}
+
+        print(
+            f"[FinancialAgent] DEBUG: subject_sqft={subject_sqft} "
+            f"estimatePerSqft={epsf} avg_ppsf={avg_ppsf} → property_value={value}"
+        )
+
+        projects: List[RenovationProject] = []
+        if value and value > 0:
+            # Keep it simple: create modest placeholder projects based on value bands.
+            # (Your Text/Image agents can refine/augment later.)
+            budget = max(15000.0, min(value * 0.05, 100000.0))
+            projects = [
+                RenovationProject(
+                    name="Kitchen refresh",
+                    description="Update countertops, repaint cabinets, modern fixtures.",
+                    estimated_cost=RenovationCost(low=budget * 0.4, high=budget * 0.6),
+                    estimated_value_add=RenovationValueAdd(low=budget * 0.6, high=budget),
+                    priority="high",
+                ),
+                RenovationProject(
+                    name="Bathroom improvements",
+                    description="New vanity, tile regrout, lighting, and hardware.",
+                    estimated_cost=RenovationCost(low=budget * 0.2, high=budget * 0.35),
+                    estimated_value_add=RenovationValueAdd(low=budget * 0.3, high=budget * 0.6),
+                    priority="medium",
+                ),
+                RenovationProject(
+                    name="Curb appeal & paint",
+                    description="Exterior paint touch-ups, landscaping, and staging polish.",
+                    estimated_cost=RenovationCost(low=budget * 0.1, high=budget * 0.2),
+                    estimated_value_add=RenovationValueAdd(low=budget * 0.2, high=budget * 0.4),
+                    priority="medium",
+                ),
+            ]
+
+        return FinancialAnalysisOutput(
+            property_value=value,
+            assumed_ppsf=assumed_ppsf,
+            rationale=" ".join(rationale_lines),
+            renovation_projects=projects,
+        )
