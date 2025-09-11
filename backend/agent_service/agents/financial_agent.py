@@ -1,376 +1,141 @@
 # backend/agent_service/agents/financial_agent.py
-import json
-import re
-from typing import Any, Dict, List, Optional, Union
-from datetime import datetime, timedelta, timezone
-
-from .base import BaseAgent
+from __future__ import annotations
+from typing import Any, Dict, List, Optional, Tuple
+from pydantic import BaseModel
 from models.property_model import PropertyDetails
-from models.renovation import RenovationProject, RenovationCost, RenovationValueAdd
 
-
-# ------------------------ parsing helpers ------------------------ #
-
-def safe_parse_int(value: Any) -> int:
-    """Parse ints from numbers/strings like '1,234' or '$1,234'."""
-    if value is None:
-        return 0
+def _num(v: Any) -> Optional[float]:
     try:
-        cleaned = re.sub(r"[^\d\-]", "", str(value))
-        return int(cleaned) if cleaned else 0
-    except (ValueError, TypeError):
-        return 0
-
-def safe_parse_float(value: Any) -> float:
-    """Parse floats from numbers/strings like '1,447.75' or '1,447'."""
-    if value is None:
-        return 0.0
-    try:
-        cleaned = re.sub(r"[^\d\.\-]", "", str(value))
-        return float(cleaned) if cleaned not in ("", ".", "-", "-.") else 0.0
-    except (ValueError, TypeError):
-        return 0.0
-
-def _as_dict(obj: Any) -> Dict[str, Any]:
-    if isinstance(obj, dict):
-        return obj
-    for attr in ("model_dump", "dict"):
-        try:
-            return getattr(obj, attr)()
-        except Exception:
-            pass
-    try:
-        return json.loads(json.dumps(obj, default=lambda o: getattr(o, "__dict__", str(o))))
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        s = str(v).replace(",", "")
+        return float(s)
     except Exception:
-        return {}
+        return None
 
-def get_field(obj: Union[Dict[str, Any], Any], *names: str) -> Any:
+def _avg_ppsf_from_comps(comps: List[Dict[str, Any]]) -> Optional[float]:
+    ppsf_vals: List[float] = []
+    for c in comps or []:
+        # Accept either 'price_per_sqft' or compute from price & sqft
+        ppsf = _num(c.get("price_per_sqft") or c.get("ppsf"))
+        price = _num(c.get("price") or c.get("sale_price"))
+        sqft = _num(c.get("sqft") or c.get("livingArea") or c.get("living_sqft"))
+        if ppsf is None and price and sqft and sqft > 0:
+            ppsf = price / sqft
+        if ppsf and ppsf > 0:
+            ppsf_vals.append(ppsf)
+    if not ppsf_vals:
+        return None
+    return sum(ppsf_vals) / len(ppsf_vals)
+
+class RenovationValueAdd(BaseModel):
+    low: Optional[float] = None
+    high: Optional[float] = None
+
+class RenovationCost(BaseModel):
+    low: Optional[float] = None
+    high: Optional[float] = None
+
+class RenovationProject(BaseModel):
+    name: str
+    description: Optional[str] = None
+    estimated_cost: RenovationCost = RenovationCost()
+    estimated_value_add: RenovationValueAdd = RenovationValueAdd()
+    priority: Optional[str] = None
+
+class FinancialAnalysisOutput(BaseModel):
+    property_value: Optional[float] = None
+    assumed_ppsf: Optional[float] = None
+    rationale: str = ""
+    renovation_projects: List[RenovationProject] = []
+
+class FinancialAnalysisAgent:
     """
-    Robustly fetch a field from either a dict or a Pydantic model
-    trying multiple candidate names (synonyms).
+    Computes a property value using the following hierarchy:
+
+    1) price (if present)
+    2) estimate (if present)
+    3) sqft * estimatePerSqft (if both present)
+    4) sqft * avg_ppsf_from_comps (if comps present and sqft present)
+
+    If nothing is available, returns no ideas but does NOT raise.
     """
-    # attribute access
-    for n in names:
-        try:
-            v = getattr(obj, n)
-            if v is not None:
-                return v
-        except Exception:
-            pass
-    # dict access
-    data = obj if isinstance(obj, dict) else _as_dict(obj)
-    for n in names:
-        if n in data and data[n] is not None:
-            return data[n]
-    return None
-
-
-class FinancialAnalysisAgent(BaseAgent):
-    """Agent for performing financial analysis on renovation ideas."""
-
-    PROMPT_TEMPLATE = """
-Analyze the financial viability of these renovation ideas for a property valued at ${property_value:,.2f}.
-The property's current estimated value is ${current_estimate:,.2f} and the price per square foot is ${price_per_sqft:,.2f}.
-
-Renovation Ideas (JSON list):
-{renovation_json}
-
-Your tasks:
-1) For each idea, provide a detailed cost breakdown (low, medium, high) as integers.
-2) Estimate the value add for each (low, medium, high) as integers.
-3) Calculate the ROI for the medium estimates as a percent (0-100, can be float).
-4) Provide a feasibility score (Easy, Moderate, Difficult) and an estimated timeline string.
-
-Return ONLY a JSON array, no commentary. Each item must include:
-- name (str)
-- description (str)
-- estimated_cost {{ "low": int, "medium": int, "high": int }}
-- estimated_value_add {{ "low": int, "medium": int, "high": int }}
-- roi (float or int)
-- feasibility (str)
-- timeline (str)
-"""
-
-    # --------------------------- pricing helpers --------------------------- #
-    def _recent_sale_within_year(self, property_data: PropertyDetails) -> int:
-        """Return most-recent SOLD price within 365 days, else 0."""
-        try:
-            events = get_field(property_data, "priceHistory") or []
-            latest_sale_price = 0
-            latest_sale_date: Optional[datetime] = None
-            for ev in events:
-                ev = _as_dict(ev)
-                if (ev.get("event") or "").lower() != "sold":
-                    continue
-                ev_date_raw = ev.get("date")
-                if not ev_date_raw:
-                    continue
-                try:
-                    ev_date = datetime.fromisoformat(str(ev_date_raw).replace("Z", "+00:00"))
-                except Exception:
-                    try:
-                        ev_date = datetime.strptime(str(ev_date_raw)[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                    except Exception:
-                        continue
-                if latest_sale_date is None or ev_date > latest_sale_date:
-                    latest_sale_date = ev_date
-                    latest_sale_price = safe_parse_int(ev.get("price"))
-            if latest_sale_date and latest_sale_date > datetime.now(timezone.utc) - timedelta(days=365):
-                if latest_sale_price > 0:
-                    print(f"[FinancialAgent] Using Recent Sale Price (<=365d): ${latest_sale_price:,}")
-                    return latest_sale_price
-        except Exception as e:
-            print(f"[FinancialAgent] priceHistory evaluation warning: {e}")
-        return 0
-
-    def _avg_ppsf_from_comps(self, comps: List[Dict[str, Any]]) -> float:
-        """
-        Average price_per_sqft from comps.
-        If missing, derive PPSF as price/sqft when both are present.
-        """
-        ppsf_vals: List[float] = []
-        for c in comps or []:
-            item = c if isinstance(c, dict) else _as_dict(c)
-
-            # direct PPSF
-            v = item.get("price_per_sqft") or item.get("ppsf") or item.get("pricePerSqft")
-            p = safe_parse_float(v)
-            if p > 0:
-                ppsf_vals.append(p)
-                continue
-
-            # derive PPSF from price and sqft if available
-            price = safe_parse_float(item.get("sale_price") or item.get("price") or item.get("list_price"))
-            sqft = safe_parse_int(item.get("sqft") or item.get("livingArea") or item.get("livableSqft"))
-            if price > 0 and sqft > 0:
-                ppsf_vals.append(price / float(sqft))
-
-        if ppsf_vals:
-            avg_ppsf = sum(ppsf_vals) / len(ppsf_vals)
-            print(f"[FinancialAgent] Avg PPSF from comps: ${avg_ppsf:,.2f}")
-            return avg_ppsf
-        return 0.0
-
-    def _determine_property_value(
-        self, property_data: PropertyDetails, comps: List[Dict[str, Any]]
-    ) -> int:
-        """
-        Waterfall to determine subject property value (off-market safe):
-
-        1) List Price (property_data.price)
-        2) Last SOLD within the last 365 days (priceHistory)
-        3) Decide between:
-           - Avg PPSF from comps × subject sqft
-           - Redfin estimatePerSqft × subject sqft
-           Prefer Redfin PPSF if comps deviate by >40% from Redfin's PPSF.
-        4) Else 0
-        """
-        # 1) List price
-        list_price = safe_parse_int(get_field(property_data, "price"))
-        if list_price > 0:
-            print(f"[FinancialAgent] Using List Price: ${list_price:,}")
-            return list_price
-
-        # 2) Recent sale within a year
-        recent_sale = self._recent_sale_within_year(property_data)
-        if recent_sale > 0:
-            return recent_sale
-
-        # Subject sqft and PPSF candidates
-        subject_sqft = safe_parse_int(
-            get_field(
-                property_data,
-                "sqft", "livingArea", "livableSqft", "interiorSqft", "totalLivableArea", "floorArea",
-            )
-        )
-        comps_ppsf = self._avg_ppsf_from_comps(comps)
-        redfin_ppsf = safe_parse_float(get_field(property_data, "estimatePerSqft", "pricePerSqft", "estPpsf"))
-
-        # If we lack sqft, we cannot use PPSF-based derivations
-        if subject_sqft <= 0:
-            print(f"[FinancialAgent] DEBUG: subject_sqft={subject_sqft} (<=0) → cannot derive value from PPSF.")
-            return 0
-
-        value_from_comps = int(round(subject_sqft * comps_ppsf)) if comps_ppsf > 0 else 0
-        value_from_redfin = int(round(subject_sqft * redfin_ppsf)) if redfin_ppsf > 0 else 0
-
-        # Decision logic with sanity check:
-        # If both available, prefer Redfin if comps deviate >40% from Redfin.
-        chosen = 0
-        reason = ""
-        if value_from_comps and value_from_redfin:
-            # Avoid division by zero
-            ratio = (comps_ppsf / redfin_ppsf) if redfin_ppsf > 0 else 0.0
-            if ratio < 0.6 or ratio > 1.6:
-                chosen = value_from_redfin
-                reason = f"Redfin PPSF chosen over outlier comps (comps_ppsf=${comps_ppsf:,.2f}, redfin_ppsf=${redfin_ppsf:,.2f}, ratio={ratio:.2f})"
-            else:
-                chosen = value_from_comps
-                reason = f"Comps PPSF within sane range (comps_ppsf=${comps_ppsf:,.2f}, redfin_ppsf=${redfin_ppsf:,.2f}, ratio={ratio:.2f})"
-        elif value_from_comps:
-            chosen = value_from_comps
-            reason = f"Only comps PPSF available (comps_ppsf=${comps_ppsf:,.2f})"
-        elif value_from_redfin:
-            chosen = value_from_redfin
-            reason = f"Only Redfin PPSF available (redfin_ppsf=${redfin_ppsf:,.2f})"
-
-        print(
-            "[FinancialAgent] DEBUG: "
-            f"subject_sqft={subject_sqft}, comps_ppsf=${comps_ppsf:,.2f}, redfin_ppsf=${redfin_ppsf:,.2f}, "
-            f"value_from_comps=${value_from_comps:,}, value_from_redfin=${value_from_redfin:,}, chosen=${chosen:,} ({reason or 'none'})"
-        )
-
-        if chosen > 0:
-            print(f"[FinancialAgent] Using Derived Property Value: ${chosen:,}")
-            return chosen
-
-        print("[FinancialAgent] ERROR: Could not determine a valid property value.")
-        return 0
-    # ------------------------- end pricing helpers ------------------------ #
-
-    def _extract_json_list(self, text: str) -> List[Dict[str, Any]]:
-        """Extract a JSON array/object from LLM text. Always returns a list."""
-        if not text:
-            return []
-        m = re.search(r"```(?:json)?\s*(\[.*?\]|\{.*?\})\s*```", text, flags=re.DOTALL | re.IGNORECASE)
-        candidate = m.group(1) if m else None
-        if not candidate:
-            start = None
-            for ch in ("[", "{"):
-                idx = text.find(ch)
-                if idx != -1:
-                    start = idx if start is None else min(start, idx)
-            if start is not None:
-                tail = text[start:]
-                end_idx = max(tail.rfind("]"), tail.rfind("}"))
-                if end_idx != -1:
-                    candidate = tail[: end_idx + 1]
-        if not candidate:
-            return []
-        try:
-            data = json.loads(candidate)
-        except Exception:
-            candidate2 = re.sub(r",\s*([\]\}])", r"\1", candidate)
-            data = json.loads(candidate2)
-        if isinstance(data, dict):
-            return [data]
-        if isinstance(data, list):
-            return data
-        return []
-
-    def _normalize_item(
-        self,
-        item: Dict[str, Any],
-        property_value: int,
-        sqft: Optional[int],
-    ) -> Dict[str, Any]:
-        """Normalize one raw item into fields expected by RenovationProject."""
-        name = str(item.get("name") or "Renovation")
-        description = str(item.get("description") or "")
-
-        cost_raw = item.get("estimated_cost") or item.get("estimatedCost") or {}
-        value_raw = item.get("estimated_value_add") or item.get("estimatedValueAdd") or {}
-
-        cost = RenovationCost(
-            low=safe_parse_int(cost_raw.get("low")),
-            medium=safe_parse_int(cost_raw.get("medium")),
-            high=safe_parse_int(cost_raw.get("high")),
-        )
-        value_add = RenovationValueAdd(
-            low=safe_parse_int(value_raw.get("low")),
-            medium=safe_parse_int(value_raw.get("medium")),
-            high=safe_parse_int(value_raw.get("high")),
-        )
-
-        roi_medium = item.get("roi")
-        try:
-            roi = float(roi_medium)
-        except Exception:
-            roi = 0.0
-            if cost.medium > 0:
-                roi = max(0.0, round((value_add.medium - cost.medium) / float(cost.medium) * 100.0, 2))
-
-        feasibility = item.get("feasibility") or None
-        timeline = item.get("timeline") or None
-
-        arv = float(max(0, property_value) + value_add.medium)
-        new_total_sqft = int(sqft or 0)
-        new_price_per_sqft = float((arv / new_total_sqft) if new_total_sqft > 0 else 0.0)
-
-        return {
-            "name": name,
-            "description": description,
-            "estimated_cost": cost,
-            "estimated_value_add": value_add,
-            "roi": float(roi),
-            "feasibility": feasibility,
-            "timeline": timeline,
-            "buyer_profile": item.get("buyer_profile"),
-            "roadmap_steps": item.get("roadmap_steps") or [],
-            "potential_risks": item.get("potential_risks") or [],
-            "after_repair_value": arv,
-            "adjusted_roi": roi,
-            "market_demand": item.get("market_demand"),
-            "local_trends": item.get("local_trends"),
-            "estimated_monthly_rent": safe_parse_int(item.get("estimated_monthly_rent")),
-            "new_total_sqft": new_total_sqft,
-            "new_price_per_sqft": new_price_per_sqft,
-        }
 
     async def process(
         self,
-        property_data: PropertyDetails,
-        renovation_ideas: List[Dict[str, Any]],
+        property_details: PropertyDetails,
         comps: List[Dict[str, Any]],
-    ) -> List[RenovationProject]:
-        """Analyze renovation ideas and return validated RenovationProject objects."""
-        print("[FinancialAgent] Process started.")
-        property_value = self._determine_property_value(property_data, comps)
-        if property_value <= 0:
-            print("[FinancialAgent] ERROR: No property value. Skipping financial analysis.")
-            return []
+        initial_ideas: List[Dict[str, Any]],
+    ) -> FinancialAnalysisOutput:
+        pd = property_details.model_dump() if hasattr(property_details, "model_dump") else dict(property_details)
+        subject_sqft = _num(pd.get("sqft")) or 0
+        epsf = _num(pd.get("estimatePerSqft"))
+        price = _num(pd.get("price"))
+        estimate = _num(pd.get("estimate"))
 
-        # Normalize ideas to dicts
-        ideas_dicts: List[Dict[str, Any]] = []
-        for idea in renovation_ideas or []:
-            if isinstance(idea, dict):
-                ideas_dicts.append(idea)
-            else:
-                for getter in ("model_dump", "dict"):
-                    try:
-                        ideas_dicts.append(getattr(idea, getter)())
-                        break
-                    except Exception:
-                        pass
+        avg_ppsf = _avg_ppsf_from_comps(comps)
+        assumed_ppsf = None
+        value = None
+        rationale_lines = []
 
-        renovation_json = json.dumps(ideas_dicts, indent=2)
-        prompt = self.PROMPT_TEMPLATE.format(
-            property_value=property_value,
-            current_estimate=safe_parse_int(get_field(property_data, "estimate")),
-            price_per_sqft=safe_parse_float(get_field(property_data, "estimatePerSqft", "pricePerSqft", "estPpsf")),
-            renovation_json=renovation_json,
-        )
+        if price and price > 0:
+            value = price
+            rationale_lines.append("Used current list price.")
+        elif estimate and estimate > 0:
+            value = estimate
+            rationale_lines.append("Used property estimate.")
+        elif subject_sqft and subject_sqft > 0 and epsf and epsf > 0:
+            value = subject_sqft * epsf
+            assumed_ppsf = epsf
+            rationale_lines.append("Used subject sqft × estimatePerSqft.")
+        elif subject_sqft and subject_sqft > 0 and avg_ppsf and avg_ppsf > 0:
+            value = subject_sqft * avg_ppsf
+            assumed_ppsf = avg_ppsf
+            rationale_lines.append("Used subject sqft × avg PPSF from comps.")
+        else:
+            rationale_lines.append(
+                "Insufficient data to compute property value (missing price, estimate, and PPSF/sqft combination)."
+            )
 
-        # Invoke LLM
-        try:
-            ai_msg = await self.llm.ainvoke(prompt)
-            response_text = getattr(ai_msg, "content", "") or ""
-        except Exception as e:
-            print(f"[FinancialAgent] LLM invocation failed: {e}")
-            response_text = ""
-
-        raw_items = self._extract_json_list(response_text)
-        sqft = safe_parse_int(
-            get_field(property_data, "sqft", "livingArea", "livableSqft", "interiorSqft", "totalLivableArea", "floorArea")
+        print(
+            f"[FinancialAgent] DEBUG: subject_sqft={subject_sqft} "
+            f"estimatePerSqft={epsf} avg_ppsf={avg_ppsf} → property_value={value}"
         )
 
         projects: List[RenovationProject] = []
-        for item in raw_items:
-            try:
-                data = self._normalize_item(item, property_value=property_value, sqft=sqft)
-                projects.append(RenovationProject(**data))
-            except Exception as e:
-                print(f"[FinancialAgent] Skipping item due to validation error: {e}")
+        if value and value > 0:
+            # Keep it simple: create modest placeholder projects based on value bands.
+            # (Your Text/Image agents can refine/augment later.)
+            budget = max(15000.0, min(value * 0.05, 100000.0))
+            projects = [
+                RenovationProject(
+                    name="Kitchen refresh",
+                    description="Update countertops, repaint cabinets, modern fixtures.",
+                    estimated_cost=RenovationCost(low=budget * 0.4, high=budget * 0.6),
+                    estimated_value_add=RenovationValueAdd(low=budget * 0.6, high=budget),
+                    priority="high",
+                ),
+                RenovationProject(
+                    name="Bathroom improvements",
+                    description="New vanity, tile regrout, lighting, and hardware.",
+                    estimated_cost=RenovationCost(low=budget * 0.2, high=budget * 0.35),
+                    estimated_value_add=RenovationValueAdd(low=budget * 0.3, high=budget * 0.6),
+                    priority="medium",
+                ),
+                RenovationProject(
+                    name="Curb appeal & paint",
+                    description="Exterior paint touch-ups, landscaping, and staging polish.",
+                    estimated_cost=RenovationCost(low=budget * 0.1, high=budget * 0.2),
+                    estimated_value_add=RenovationValueAdd(low=budget * 0.2, high=budget * 0.4),
+                    priority="medium",
+                ),
+            ]
 
-        print(f"[FinancialAgent] Process finished. {len(projects)} project(s) produced.")
-        return projects
+        return FinancialAnalysisOutput(
+            property_value=value,
+            assumed_ppsf=assumed_ppsf,
+            rationale=" ".join(rationale_lines),
+            renovation_projects=projects,
+        )

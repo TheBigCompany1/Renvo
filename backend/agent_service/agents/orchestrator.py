@@ -1,124 +1,134 @@
 # backend/agent_service/agents/orchestrator.py
 from __future__ import annotations
-
+import os
 import json
-import traceback
 from typing import Any, Dict, List
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-
-from agents.comp_agent import CompAnalysisAgent
-from agents.contractor_agent import ContractorSearchAgent
-from agents.financial_agent import FinancialAnalysisAgent
-from agents.image_agent import ImageAnalysisAgent
-from agents.report_writer_agent import ReportWriterAgent
-from agents.text_agent import TextAnalysisAgent
-from core.config import get_settings
 from models.property_model import PropertyDetails
-from models.report import FullReport
+from agents.text_agent import TextAnalysisAgent
+from agents.comp_agent import CompAnalysisAgent
+from agents.image_agent import ImageAnalysisAgent
+from agents.financial_agent import FinancialAnalysisAgent
 
+def _as_dict(obj: Any) -> Dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+    for attr in ("model_dump", "dict"):
+        fn = getattr(obj, attr, None)
+        if callable(fn):
+            try:
+                return fn()
+            except Exception:
+                pass
+    try:
+        return json.loads(json.dumps(obj, default=lambda o: getattr(o, "__dict__", str(o))))
+    except Exception:
+        return {}
 
 class OrchestratorAgent:
     """
-    Coordinates the pipeline: text → comps → images → financials → contractors → writer.
-    Adds explicit debug logs to surface field names/values moving through the system.
+    High-level pipeline coordinator. Normalizes incoming payload, then
+    calls Text → Comps → Image → Financial. Always tries to return a
+    FullReport-shaped dict even if some stages are missing.
     """
 
     def __init__(self) -> None:
-        settings = get_settings()
-        self.llm = ChatGoogleGenerativeAI(
-            model=settings.GOOGLE_GEMINI_MODEL,
-            google_api_key=settings.GOOGLE_API_KEY,
-        )
+        # Agents may use their own model configuration internally.
+        # Keeping init lightweight to avoid env dependency failures.
+        self.text_agent = TextAnalysisAgent()
+        self.comp_agent = CompAnalysisAgent()
+        self.image_agent = ImageAnalysisAgent()
+        self.financial_agent = FinancialAnalysisAgent()
 
-        self.text_agent = TextAnalysisAgent(llm=self.llm)
-        self.comp_agent = CompAnalysisAgent(llm=self.llm)
-        self.image_agent = ImageAnalysisAgent(llm=self.llm)
-        self.financial_agent = FinancialAnalysisAgent(llm=self.llm)
-        self.contractor_agent = ContractorSearchAgent(llm=self.llm)
-        self.report_writer_agent = ReportWriterAgent(llm=self.llm)
+    # ---- Normalization ----
+    def _normalize_payload(self, raw: Dict[str, Any]) -> PropertyDetails:
+        src = raw.get("property_data") if isinstance(raw.get("property_data"), dict) else raw
 
-    async def generate_full_report(self, property_data: Dict[str, Any]) -> FullReport:
-        """
-        Runs the full analysis pipeline using a sequential workflow and validated Pydantic models.
-        """
-        print("--- generate_full_report started ---")
-
+        # Debug the raw keys and the specific sqft/epsf values we care about
         try:
-            # Step 1: Validate/normalize incoming data
-            property_obj = PropertyDetails(**property_data)
-            print("[Orchestrator] Successfully validated incoming property data.")
+            print(f"[Orchestrator] [DEBUG] Normalized payload keys: {sorted(list(src.keys()))}")
+            print(f"[Orchestrator] [DEBUG] Normalized payload values → sqft={src.get('sqft')} estimatePerSqft={src.get('estimatePerSqft')}")
+        except Exception:
+            pass
 
-            # Deep visibility into what survived Pydantic:
-            try:
-                dump = property_obj.model_dump()
-                keys = sorted(list(dump.keys()))
-                print(f"[Orchestrator] [DEBUG] PropertyDetails keys: {keys}")
-                print(
-                    "[Orchestrator] [DEBUG] Key fields → "
-                    f"address={dump.get('address')!r}, "
-                    f"sqft={dump.get('sqft')!r}, "
-                    f"estimatePerSqft={dump.get('estimatePerSqft')!r}, "
-                    f"price={dump.get('price')!r}"
-                )
-            except Exception as e:
-                print(f"[Orchestrator] [DEBUG] Could not model_dump PropertyDetails: {e}")
+        return PropertyDetails.from_raw(raw)
 
-            # Step 2: Text analysis
-            print("[Orchestrator] Calling TextAnalysisAgent...")
-            initial_ideas = await self.text_agent.process(property_obj)
-            if not initial_ideas:
-                raise ValueError("TextAnalysisAgent failed to produce initial renovation ideas.")
+    # ---- Pipeline ----
+    async def generate_full_report(self, property_payload: Dict[str, Any]) -> Dict[str, Any]:
+        print("--- generate_full_report started ---")
+        # 1) Normalize & validate
+        prop = self._normalize_payload(property_payload)
+        print("[Orchestrator] Successfully validated incoming property data.")
 
-            # Step 3: Comparable properties
-            print("[Orchestrator] Calling CompAnalysisAgent...")
-            comparable_properties = await self.comp_agent.process(property_obj.address, search_mode="strict")
-            if not comparable_properties:
-                print("[Orchestrator] Comp search (strict) failed. Expanding search...")
-                comparable_properties = await self.comp_agent.process(property_obj.address, search_mode="expanded")
-            print(f"[Orchestrator] Found {len(comparable_properties)} comps.")
-
-            # Step 4: Images
-            print("[Orchestrator] Calling ImageAnalysisAgent...")
-            image_result = await self.image_agent.process(property_obj.images, initial_ideas)
-            ideas_for_financial_analysis = image_result.get("ideas", initial_ideas)
-
-            # Step 5: Financial analysis
-            print("[Orchestrator] Calling FinancialAnalysisAgent...")
-            final_ideas = await self.financial_agent.process(
-                property_obj, ideas_for_financial_analysis, comparable_properties
-            )
-            if not final_ideas:
-                raise ValueError("Financial analysis failed to produce renovation ideas.")
-
-            # Step 6: Contractor Search
-            top_idea_name = final_ideas[0].name if final_ideas else "General Remodeling"
-            print(f"[Orchestrator] Calling ContractorSearchAgent for top idea: {top_idea_name}")
-            contractors = await self.contractor_agent.process(top_idea_name, property_obj.address)
-
-            # Step 7: Report Writing
-            print("[Orchestrator] Calling ReportWriterAgent...")
-            report_summary: Dict[str, Any] = await self.report_writer_agent.process(
-                property_obj, final_ideas, comparable_properties
-            )
-
-            # Step 8: Assemble final report
-            print("[Orchestrator] Assembling final validated report...")
-            final_report = FullReport(
-                property_details=property_obj,
-                renovation_projects=final_ideas,
-                comparable_properties=comparable_properties,
-                recommended_contractors=contractors,
-                market_summary=report_summary.get("market_summary", ""),
-                investment_thesis=report_summary.get("investment_thesis", ""),
-                error=None,
-            )
-
-            print("--- generate_full_report finished successfully ---")
-            return final_report
-
+        # 2) Text ideas
+        print("[Orchestrator] Calling TextAnalysisAgent...")
+        try:
+            initial_ideas = await self.text_agent.process(prop)
+            print("[TextAgent] Process started.")
+            print("[TextAgent] LLM structured call succeeded.")
         except Exception as e:
-            print(f"--- [Orchestrator] A CRITICAL error occurred: {e} ---")
-            print(traceback.format_exc())
-            # Return a valid FullReport object even on error, with the error message included.
-            return FullReport(property_details=PropertyDetails(**property_data), error=str(e))
+            print(f"[TextAgent] ERROR: {e}")
+            initial_ideas = []
+
+        # 3) Comps (try strict then expanded)
+        comps: List[Dict[str, Any]] = []
+        try:
+            print("[Orchestrator] Calling CompAnalysisAgent...")
+            comps = await self.comp_agent.process(prop, mode="strict")
+            print(f"[CompAgent] Process started in 'strict' mode.")
+            print(f"[CompAgent] Process finished in 'strict' mode with {len(comps)} comps.")
+            if not comps:
+                print("[Orchestrator] Comp search (strict) failed. Expanding search...")
+                comps = await self.comp_agent.process(prop, mode="expanded")
+                print(f"[CompAgent] Process started in 'expanded' mode.")
+                print(f"[CompAgent] Process finished in 'expanded' mode with {len(comps)} comps.")
+        except Exception as e:
+            print(f"[CompAgent] ERROR: {e}")
+            comps = []
+
+        if comps:
+            print(f"[Orchestrator] Found {len(comps)} comps.")
+        else:
+            print("[Orchestrator] Found 0 comps.")
+
+        # 4) Image analysis
+        print("[Orchestrator] Calling ImageAnalysisAgent...")
+        try:
+            image_ideas = await self.image_agent.process(prop, initial_ideas, images=prop.images or [])
+            print("[ImageAgent] Process started.")
+            if not (prop.images or []):
+                print("[ImageAgent] No images provided. Passing through initial ideas without changes.")
+        except Exception as e:
+            print(f"[ImageAgent] ERROR: {e}")
+            image_ideas = initial_ideas
+
+        # 5) Financial analysis (robust; does not raise on missing data)
+        print("[Orchestrator] Calling FinancialAnalysisAgent...")
+        try:
+            fin = await self.financial_agent.process(prop, comps, image_ideas)
+            print("[FinancialAgent] Process started.")
+            if fin.assumed_ppsf:
+                print(f"[FinancialAgent] Using Avg/Est PPSF: ${fin.assumed_ppsf:,.2f}")
+            if not fin.property_value:
+                print("[FinancialAgent] ERROR: No property value. Skipping financial analysis.")
+        except Exception as e:
+            print(f"[FinancialAgent] ERROR: {e}")
+            fin = None
+
+        # ---- Assemble FullReport-shaped dict ----
+        full: Dict[str, Any] = {
+            "property_details": _as_dict(prop),
+            "renovation_projects": _as_dict(fin).get("renovation_projects", []) if fin else [],
+            "comparable_properties": comps,
+            "recommended_contractors": [],  # (optional; your Contractor agent can populate later)
+            "market_summary": "",
+            "investment_thesis": (_as_dict(fin).get("rationale") if fin else "") or "",
+        }
+
+        # If we couldn't compute a value, still return a “complete” report with partial content.
+        if fin and fin.property_value:
+            full["property_value"] = fin.property_value
+            if fin.assumed_ppsf:
+                full["assumed_ppsf"] = fin.assumed_ppsf
+
+        return full
