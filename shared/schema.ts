@@ -45,6 +45,11 @@ export const renovationProjectSchema = z.object({
   roi: z.number(),
   timeline: z.string(),
   priority: z.number(),
+  // Enhanced details for better breakdown
+  sqftAdded: z.number().optional(), // Square footage being added
+  costPerSqft: z.number().optional(), // Cost per square foot for this project
+  valuePerSqft: z.number().optional(), // Value add per square foot
+  detailedDescription: z.string().optional(), // More specific description with sqft details
 });
 
 export const comparablePropertySchema = z.object({
@@ -64,6 +69,7 @@ export const contractorSchema = z.object({
   reviewCount: z.number(),
   experience: z.string(),
   contact: z.string().optional(),
+  website: z.string().optional(), // Website URL for the contractor
 });
 
 export const financialSummarySchema = z.object({

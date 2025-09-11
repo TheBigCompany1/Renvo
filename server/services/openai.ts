@@ -45,9 +45,12 @@ export async function analyzePropertyForRenovations(
         Tasks:
         1) Generate 3–5 large, transformative renovation ideas tailored to the subject property
         2) For EACH idea, estimate the new_total_sqft (original sqft plus any additions; never use lot sqft)
-        3) Provide sourced local costs and a cost_source string (cite a realistic publication or index)
-        4) Provide an estimated_value_add band and compute roi = ((medium value add - medium cost) / medium cost) * 100
-        5) Include feasibility, timeline, buyer_profile, 3–6 roadmap_steps, and 2–4 potential_risks
+        3) Calculate sqft_added (how much new square footage is being added)
+        4) Provide cost_per_sqft for the construction work and value_per_sqft for the value added
+        5) Include detailed_description with specific square footage details (e.g., "Add 600 sq ft second story...")
+        6) Provide sourced local costs and a cost_source string (cite a realistic publication or index)
+        7) Provide an estimated_value_add band and compute roi = ((medium value add - medium cost) / medium cost) * 100
+        8) Include feasibility, timeline, buyer_profile, 3–6 roadmap_steps, and 2–4 potential_risks
         
         Output ONLY a JSON object that matches this schema exactly:
         {
@@ -55,7 +58,11 @@ export async function analyzePropertyForRenovations(
             {
               "name": "ADU Addition with Second Story",
               "description": "Add a second story ADU above existing garage with full kitchen, bath, and living area",
+              "detailed_description": "Add 800 sq ft second story ADU above existing garage featuring 1 bedroom, 1 bathroom, kitchen, and living area. Total addition: 800 sq ft at $250/sq ft construction cost.",
               "new_total_sqft": 2000,
+              "sqft_added": 800,
+              "cost_per_sqft": 250,
+              "value_per_sqft": 312,
               "estimated_cost": { "low": 150000, "medium": 200000, "high": 250000 },
               "cost_source": "2024 Los Angeles Construction Cost Index via ENR",
               "estimated_value_add": { "low": 180000, "medium": 250000, "high": 320000 },
@@ -161,6 +168,7 @@ export async function generateContractorRecommendations(
   reviewCount: number;
   experience: string;
   contact: string;
+  website: string;
 }>> {
   try {
     const response = await openai.chat.completions.create({
@@ -180,7 +188,8 @@ export async function generateContractorRecommendations(
                 "rating": 4.9,
                 "reviewCount": 127,
                 "experience": "15+ years experience",
-                "contact": "(555) 123-4567"
+                "contact": "(555) 123-4567",
+                "website": "https://baycitycontractors.com"
               }
             ]
           }`

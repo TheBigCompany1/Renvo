@@ -122,13 +122,21 @@ export default function Report() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Property Details */}
               <div className="space-y-6">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-2xl font-bold text-teal-600" data-testid="text-property-price">
                       {propertyData.price ? formatCurrency(propertyData.price) : 'N/A'}
                     </div>
-                    <div className="text-sm text-gray-600">Price</div>
+                    <div className="text-sm text-gray-600">Last Price Sold</div>
                   </div>
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600" data-testid="text-property-estimated-price">
+                      {propertyData.price ? formatCurrency(Math.floor(propertyData.price * 1.08)) : 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-600">Estimated Current Value</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-2xl font-bold text-teal-600" data-testid="text-property-beds">
                       {propertyData.beds || 'N/A'}
@@ -369,16 +377,34 @@ export default function Report() {
                     </h4>
                     <div className="space-y-3">
                       {contractors.slice(0, 2).map((contractor, contractorIndex) => (
-                        <button 
+                        <div 
                           key={contractorIndex} 
-                          className="w-full p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors text-left group cursor-pointer"
-                          onClick={() => window.open(`tel:${contractor.contact}`, '_self')}
-                          data-testid={`button-contractor-${contractorIndex}`}
+                          className="p-3 bg-blue-50 border border-blue-200 rounded-lg"
+                          data-testid={`card-contractor-${contractorIndex}`}
                         >
-                          <div className="font-medium text-blue-700 group-hover:text-blue-800">{contractor.name}</div>
-                          <div className="text-sm text-blue-600 group-hover:text-blue-700">{contractor.specialty}</div>
-                          <div className="text-xs text-blue-500 mt-1">📞 Tap to call</div>
-                        </button>
+                          <div className="font-medium text-blue-700 mb-2">{contractor.name}</div>
+                          <div className="text-sm text-blue-600 mb-3">{contractor.specialty}</div>
+                          <div className="flex gap-2">
+                            {contractor.contact && (
+                              <button 
+                                className="flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs transition-colors"
+                                onClick={() => window.open(`tel:${contractor.contact}`, '_self')}
+                                data-testid={`button-call-${contractorIndex}`}
+                              >
+                                📞 Call
+                              </button>
+                            )}
+                            {contractor.website && (
+                              <button 
+                                className="flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-xs transition-colors"
+                                onClick={() => window.open(contractor.website, '_blank')}
+                                data-testid={`button-website-${contractorIndex}`}
+                              >
+                                🌐 Website
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
