@@ -5,12 +5,12 @@ from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 
-# ---------- History entry types ----------
+# ---------------- Price & Tax history entries ---------------- #
 
 class PriceHistoryEntry(BaseModel):
-    date: Optional[str] = None            # ISO string preferred; keep flexible
-    price: Optional[Union[int, str]] = None
-    event: Optional[str] = None           # e.g., "Sold", "Listed"
+    date: Optional[str] = None                 # ISO string preferred; keep flexible
+    price: Optional[Union[int, str]] = None    # raw price; downstream will parse
+    event: Optional[str] = None                # e.g., "Sold", "Listed"
 
 
 class TaxHistoryEntry(BaseModel):
@@ -19,23 +19,22 @@ class TaxHistoryEntry(BaseModel):
     assessment: Optional[Union[int, str]] = None
 
 
-# ---------- Core property payload ----------
+# ----------------------- Core payload ------------------------ #
 
 class PropertyDetails(BaseModel):
     """
     Canonical model for property details coming from the Node scraper.
-
     IMPORTANT:
-    - Declare known fields (so Pydantic keeps them).
-    - Allow extras so new scraper fields won't be dropped.
+    - Declare known fields so Pydantic keeps them.
+    - Allow extras so future scraper keys won't be dropped.
     """
 
     # Primary facts
     address: Optional[str] = None
-    price: Optional[Union[int, str]] = None                # on-market price (may be null)
-    beds: Optional[Union[int, float]] = None
-    baths: Optional[Union[int, float]] = None
-    sqft: Optional[Union[int, str]] = None                 # livable sqft
+    price: Optional[Union[int, str]] = None            # on-market price (may be null)
+    beds: Optional[Union[int, float, str]] = None
+    baths: Optional[Union[int, float, str]] = None
+    sqft: Optional[Union[int, str]] = None             # livable sqft from scraper
     yearBuilt: Optional[int] = None
     lotSize: Optional[Union[int, str]] = None
     homeType: Optional[str] = None
@@ -43,13 +42,13 @@ class PropertyDetails(BaseModel):
 
     # Media & source
     images: List[str] = Field(default_factory=list)
-    source: Optional[str] = None                           # e.g., "redfin"
+    source: Optional[str] = None                       # e.g., "redfin"
     url: Optional[str] = None
-    timestamp: Optional[str] = None                        # ISO string
+    timestamp: Optional[str] = None                    # ISO string
 
     # Estimates
     estimate: Optional[Union[int, str]] = None
-    estimatePerSqft: Optional[Union[int, float, str]] = None
+    estimatePerSqft: Optional[Union[int, float, str]] = None  # e.g., 1447 from Redfin
 
     # Nested/auxiliary maps
     interiorFeatures: Dict[str, Any] = Field(default_factory=dict)
@@ -74,7 +73,7 @@ class PropertyDetails(BaseModel):
 
     # Keep unknown fields instead of dropping them
     model_config = ConfigDict(
-        extra="allow",
+        extra="allow",              # <- critical: preserve fields like sqft, estimatePerSqft, etc.
         populate_by_name=True,
         arbitrary_types_allowed=True,
     )
