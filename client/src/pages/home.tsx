@@ -3,12 +3,13 @@ import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { createAnalysisReport } from "@/lib/api";
-import { Link2, Shield, Calculator, Wrench } from "lucide-react";
 
 export default function Home() {
+  // Using public directory paths for video files
+  const background1 = "/background1.mp4";
+  const background2 = "/background2.mp4";
   const [propertyUrl, setPropertyUrl] = useState("");
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -51,86 +52,85 @@ export default function Home() {
     createReportMutation.mutate(propertyUrl);
   };
 
+  // Create video grid items
+  const videoGridItems = [
+    { src: background1, delay: '0s' },
+    { src: background2, delay: '2s' },
+    { src: background1, delay: '4s' },
+    { src: background2, delay: '1s' },
+    { src: background1, delay: '3s' },
+    { src: background2, delay: '5s' },
+    { src: background1, delay: '6s' },
+    { src: background2, delay: '7s' },
+    { src: background1, delay: '8s' },
+  ];
+
   return (
-    <div className="py-12 lg:py-20">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h1 className="text-4xl lg:text-6xl font-bold text-foreground mb-6">
-          AI-Powered Real Estate <br className="hidden sm:block" />
-          <span className="text-accent">Renovation Analysis</span>
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Video Grid Background */}
+      <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 gap-1">
+        {videoGridItems.map((item, index) => (
+          <div key={index} className="relative overflow-hidden">
+            <video
+              src={item.src}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              className="w-full h-full object-cover"
+              onLoadedData={() => console.log('Video loaded:', item.src)}
+              onError={(e) => console.error('Video error:', item.src, e)}
+              style={{
+                animationDelay: item.delay,
+                filter: 'brightness(0.4)'
+              }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Dark Overlay */}
+      <div className="absolute inset-0 bg-black/50" />
+
+      {/* Content Overlay */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 text-center">
+        {/* RENVO Branding */}
+        <h1 className="text-6xl lg:text-8xl font-bold text-white mb-6 tracking-wider" data-testid="title-brand">
+          RENVO
         </h1>
-        <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-          Transform any Redfin property URL into a comprehensive renovation report with cost estimates, 
-          ROI calculations, and contractor recommendations.
+        
+        {/* Tagline */}
+        <p className="text-xl lg:text-2xl text-white/90 mb-12 max-w-4xl font-medium" data-testid="text-tagline">
+          Maximize the Value of Your Property with Highest and Best Use Analysis
         </p>
 
-        {/* URL Input Form */}
-        <Card className="max-w-2xl mx-auto">
-          <CardContent className="p-8">
-            <div className="mb-6">
-              <h2 className="text-2xl font-semibold text-foreground mb-2">Start Your Analysis</h2>
-              <p className="text-muted-foreground">Paste a Redfin property URL to begin</p>
+        {/* Search Form */}
+        <div className="w-full max-w-3xl">
+          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <Input
+                type="url"
+                placeholder="Enter Redfin or Zillow URL (e.g., https://www.redfin.com/...)"
+                value={propertyUrl}
+                onChange={(e) => setPropertyUrl(e.target.value)}
+                className="h-14 text-lg px-6 bg-white/95 backdrop-blur-sm border-0 shadow-lg text-gray-900 placeholder:text-gray-500"
+                data-testid="input-property-url"
+              />
             </div>
+            <Button
+              type="submit"
+              className="h-14 px-8 text-lg font-semibold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 border-0 shadow-lg"
+              disabled={createReportMutation.isPending}
+              data-testid="button-analyze-property"
+            >
+              {createReportMutation.isPending ? "Analyzing..." : "Search"}
+            </Button>
+          </form>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="relative" data-testid="url-input-container">
-                <Input
-                  type="url"
-                  placeholder="https://www.redfin.com/property-url..."
-                  value={propertyUrl}
-                  onChange={(e) => setPropertyUrl(e.target.value)}
-                  className="pl-12"
-                  data-testid="input-property-url"
-                />
-                <Link2 className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full"
-                size="lg"
-                disabled={createReportMutation.isPending}
-                data-testid="button-analyze-property"
-              >
-                {createReportMutation.isPending ? "Starting Analysis..." : "Analyze Property"}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-sm text-muted-foreground">
-              <p>✓ Free analysis • ✓ No signup required • ✓ Results in 2-3 minutes</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Feature Highlights */}
-        <div className="grid md:grid-cols-3 gap-8 mt-16">
-          <div className="text-center">
-            <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <Shield className="w-6 h-6 text-accent" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">AI-Powered Analysis</h3>
-            <p className="text-muted-foreground">
-              Advanced AI analyzes property photos and details to identify the most profitable renovation opportunities.
-            </p>
-          </div>
-
-          <div className="text-center">
-            <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <Calculator className="w-6 h-6 text-accent" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Financial Projections</h3>
-            <p className="text-muted-foreground">
-              Get detailed cost estimates, ARV calculations, and ROI projections backed by local market data.
-            </p>
-          </div>
-
-          <div className="text-center">
-            <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <Wrench className="w-6 h-6 text-accent" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Contractor Network</h3>
-            <p className="text-muted-foreground">
-              Connect with vetted local contractors specialized in your recommended renovation projects.
-            </p>
+          {/* Benefits */}
+          <div className="mt-8 text-white/80 text-sm">
+            <p>✓ Free analysis • ✓ No signup required • ✓ Results in 2-3 minutes</p>
           </div>
         </div>
       </div>
