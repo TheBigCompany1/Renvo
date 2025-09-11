@@ -1,34 +1,40 @@
-from pydantic_settings import BaseSettings
+# backend/agent_service/core/config.py
+from __future__ import annotations
+
 from functools import lru_cache
-import os
-from dotenv import load_dotenv
-from pathlib import Path
+from typing import Optional
+from pydantic_settings import BaseSettings
+from pydantic import Field
 
-# Load environment variables from .env file
-BASE_DIR = Path(__file__).resolve().parent
-dotenv_path = BASE_DIR / '.env'
-
-load_dotenv(dotenv_path=dotenv_path)
 
 class Settings(BaseSettings):
-    """Application settings."""
-    app_name: str = "Renvo API"
-    
-    # --- FIX: Re-added openai_api_key to support the fallback logic ---
-    openai_api_key: str = os.getenv("OPENAI_API_KEY")
-    gemini_api_key: str = os.getenv("GEMINI_API_KEY")
-    redis_url: str = os.getenv("REDIS_URL") 
-    
-    # Database settings (for future use)
-    database_url: str = os.getenv("DATABASE_URL", "")
-    
-    # API settings
-    api_prefix: str = "/api/extension/v1"
-    
+    # ---- Google / Gemini ----
+    GOOGLE_API_KEY: Optional[str] = Field(default=None, description="Google API key for Gemini.")
+    GOOGLE_GEMINI_MODEL: str = Field(
+        default="gemini-2.0-flash",
+        description="Default Gemini model name used across agents."
+    )
+
+    # ---- OpenAI (if you use it anywhere) ----
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+
+    # ---- Redis ----
+    REDIS_URL: Optional[str] = Field(default=None, description="External Redis URL if provided.")
+    REDIS_INTERNAL_URL: Optional[str] = Field(default=None, description="Internal Redis URL (Render).")
+
+    # ---- Misc ----
+    ENV: str = "staging"
+
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
-@lru_cache()
+
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Get cached settings."""
+    """
+    Cached settings instance so all imports get the same object.
+    Ensures GOOGLE_GEMINI_MODEL is always present with a sane default.
+    """
     return Settings()

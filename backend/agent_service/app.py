@@ -1,20 +1,20 @@
 # backend/agent_service/app.py
 from __future__ import annotations
 
+from flask import Flask, request, jsonify, render_template, abort
 import asyncio
-import datetime as dt
-import json
-import os
-import threading
-import traceback
 import uuid
+import os
+import datetime as dt
+import traceback
+import json
+import threading
+import redis
 from typing import Any, Dict, List, Union
 
-import redis
 from dotenv import load_dotenv
-from flask import Flask, abort, jsonify, render_template, request
-
 from agents.orchestrator import OrchestratorAgent
+from core.config import get_settings
 
 load_dotenv()
 
@@ -23,33 +23,34 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 
 # --------------------------- Redis setup --------------------------- #
 
-def get_redis_client() -> redis.Redis | None:
-    """Create a Redis client from env vars and verify connectivity."""
-    url = os.getenv("REDIS_URL") or os.getenv("REDIS_INTERNAL_URL", "redis://localhost:6379")
-    try:
-        print(f"Attempting to connect to Redis at: {url}")
-        client = redis.from_url(url, decode_responses=True)
-        client.ping()
-        print("✅ Successfully connected to Redis!")
-        return client
-    except Exception as e:
-        print(f"❌ Redis connection failed: {e}")
-        return None
+def get_redis_client() -> redis.Redis:
+    settings = get_settings()
+    # Prefer REDIS_URL, fall back to REDIS_INTERNAL_URL, then local
+    url = settings.REDIS_URL or settings.REDIS_INTERNAL_URL or "redis://localhost:6379"
+    print(f"Attempting to connect to Redis at: {url}")
+    client = redis.from_url(url, decode_responses=True)
+    client.ping()
+    print("✅ Successfully connected to Redis!")
+    return client
 
 
-report_storage = get_redis_client()
+try:
+    report_storage = get_redis_client()
+except Exception as e:
+    print(f"❌ Redis connection failed: {e}")
+    report_storage = None
 
 
-# --------------------------- Helper utils --------------------------- #
+# --------------------------- Helpers --------------------------- #
 
 def now_iso() -> str:
     return dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc).isoformat()
 
 
 def _as_dict(obj: Any) -> Dict[str, Any]:
-    """Leniently coerce any pydantic/dataclass/object to a plain dict for templating/logging."""
     if isinstance(obj, dict):
         return obj
+    # Pydantic v2 / v1 compatible getter
     for attr in ("model_dump", "dict"):
         fn = getattr(obj, attr, None)
         if callable(fn):
@@ -74,9 +75,8 @@ def build_template_from_property(
     created_at: str,
     updated_at: str,
     status: str,
-    prop_payload: Dict[str, Any],
+    prop_payload: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Bare-minimum report shell used for initial 'processing' and failure cases."""
     prop = _as_dict(prop_payload) or {}
     property_block = {
         "address": prop.get("address") or prop.get("fullAddress") or "",
@@ -88,9 +88,6 @@ def build_template_from_property(
         "lotSize": prop.get("lotSize") or prop.get("lot_size"),
         "images": prop.get("images") or prop.get("imageUrls") or [],
         "description": prop.get("description") or "",
-        "estimatePerSqft": prop.get("estimatePerSqft"),
-        "source": prop.get("source"),
-        "url": prop.get("url"),
     }
     return {
         "report_id": report_id,
@@ -113,9 +110,8 @@ def build_template_from_fullreport(
     created_at: str,
     updated_at: str,
     status: str,
-    full: Union[Dict[str, Any], Any],
+    full: Union[Dict[str, Any], Any]
 ) -> Dict[str, Any]:
-    """Normalize a FullReport (pydantic) to the Jinja template dict shape."""
     body = _as_dict(full)
     prop = _as_dict(body.get("property_details") or {})
     property_block = {
@@ -128,9 +124,6 @@ def build_template_from_fullreport(
         "lotSize": prop.get("lotSize") or prop.get("lot_size"),
         "images": prop.get("images") or [],
         "description": prop.get("description") or "",
-        "estimatePerSqft": prop.get("estimatePerSqft"),
-        "source": prop.get("source"),
-        "url": prop.get("url"),
     }
 
     ideas = [_as_dict(x) for x in _coerce_list(body.get("renovation_projects"))]
@@ -162,13 +155,12 @@ def build_template_from_fullreport(
 
 def json_dumps(data: Dict[str, Any]) -> str:
     def default(o):
-        if isinstance(o, dt.datetime):
+        if isinstance(o, (dt.datetime,)):
             return o.isoformat()
         try:
             return _as_dict(o)
         except Exception:
             return str(o)
-
     return json.dumps(data, default=default)
 
 
@@ -180,6 +172,10 @@ def run_orchestrator_in_background(report_id: str, property_data: Dict[str, Any]
 
     try:
         print(f"[{report_id}] Background orchestration thread started.")
+        print(f"[{report_id}] [DEBUG] Normalized payload keys: {sorted(list(property_data.keys()))}")
+        print(f"[{report_id}] [DEBUG] Normalized payload values → sqft={property_data.get('sqft')} "
+              f"estimatePerSqft={property_data.get('estimatePerSqft')}")
+
         orchestrator = OrchestratorAgent()
         full_report = loop.run_until_complete(
             orchestrator.generate_full_report(property_data)
@@ -197,11 +193,9 @@ def run_orchestrator_in_background(report_id: str, property_data: Dict[str, Any]
             print(f"[{report_id}] ✅ Stored completed report in Redis.")
         else:
             print(f"[{report_id}] ⚠ No Redis; report not persisted.")
-
     except Exception as e:
         print(f"[{report_id}] ❌ CRITICAL EXCEPTION during background orchestration: {e}")
         print(traceback.format_exc())
-
         fail_payload = build_template_from_property(
             report_id=report_id,
             created_at=now_iso(),
@@ -226,41 +220,43 @@ def root():
 
 @app.route("/api/analyze-property", methods=["POST"])
 def analyze_property():
-    """Entry point invoked by the Node scraper service."""
+    """
+    Accepts either:
+      { ...flat property fields... }
+    or
+      { "property_data": { ...flat property fields... } }
+    or
+      { "property": { ...flat property fields... } }
+    """
     if not report_storage:
         return jsonify({"error": "Report storage not available"}), 503
 
-    # Always generate report_id first so logs can reference it
-    report_id = str(uuid.uuid4())
-    print(f"[{report_id}] Received /api/analyze-property request. Generated ID.")
-
-    # Read raw JSON as-is (no coercion) for maximum visibility
+    # Parse raw JSON
     try:
-        payload = request.get_json(force=True) or {}
+        raw = request.get_json(force=True) or {}
     except Exception:
-        print(f"[{report_id}] ❌ Invalid JSON in POST body.")
         return jsonify({"error": "Invalid JSON"}), 400
 
-    # ── DEBUG: show exactly what arrived from Node ─────────────────────────────
-    try:
-        keys = sorted(list(payload.keys()))
-        top_sqft = payload.get("sqft")
-        top_epsf = payload.get("estimatePerSqft")
-        maybe_prop = payload.get("property") if isinstance(payload.get("property"), dict) else None
-        print(f"[{report_id}] [DEBUG] Incoming POST keys: {keys}")
-        print(f"[{report_id}] [DEBUG] POST.sqft={top_sqft}  POST.estimatePerSqft={top_epsf}")
-        if maybe_prop is not None:
-            pk = sorted(list(maybe_prop.keys()))
-            print(f"[{report_id}] [DEBUG] POST.property keys: {pk}")
-            print(
-                f"[{report_id}] [DEBUG] POST.property.sqft={maybe_prop.get('sqft')}  "
-                f"POST.property.estimatePerSqft={maybe_prop.get('estimatePerSqft')}"
-            )
-    except Exception as e:
-        print(f"[{report_id}] [DEBUG] Error logging incoming payload: {e}")
-    # ───────────────────────────────────────────────────────────────────────────
+    # Normalize wrapper → a flat dict of property fields
+    if isinstance(raw.get("property_data"), dict):
+        payload = raw["property_data"]
+        wrapper = "property_data"
+    elif isinstance(raw.get("property"), dict):
+        payload = raw["property"]
+        wrapper = "property"
+    else:
+        payload = raw
+        wrapper = "(none)"
 
-    # Store initial 'processing' shell so the report page has something to render
+    report_id = str(uuid.uuid4())
+    print(f"[{report_id}] Received /api/analyze-property request. Generated ID.")
+    print(f"[{report_id}] [DEBUG] Incoming POST keys: {sorted(list(raw.keys()))} (wrapper: {wrapper})")
+    print(f"[{report_id}] [DEBUG] POST.sqft={raw.get('sqft')}  POST.estimatePerSqft={raw.get('estimatePerSqft')}")
+    if isinstance(raw.get(wrapper if wrapper in ("property_data", "property") else ""), dict):
+        sub = raw[wrapper]
+        print(f"[{report_id}] [DEBUG] POST.{wrapper}.sqft={sub.get('sqft')}  "
+              f"POST.{wrapper}.estimatePerSqft={sub.get('estimatePerSqft')}")
+
     initial = build_template_from_property(
         report_id=report_id,
         created_at=now_iso(),
@@ -268,15 +264,15 @@ def analyze_property():
         status="processing",
         prop_payload=payload,
     )
+
     print(f"[{report_id}] Attempting to write initial 'processing' status to Redis...")
     report_storage.set(report_id, json_dumps(initial))
     print(f"[{report_id}] ✅ Successfully wrote initial status to Redis.")
 
-    # Spawn the orchestrator in a background thread
     threading.Thread(
         target=run_orchestrator_in_background,
         args=(report_id, payload),
-        daemon=True,
+        daemon=True
     ).start()
     print(f"[{report_id}] Started background thread and sending immediate response.")
 
@@ -285,38 +281,30 @@ def analyze_property():
 
 @app.route("/api/report/status", methods=["GET"])
 def report_status():
-    """Lightweight JSON endpoint for the Node client to poll progress."""
+    """Small JSON endpoint so the Node client can poll progress."""
     if not report_storage:
         return jsonify({"error": "Report storage not available"}), 503
-
     report_id = request.args.get("reportId")
     if not report_id:
         return jsonify({"error": "reportId required"}), 400
-
     data_str = report_storage.get(report_id)
     if not data_str:
         return jsonify({"status": "not_found"}), 404
-
     data = json.loads(data_str)
-    return jsonify(
-        {
-            "status": data.get("status", "unknown"),
-            "reportId": data.get("report_id", report_id),
-            "updated_at": data.get("updated_at"),
-        }
-    )
+    return jsonify({
+        "status": data.get("status", "unknown"),
+        "reportId": data.get("report_id", report_id),
+        "updated_at": data.get("updated_at"),
+    })
 
 
 @app.route("/report", methods=["GET"])
 def get_report():
-    """Render the human-facing HTML report from what we stored in Redis."""
     if not report_storage:
         abort(503)
-
     report_id = request.args.get("reportId")
     if not report_id:
         abort(400)
-
     report_str = report_storage.get(report_id)
     if not report_str:
         abort(404)
@@ -334,6 +322,5 @@ def get_report():
 
 
 if __name__ == "__main__":
-    # On Render this block is typically ignored (Gunicorn is used),
-    # but it’s handy for local runs.
+    # Local dev only
     app.run(host="0.0.0.0", port=5000, debug=False)
