@@ -1,37 +1,216 @@
 import { PropertyData } from "@shared/schema";
+import puppeteer from "puppeteer";
 
 export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
+  let browser;
   try {
-    // In a real implementation, this would use Puppeteer or similar to scrape Redfin
-    // For now, we'll extract what we can from the URL and return structured data
-    
     // Validate Redfin URL
     if (!url.includes('redfin.com')) {
       throw new Error("Invalid Redfin URL provided");
     }
 
-    // Mock property data extraction - in production this would be actual scraping
-    // This simulates what would be scraped from a real Redfin page
-    const mockPropertyData: PropertyData = {
-      address: extractAddressFromUrl(url),
-      price: Math.floor(Math.random() * 500000) + 500000, // Random price between 500k-1M
-      beds: Math.floor(Math.random() * 3) + 2, // 2-4 bedrooms
-      baths: Math.floor(Math.random() * 2) + 1, // 1-3 bathrooms
-      sqft: Math.floor(Math.random() * 1000) + 1200, // 1200-2200 sqft
-      yearBuilt: Math.floor(Math.random() * 50) + 1970, // 1970-2020
-      lotSize: `${(Math.random() * 0.5 + 0.1).toFixed(2)} acres`,
-      description: "Well-maintained property with original hardwood floors, spacious rooms, and great potential for updates. Located in a desirable neighborhood with easy access to schools and shopping.",
-      images: [
-        "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600",
-        "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600",
-        "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"
-      ]
+    console.log(`Starting to scrape Redfin property: ${url}`);
+    
+    // Launch Puppeteer browser
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+    
+    const page = await browser.newPage();
+    
+    // Set user agent to avoid detection
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    // Navigate to the property page
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    
+    // Wait for key elements to load
+    await page.waitForSelector('.street-address, .address, h1', { timeout: 10000 });
+    
+    // Extract property data
+    const propertyData = await page.evaluate(() => {
+      // Helper function to clean text
+      const cleanText = (text: string | null) => text?.trim().replace(/\s+/g, ' ') || '';
+      
+      // Helper function to parse numbers
+      const parseNumber = (text: string | null) => {
+        if (!text) return undefined;
+        const num = parseInt(text.replace(/[^0-9]/g, ''));
+        return isNaN(num) ? undefined : num;
+      };
+      
+      // Extract address
+      let address = '';
+      const addressSelectors = [
+        '.street-address',
+        '.address-line', 
+        'h1',
+        '[data-rf-test-name="abp-streetLine"]',
+        '.address'
+      ];
+      
+      for (const selector of addressSelectors) {
+        const element = document.querySelector(selector);
+        if (element && element.textContent) {
+          address = cleanText(element.textContent);
+          if (address) break;
+        }
+      }
+      
+      // Extract price
+      let price: number | undefined;
+      const priceSelectors = [
+        '.price-section .price',
+        '.home-main-stats-price .price',
+        '[data-rf-test-name="abp-price"]',
+        '.price'
+      ];
+      
+      for (const selector of priceSelectors) {
+        const element = document.querySelector(selector);
+        if (element && element.textContent) {
+          price = parseNumber(element.textContent);
+          if (price) break;
+        }
+      }
+      
+      // Extract beds, baths, sqft
+      let beds: number | undefined;
+      let baths: number | undefined;
+      let sqft: number | undefined;
+      
+      // Try to find bed/bath/sqft info
+      const statsSelectors = [
+        '.home-main-stats',
+        '.property-details',
+        '.listing-summary-table',
+        '.stats-list'
+      ];
+      
+      for (const selector of statsSelectors) {
+        const container = document.querySelector(selector);
+        if (container) {
+          const text = container.textContent || '';
+          
+          // Extract beds
+          const bedMatch = text.match(/(\d+)\s*bed/i);
+          if (bedMatch && !beds) beds = parseInt(bedMatch[1]);
+          
+          // Extract baths
+          const bathMatch = text.match(/(\d+(?:\.\d+)?)\s*bath/i);
+          if (bathMatch && !baths) baths = parseFloat(bathMatch[1]);
+          
+          // Extract sqft
+          const sqftMatch = text.match(/([\d,]+)\s*sq\s*ft/i);
+          if (sqftMatch && !sqft) sqft = parseNumber(sqftMatch[1]);
+        }
+      }
+      
+      // Extract year built
+      let yearBuilt: number | undefined;
+      const yearElements = document.querySelectorAll('*');
+      for (const element of yearElements) {
+        const text = element.textContent || '';
+        const yearMatch = text.match(/built.*?(19\d{2}|20\d{2})|year.*?(19\d{2}|20\d{2})/i);
+        if (yearMatch) {
+          yearBuilt = parseInt(yearMatch[1] || yearMatch[2]);
+          break;
+        }
+      }
+      
+      // Extract lot size
+      let lotSize: string | undefined;
+      for (const element of yearElements) {
+        const text = element.textContent || '';
+        const lotMatch = text.match(/lot.*?([\d.,]+\s*(?:acres?|sq\s*ft))/i);
+        if (lotMatch) {
+          lotSize = lotMatch[1];
+          break;
+        }
+      }
+      
+      // Extract description
+      let description = '';
+      const descriptionSelectors = [
+        '.remarks',
+        '.listing-description',
+        '.public-remarks',
+        '[data-rf-test-name="abp-remarks"]'
+      ];
+      
+      for (const selector of descriptionSelectors) {
+        const element = document.querySelector(selector);
+        if (element && element.textContent) {
+          description = cleanText(element.textContent);
+          if (description.length > 50) break;
+        }
+      }
+      
+      // Extract images
+      const images: string[] = [];
+      const imageSelectors = [
+        '.media-stream img',
+        '.photo-carousel img',
+        '.listing-photo img',
+        'img[src*="ssl.cdn-redfin.com"]'
+      ];
+      
+      for (const selector of imageSelectors) {
+        const imageElements = document.querySelectorAll(selector);
+        for (const img of imageElements) {
+          const src = (img as HTMLImageElement).src;
+          if (src && src.includes('ssl.cdn-redfin.com') && !images.includes(src)) {
+            images.push(src);
+            if (images.length >= 6) break;
+          }
+        }
+        if (images.length >= 6) break;
+      }
+      
+      return {
+        address,
+        price,
+        beds,
+        baths,
+        sqft,
+        yearBuilt,
+        lotSize,
+        description,
+        images
+      };
+    });
+    
+    console.log('Extracted property data:', propertyData);
+    
+    // Validate that we got meaningful data
+    if (!propertyData.address) {
+      throw new Error('Could not extract property address from Redfin page');
+    }
+    
+    // Return the extracted data with proper typing
+    const result: PropertyData = {
+      address: propertyData.address,
+      price: propertyData.price,
+      beds: propertyData.beds || 0,
+      baths: propertyData.baths || 0,
+      sqft: propertyData.sqft || 0,
+      yearBuilt: propertyData.yearBuilt,
+      lotSize: propertyData.lotSize,
+      description: propertyData.description || 'No description available.',
+      images: propertyData.images.length > 0 ? propertyData.images : undefined
     };
-
-    return mockPropertyData;
+    
+    console.log('Final property data:', result);
+    return result;
+    
   } catch (error) {
     console.error("Error scraping Redfin property:", error);
     throw new Error("Failed to extract property data from Redfin URL: " + (error as Error).message);
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 }
 
