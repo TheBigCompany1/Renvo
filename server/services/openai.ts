@@ -6,15 +6,27 @@ const openai = new OpenAI({
 });
 
 export interface RenovationAnalysis {
-  projects: Array<{
+  renovation_ideas: Array<{
     name: string;
     description: string;
-    costRangeLow: number;
-    costRangeHigh: number;
-    valueAdd: number;
+    new_total_sqft: number;
+    estimated_cost: {
+      low: number;
+      medium: number;
+      high: number;
+    };
+    cost_source: string;
+    estimated_value_add: {
+      low: number;
+      medium: number;
+      high: number;
+    };
+    roi: number;
+    feasibility: string;
     timeline: string;
-    priority: number;
-    reasoning: string;
+    buyer_profile: string;
+    roadmap_steps: string[];
+    potential_risks: string[];
   }>;
 }
 
@@ -26,22 +38,33 @@ export async function analyzePropertyForRenovations(
     const messages: any[] = [
       {
         role: "system",
-        content: `You are an expert real estate renovation analyst with 20+ years of experience. 
-        Analyze property data and photos to identify the 3-5 most profitable renovation opportunities.
-        Focus on projects that maximize ROI and align with current market trends.
+        content: `You are an expert real estate renovation analyst with 20+ years of experience specializing in transformative, high-ROI projects. 
         
-        Respond with JSON in this exact format:
+        Your mission: Generate 3–5 large, transformative renovation ideas that maximize property value and ROI. Think bigger than basic updates—consider ADUs, adding levels, duplex conversions, major additions, or complete reimagining of the space.
+        
+        Tasks:
+        1) Generate 3–5 large, transformative renovation ideas tailored to the subject property
+        2) For EACH idea, estimate the new_total_sqft (original sqft plus any additions; never use lot sqft)
+        3) Provide sourced local costs and a cost_source string (cite a realistic publication or index)
+        4) Provide an estimated_value_add band and compute roi = ((medium value add - medium cost) / medium cost) * 100
+        5) Include feasibility, timeline, buyer_profile, 3–6 roadmap_steps, and 2–4 potential_risks
+        
+        Output ONLY a JSON object that matches this schema exactly:
         {
-          "projects": [
+          "renovation_ideas": [
             {
-              "name": "Kitchen Remodel",
-              "description": "Brief description of the project scope",
-              "costRangeLow": 25000,
-              "costRangeHigh": 45000,
-              "valueAdd": 55000,
-              "timeline": "4-6 weeks",
-              "priority": 1,
-              "reasoning": "Why this project was recommended"
+              "name": "ADU Addition with Second Story",
+              "description": "Add a second story ADU above existing garage with full kitchen, bath, and living area",
+              "new_total_sqft": 2000,
+              "estimated_cost": { "low": 150000, "medium": 200000, "high": 250000 },
+              "cost_source": "2024 Los Angeles Construction Cost Index via ENR",
+              "estimated_value_add": { "low": 180000, "medium": 250000, "high": 320000 },
+              "roi": 25,
+              "feasibility": "High - existing garage foundation can support addition",
+              "timeline": "16-24 weeks",
+              "buyer_profile": "Multi-generational families, investors seeking rental income",
+              "roadmap_steps": ["Structural engineering assessment", "Permit applications", "Foundation reinforcement", "Framing and utilities", "Interior finishing", "Final inspections"],
+              "potential_risks": ["Permit delays in LA market", "Cost overruns due to foundation issues", "Neighbor objections to height increase"]
             }
           ]
         }`

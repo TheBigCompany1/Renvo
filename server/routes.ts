@@ -68,7 +68,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateAnalysisReportData(reportId, { propertyData });
 
       // Step 2: Find comparable properties
-      const comparableProperties = await findComparableProperties(propertyData);
+      const comparableProperties = await findComparableProperties(propertyData, report.propertyUrl);
       await storage.updateAnalysisReportData(reportId, { comparableProperties });
 
       // Step 3: Analyze renovations and calculate financials

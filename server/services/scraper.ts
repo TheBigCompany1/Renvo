@@ -68,6 +68,9 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
       }
     }
     
+    // Get page text for pattern matching
+    const pageText = $('body').text();
+    
     // Extract price - prefer sold price over estimate
     let price: number | undefined;
     
@@ -99,8 +102,6 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     let beds: number | undefined;
     let baths: number | undefined;
     let sqft: number | undefined;
-    
-    const pageText = $('body').text();
     
     // Extract beds
     const bedMatch = pageText.match(/(\d+)\s*bed/i);

@@ -10,16 +10,16 @@ export async function processRenovationAnalysis(
     const aiAnalysis = await analyzePropertyForRenovations(propertyData, propertyData.images);
     
     // Convert AI analysis to our schema format
-    const projects: RenovationProject[] = aiAnalysis.projects.map((project, index) => ({
+    const projects: RenovationProject[] = (aiAnalysis.renovation_ideas || aiAnalysis.projects || []).map((project: any, index: number) => ({
       id: `project-${index + 1}`,
       name: project.name,
       description: project.description,
-      costRangeLow: project.costRangeLow,
-      costRangeHigh: project.costRangeHigh,
-      valueAdd: project.valueAdd,
-      roi: Math.round(((project.valueAdd - ((project.costRangeLow + project.costRangeHigh) / 2)) / ((project.costRangeLow + project.costRangeHigh) / 2)) * 100),
+      costRangeLow: project.estimated_cost ? project.estimated_cost.low : project.costRangeLow,
+      costRangeHigh: project.estimated_cost ? project.estimated_cost.high : project.costRangeHigh,
+      valueAdd: project.estimated_value_add ? project.estimated_value_add.medium : project.valueAdd,
+      roi: project.roi || Math.round(((project.estimated_value_add?.medium || project.valueAdd || 0) - ((project.estimated_cost?.low || project.costRangeLow || 0) + (project.estimated_cost?.high || project.costRangeHigh || 0)) / 2) / (((project.estimated_cost?.low || project.costRangeLow || 0) + (project.estimated_cost?.high || project.costRangeHigh || 0)) / 2) * 100),
       timeline: project.timeline,
-      priority: project.priority
+      priority: index + 1
     }));
 
     // Calculate financial summary
