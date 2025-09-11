@@ -1,134 +1,120 @@
 # backend/agent_service/agents/orchestrator.py
 from __future__ import annotations
-import os
-import json
-from typing import Any, Dict, List
 
-from models.property_model import PropertyDetails
-from agents.text_agent import TextAnalysisAgent
-from agents.comp_agent import CompAnalysisAgent
-from agents.image_agent import ImageAnalysisAgent
-from agents.financial_agent import FinancialAnalysisAgent
+import asyncio
+from typing import Any, Dict
 
-def _as_dict(obj: Any) -> Dict[str, Any]:
-    if isinstance(obj, dict):
-        return obj
-    for attr in ("model_dump", "dict"):
-        fn = getattr(obj, attr, None)
-        if callable(fn):
-            try:
-                return fn()
-            except Exception:
-                pass
-    try:
-        return json.loads(json.dumps(obj, default=lambda o: getattr(o, "__dict__", str(o))))
-    except Exception:
-        return {}
+from config.settings import settings
+
+# LangChain LLMs
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
+
+# Import your agents
+from .text_agent import TextAnalysisAgent
+from .financial_agent import FinancialAnalysisAgent
+# If you have separate agents for comps/images, import them here
+try:
+    from .comp_agent import CompAnalysisAgent
+except Exception:
+    CompAnalysisAgent = None  # optional
+
+try:
+    from .image_agent import ImageAnalysisAgent
+except Exception:
+    ImageAnalysisAgent = None  # optional
+
 
 class OrchestratorAgent:
     """
-    High-level pipeline coordinator. Normalizes incoming payload, then
-    calls Text → Comps → Image → Financial. Always tries to return a
-    FullReport-shaped dict even if some stages are missing.
+    Builds the LLM once (Gemini preferred), then orchestrates all analysis steps.
     """
 
     def __init__(self) -> None:
-        # Agents may use their own model configuration internally.
-        # Keeping init lightweight to avoid env dependency failures.
-        self.text_agent = TextAnalysisAgent()
-        self.comp_agent = CompAnalysisAgent()
-        self.image_agent = ImageAnalysisAgent()
-        self.financial_agent = FinancialAnalysisAgent()
+        # Decide which LLM to use based on env vars
+        provider = settings.LLM_PROVIDER
 
-    # ---- Normalization ----
-    def _normalize_payload(self, raw: Dict[str, Any]) -> PropertyDetails:
-        src = raw.get("property_data") if isinstance(raw.get("property_data"), dict) else raw
+        if provider == "gemini":
+            # CRITICAL: pass the API key explicitly so it does NOT try ADC
+            self.llm = ChatGoogleGenerativeAI(
+                model=settings.GOOGLE_GEMINI_MODEL,
+                google_api_key=settings.GOOGLE_API_KEY,
+                temperature=0.2,
+            )
+            print(f"[Orchestrator] LLM = Gemini ({settings.GOOGLE_GEMINI_MODEL})")
+        elif provider == "openai":
+            self.llm = ChatOpenAI(
+                model=settings.OPENAI_MODEL,
+                api_key=settings.OPENAI_API_KEY,
+                temperature=0.2,
+            )
+            print(f"[Orchestrator] LLM = OpenAI ({settings.OPENAI_MODEL})")
+        else:
+            raise RuntimeError(
+                "No LLM credentials found. Set GEMINI_API_KEY/GOOGLE_API_KEY or OPENAI_API_KEY."
+            )
 
-        # Debug the raw keys and the specific sqft/epsf values we care about
-        try:
-            print(f"[Orchestrator] [DEBUG] Normalized payload keys: {sorted(list(src.keys()))}")
-            print(f"[Orchestrator] [DEBUG] Normalized payload values → sqft={src.get('sqft')} estimatePerSqft={src.get('estimatePerSqft')}")
-        except Exception:
-            pass
+        # Create sub-agents, passing the LLM where required
+        # (Guard against agents that don’t accept llm in __init__)
+        def _make(agent_cls):
+            if agent_cls is None:
+                return None
+            try:
+                return agent_cls(llm=self.llm)
+            except TypeError:
+                return agent_cls()
 
-        return PropertyDetails.from_raw(raw)
+        self.text_agent = _make(TextAnalysisAgent)
+        self.comp_agent = _make(CompAnalysisAgent) if CompAnalysisAgent else None
+        self.image_agent = _make(ImageAnalysisAgent) if ImageAnalysisAgent else None
+        self.financial_agent = FinancialAnalysisAgent()  # no LLM needed here
 
-    # ---- Pipeline ----
     async def generate_full_report(self, property_payload: Dict[str, Any]) -> Dict[str, Any]:
-        print("--- generate_full_report started ---")
-        # 1) Normalize & validate
-        prop = self._normalize_payload(property_payload)
+        """
+        Runs all agents in sequence and returns a dict the Flask app can render.
+        Keep names generic so app.py doesn’t need to know classes.
+        """
         print("[Orchestrator] Successfully validated incoming property data.")
 
-        # 2) Text ideas
+        # 1) Text understanding / initial ideas
         print("[Orchestrator] Calling TextAnalysisAgent...")
-        try:
-            initial_ideas = await self.text_agent.process(prop)
-            print("[TextAgent] Process started.")
-            print("[TextAgent] LLM structured call succeeded.")
-        except Exception as e:
-            print(f"[TextAgent] ERROR: {e}")
-            initial_ideas = []
+        initial_ideas = await self.text_agent.process(property_payload)
 
-        # 3) Comps (try strict then expanded)
-        comps: List[Dict[str, Any]] = []
-        try:
+        # 2) Comps (optional, depending on your implementation)
+        comps = []
+        if self.comp_agent:
             print("[Orchestrator] Calling CompAnalysisAgent...")
-            comps = await self.comp_agent.process(prop, mode="strict")
-            print(f"[CompAgent] Process started in 'strict' mode.")
-            print(f"[CompAgent] Process finished in 'strict' mode with {len(comps)} comps.")
-            if not comps:
-                print("[Orchestrator] Comp search (strict) failed. Expanding search...")
-                comps = await self.comp_agent.process(prop, mode="expanded")
-                print(f"[CompAgent] Process started in 'expanded' mode.")
-                print(f"[CompAgent] Process finished in 'expanded' mode with {len(comps)} comps.")
-        except Exception as e:
-            print(f"[CompAgent] ERROR: {e}")
-            comps = []
-
-        if comps:
+            comps = await self.comp_agent.process(property_payload)
             print(f"[Orchestrator] Found {len(comps)} comps.")
-        else:
-            print("[Orchestrator] Found 0 comps.")
 
-        # 4) Image analysis
+        # 3) Image analysis (optional)
         print("[Orchestrator] Calling ImageAnalysisAgent...")
-        try:
-            image_ideas = await self.image_agent.process(prop, initial_ideas, images=prop.images or [])
-            print("[ImageAgent] Process started.")
-            if not (prop.images or []):
-                print("[ImageAgent] No images provided. Passing through initial ideas without changes.")
-        except Exception as e:
-            print(f"[ImageAgent] ERROR: {e}")
-            image_ideas = initial_ideas
+        images_out = None
+        if self.image_agent:
+            images_out = await self.image_agent.process(
+                property_payload, initial_ideas=initial_ideas
+            )
+        else:
+            images_out = initial_ideas
 
-        # 5) Financial analysis (robust; does not raise on missing data)
+        # 4) Financials — must NOT block on missing sqft/value anymore
         print("[Orchestrator] Calling FinancialAnalysisAgent...")
-        try:
-            fin = await self.financial_agent.process(prop, comps, image_ideas)
-            print("[FinancialAgent] Process started.")
-            if fin.assumed_ppsf:
-                print(f"[FinancialAgent] Using Avg/Est PPSF: ${fin.assumed_ppsf:,.2f}")
-            if not fin.property_value:
-                print("[FinancialAgent] ERROR: No property value. Skipping financial analysis.")
-        except Exception as e:
-            print(f"[FinancialAgent] ERROR: {e}")
-            fin = None
+        fin = self.financial_agent.process(property_payload, comps or [])
+        if not fin.get("subject_value"):
+            # Don’t crash the whole report—leave a warning and keep going
+            print("[Orchestrator] WARNING: Financials could not compute subject_value.")
+            fin.setdefault("warnings", []).append(
+                "Could not determine property value; please verify sqft/comp data."
+            )
 
-        # ---- Assemble FullReport-shaped dict ----
-        full: Dict[str, Any] = {
-            "property_details": _as_dict(prop),
-            "renovation_projects": _as_dict(fin).get("renovation_projects", []) if fin else [],
+        # Assemble the final payload dict (app.py will normalize/serialize)
+        return {
+            "property_details": property_payload,
+            "renovation_projects": images_out.get("renovation_projects") if isinstance(images_out, dict) else [],
             "comparable_properties": comps,
-            "recommended_contractors": [],  # (optional; your Contractor agent can populate later)
-            "market_summary": "",
-            "investment_thesis": (_as_dict(fin).get("rationale") if fin else "") or "",
+            "recommended_contractors": initial_ideas.get("recommended_contractors") if isinstance(initial_ideas, dict) else [],
+            "market_summary": initial_ideas.get("market_summary") if isinstance(initial_ideas, dict) else "",
+            "investment_thesis": initial_ideas.get("investment_thesis") if isinstance(initial_ideas, dict) else "",
+            "financials": fin,
+            "error": None,
         }
-
-        # If we couldn't compute a value, still return a “complete” report with partial content.
-        if fin and fin.property_value:
-            full["property_value"] = fin.property_value
-            if fin.assumed_ppsf:
-                full["assumed_ppsf"] = fin.assumed_ppsf
-
-        return full
