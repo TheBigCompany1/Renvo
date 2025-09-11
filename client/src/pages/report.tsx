@@ -367,12 +367,18 @@ export default function Report() {
                       <Users className="w-4 h-4 mr-2 text-blue-600" />
                       Recommended Pros
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {contractors.slice(0, 2).map((contractor, contractorIndex) => (
-                        <div key={contractorIndex} className="text-sm">
-                          <div className="font-medium text-blue-600">{contractor.name}</div>
-                          <div className="text-gray-600">{contractor.specialty}</div>
-                        </div>
+                        <button 
+                          key={contractorIndex} 
+                          className="w-full p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors text-left group cursor-pointer"
+                          onClick={() => window.open(`tel:${contractor.contact}`, '_self')}
+                          data-testid={`button-contractor-${contractorIndex}`}
+                        >
+                          <div className="font-medium text-blue-700 group-hover:text-blue-800">{contractor.name}</div>
+                          <div className="text-sm text-blue-600 group-hover:text-blue-700">{contractor.specialty}</div>
+                          <div className="text-xs text-blue-500 mt-1">📞 Tap to call</div>
+                        </button>
                       ))}
                     </div>
                   </div>

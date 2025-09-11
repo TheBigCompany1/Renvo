@@ -134,10 +134,15 @@ export async function analyzePropertyForRenovations(
     
     console.log("Parsed Analysis:", JSON.stringify(analysis, null, 2));
     
-    if (!analysis.projects || !Array.isArray(analysis.projects)) {
+    // Handle both old and new response formats
+    const projectsArray = analysis.renovation_ideas || analysis.projects;
+    if (!projectsArray || !Array.isArray(projectsArray)) {
       console.error("Invalid analysis structure:", analysis);
-      throw new Error("Invalid response format from OpenAI - missing or invalid projects array");
+      throw new Error("Invalid response format from OpenAI - missing or invalid projects/renovation_ideas array");
     }
+    
+    // Normalize to the expected format for backward compatibility
+    analysis.projects = projectsArray;
 
     return analysis;
   } catch (error) {
@@ -155,6 +160,7 @@ export async function generateContractorRecommendations(
   rating: number;
   reviewCount: number;
   experience: string;
+  contact: string;
 }>> {
   try {
     const response = await openai.chat.completions.create({
@@ -173,7 +179,8 @@ export async function generateContractorRecommendations(
                 "specialty": "Kitchen Specialists",
                 "rating": 4.9,
                 "reviewCount": 127,
-                "experience": "15+ years experience"
+                "experience": "15+ years experience",
+                "contact": "(555) 123-4567"
               }
             ]
           }`
