@@ -196,12 +196,6 @@ export default function Report() {
                     </div>
                     <div className="text-sm text-gray-600">Last Price Sold</div>
                   </div>
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600" data-testid="text-property-estimated-price">
-                      {calculateEstimatedCurrentValue(propertyData, comparableProperties, renovationProjects)}
-                    </div>
-                    <div className="text-sm text-gray-600">Estimated Current Value</div>
-                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
@@ -279,7 +273,7 @@ export default function Report() {
                   sq ft of space and {propertyData.lotSize} lot, make this the most strategic investment for this property.
                 </p>
               </div>
-              <div className="text-center">
+              <div className="text-center space-y-6">
                 <div className="inline-block p-6 bg-orange-50 rounded-full">
                   <div className="text-3xl font-bold text-orange-600" data-testid="text-opportunity-score">
                     {opportunityScore}%
@@ -288,6 +282,12 @@ export default function Report() {
                   <Badge variant="secondary" className="mt-2 bg-orange-100 text-orange-700">
                     Average
                   </Badge>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600" data-testid="text-property-estimated-price">
+                    {calculateEstimatedCurrentValue(propertyData, comparableProperties, renovationProjects)}
+                  </div>
+                  <div className="text-sm text-gray-600">Estimated Post-Renovation Value</div>
                 </div>
               </div>
             </div>
