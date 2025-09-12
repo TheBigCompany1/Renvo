@@ -78,8 +78,12 @@ function generateRealisticComparables(
     const adjustedPricePsf = medianPricePsf * variation.priceVariation;
     const price = Math.floor(sqft * adjustedPricePsf);
     
+    // Build address with ZIP only if defined
+    const zipSuffix = location.zip ? ` ${location.zip}` : '';
+    const sourceLabel = location.zip ? `Market Data (${location.zip})` : 'Market Data';
+    
     comparables.push({
-      address: `${generateHouseNumber()} ${streetName} ${variation.streetSuffix}, ${location.city}, ${location.state} ${location.zip}`,
+      address: `${generateHouseNumber()} ${streetName} ${variation.streetSuffix}, ${location.city}, ${location.state}${zipSuffix}`,
       price,
       beds: Math.max(1, baseBeds + variation.bedVariation),
       baths: Math.max(1, baseBaths + variation.bathVariation),
