@@ -495,12 +495,24 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     if (propertyData.price && propertyData.sqft) {
       const actualPricePsf = propertyData.price / propertyData.sqft;
       
-      // Get market context for location-based pricing expectations  
-      const marketExpectedPsf = getLocationBasedPricingPsf({
-        city: location.city || 'Los Angeles',
-        state: location.state || 'CA',
-        zipCode: location.zipCode || '90066'
-      });
+      // Get market context for location-based pricing expectations
+      const marketExpectedPsf = (() => {
+        const locationKey = `${location.city || 'Los Angeles'}, ${location.state || 'CA'}`;
+        // Market pricing based on location
+        const marketContext: { [key: string]: number } = {
+          'Los Angeles, CA': 1000,
+          'San Francisco, CA': 1400,
+          'New York, NY': 1200,
+          'Miami, FL': 800,
+          'Austin, TX': 600,
+          'Seattle, WA': 900,
+          'Denver, CO': 700,
+          'Atlanta, GA': 500,
+          'Phoenix, AZ': 450,
+          'Dallas, TX': 550
+        };
+        return marketContext[locationKey] || 600; // National average fallback
+      })();
       const expectedPrice = propertyData.sqft * marketExpectedPsf;
       const priceRatio = propertyData.price / expectedPrice;
       
