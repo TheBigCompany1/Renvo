@@ -267,36 +267,115 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     // Get page text for pattern matching
     const pageText = $('body').text();
     
-    // Extract price - prefer sold price over estimate
+    // Enhanced price extraction - find all price mentions and select the best one
     let price: number | undefined;
+    let priceSource = '';
+    const allPrices: Array<{price: number, source: string, confidence: number}> = [];
     
-    console.log('Debug: Searching for price data...');
+    console.log('Debug: Enhanced price searching...');
     
-    // First try to find sold price
-    const soldPriceText = pageText.match(/sold\s+for\s+\$([\d,]+)/i);
-    if (soldPriceText) {
-      price = parseNumber(soldPriceText[1]);
-      console.log(`Debug: Found sold price: ${price} from match: ${soldPriceText[0]}`);
-    } else {
-      console.log('Debug: No sold price found');
-    }
+    // 1. Search for all "sold for" patterns with dates to find recent sales
+    const soldPricePatterns = [
+      /sold\s+(?:on\s+)?(\w+\s+\d+,?\s+\d{4})\s+for\s+\$([\d,]+)/gi,
+      /sold\s+for\s+\$([\d,]+)\s+(?:on\s+)?(\w+\s+\d+,?\s+\d{4})/gi,
+      /sold\s+for\s+\$([\d,]+)/gi,
+      /sale\s+price:?\s*\$([\d,]+)/gi,
+      /last\s+sold:?\s*\$([\d,]+)/gi,
+    ];
     
-    // Fallback to current price/estimate
-    if (!price) {
-      const priceSelectors = [
-        '.price-section .price',
-        '.home-main-stats-price .price',
-        '[data-rf-test-name="abp-price"]',
-        '.price'
-      ];
-      
-      for (const selector of priceSelectors) {
-        const element = $(selector).first();
-        if (element.length && element.text()) {
-          price = parseNumber(element.text());
-          if (price) break;
+    soldPricePatterns.forEach((pattern, index) => {
+      let match;
+      const patternCopy = new RegExp(pattern.source, pattern.flags);
+      while ((match = patternCopy.exec(pageText)) !== null) {
+        let priceValue: number;
+        let dateStr = '';
+        
+        if (match.length > 2) {
+          // Pattern with date
+          priceValue = parseNumber(match[2]) || parseNumber(match[1]);
+          dateStr = match[1] || match[2];
+        } else {
+          priceValue = parseNumber(match[1]);
+        }
+        
+        if (priceValue && priceValue > 10000) { // Sanity check
+          const confidence = index === 0 ? 95 : (index === 1 ? 90 : 80); // Prefer patterns with dates
+          allPrices.push({
+            price: priceValue,
+            source: `sold_${index}_${dateStr}`.replace(/\s+/g, '_'),
+            confidence
+          });
+          console.log(`Debug: Found sale price: $${priceValue.toLocaleString()} (confidence: ${confidence}%) from: ${match[0]}`);
         }
       }
+    });
+    
+    // 2. Search for current/list prices as fallback
+    const currentPriceSelectors = [
+      '.price-section .price',
+      '.home-main-stats-price .price', 
+      '[data-rf-test-name="abp-price"]',
+      '.price',
+      '.list-price',
+      '.asking-price'
+    ];
+    
+    currentPriceSelectors.forEach((selector, index) => {
+      const element = $(selector).first();
+      if (element.length && element.text()) {
+        const priceValue = parseNumber(element.text());
+        if (priceValue && priceValue > 10000) {
+          allPrices.push({
+            price: priceValue,
+            source: `current_${selector}`,
+            confidence: 60 - index * 5 // Lower confidence for current prices
+          });
+          console.log(`Debug: Found current price: $${priceValue.toLocaleString()} from selector: ${selector}`);
+        }
+      }
+    });
+    
+    // 3. Search for price patterns in page text
+    const textPricePatterns = [
+      /list\s+price:?\s*\$([\d,]+)/gi,
+      /asking:?\s*\$([\d,]+)/gi,
+      /priced?\s+at:?\s*\$([\d,]+)/gi,
+      /\$(\d{3},\d{3}(?:,\d{3})?)/g // Match formatted prices like $1,350,000
+    ];
+    
+    textPricePatterns.forEach((pattern, index) => {
+      let match;
+      const patternCopy = new RegExp(pattern.source, pattern.flags);
+      while ((match = patternCopy.exec(pageText)) !== null) {
+        const priceValue = parseNumber(match[1]);
+        if (priceValue && priceValue > 10000) {
+          allPrices.push({
+            price: priceValue,
+            source: `text_pattern_${index}`,
+            confidence: 40 - index * 5
+          });
+          console.log(`Debug: Found text price: $${priceValue.toLocaleString()} from pattern: ${match[0]}`);
+        }
+      }
+    });
+    
+    // 4. Select the best price based on confidence and value
+    if (allPrices.length > 0) {
+      // Sort by confidence first, then by price (higher is often more recent/accurate)
+      allPrices.sort((a, b) => {
+        if (a.confidence !== b.confidence) return b.confidence - a.confidence;
+        return b.price - a.price;
+      });
+      
+      price = allPrices[0].price;
+      priceSource = allPrices[0].source;
+      
+      console.log(`Debug: Selected price: $${price.toLocaleString()} from ${priceSource} (confidence: ${allPrices[0].confidence}%)`);
+      
+      // Log all found prices for debugging
+      console.log('Debug: All found prices:', allPrices.map(p => `$${p.price.toLocaleString()} (${p.confidence}%, ${p.source})`).join(', '));
+    } else {
+      console.log('Debug: No valid prices found');
     }
     
     // Extract beds, baths, sqft from the page text
@@ -411,6 +490,37 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     
     console.log('Extracted property data:', propertyData);
     console.log(`Location - City: ${location.city}, State: ${location.state}, Zip: ${location.zipCode}`);
+    
+    // 5. Validate price against market expectations
+    if (propertyData.price && propertyData.sqft) {
+      const actualPricePsf = propertyData.price / propertyData.sqft;
+      
+      // Get market context for location-based pricing expectations
+      const marketExpectedPsf = getLocationBasedPricingPsf(location);
+      const expectedPrice = propertyData.sqft * marketExpectedPsf;
+      const priceRatio = propertyData.price / expectedPrice;
+      
+      console.log(`Debug: Price validation - Actual: $${propertyData.price.toLocaleString()} ($${Math.round(actualPricePsf)}/sqft)`);
+      console.log(`Debug: Market expected: $${Math.round(expectedPrice).toLocaleString()} ($${Math.round(marketExpectedPsf)}/sqft)`);
+      console.log(`Debug: Price ratio: ${(priceRatio * 100).toFixed(1)}% of market expectation`);
+      
+      // Flag potential issues
+      if (priceRatio < 0.4) { // Less than 40% of market value
+        console.warn(`⚠️  WARNING: Property price ($${propertyData.price.toLocaleString()}) seems unusually LOW compared to market expectations ($${Math.round(expectedPrice).toLocaleString()})`);
+        console.warn(`⚠️  This may indicate: old sale data, distressed sale, or data extraction error`);
+        console.warn(`⚠️  Consider manual verification of this price data`);
+        
+        // Add warning to description if needed
+        if (!propertyData.description.includes('price data may not reflect current market value')) {
+          propertyData.description += ' NOTE: Extracted price data may not reflect current market value and should be verified.';
+        }
+      } else if (priceRatio > 2.0) { // More than 200% of market value  
+        console.warn(`⚠️  NOTICE: Property price ($${propertyData.price.toLocaleString()}) is significantly ABOVE market expectations ($${Math.round(expectedPrice).toLocaleString()})`);
+        console.warn(`⚠️  This may indicate: luxury property, recent renovation, or premium location`);
+      } else {
+        console.log(`✅ Price validation: Property price appears reasonable for the market`);
+      }
+    }
     
     // Validate that we got meaningful data
     if (!propertyData.address) {
