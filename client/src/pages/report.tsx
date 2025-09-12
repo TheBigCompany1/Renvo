@@ -113,22 +113,43 @@ export default function Report() {
   };
 
   // Calculate estimated current value using dynamic market data
-  const calculateEstimatedCurrentValue = (propertyData: PropertyData, comparableProperties: ComparableProperty[]) => {
+  const calculateEstimatedCurrentValue = (propertyData: PropertyData, comparableProperties: ComparableProperty[], renovationProjects: RenovationProject[]) => {
     if (!propertyData.price || !propertyData.sqft) {
       return 'N/A';
     }
 
+    // Find the maximum square footage addition from all renovation projects
+    const maxAddedSqft = renovationProjects && renovationProjects.length > 0 
+      ? Math.max(...renovationProjects.map(p => p.sqftAdded || 0), 0)
+      : 0;
+    
+    // Total livable square footage including best renovation option
+    const totalLivableSqft = propertyData.sqft + maxAddedSqft;
+
+    console.log('🔍 Estimated Current Value Debug:');
+    console.log('  Base sqft:', propertyData.sqft);
+    console.log('  Max added sqft:', maxAddedSqft);
+    console.log('  Total livable sqft:', totalLivableSqft);
+    console.log('  Renovation projects:', renovationProjects?.map(p => ({ name: p.name, sqftAdded: p.sqftAdded })));
+    console.log('  Comparable properties count:', comparableProperties?.length);
+
     // Use average price per sqft from comparable properties if available
     if (comparableProperties && comparableProperties.length > 0) {
       const avgPricePsf = comparableProperties.reduce((sum, comp) => sum + comp.pricePsf, 0) / comparableProperties.length;
+      console.log('  Avg comp price per sqft:', avgPricePsf);
       if (avgPricePsf > 100) { // Sanity check
-        const estimatedValue = Math.floor(propertyData.sqft * avgPricePsf);
+        const estimatedValue = Math.floor(totalLivableSqft * avgPricePsf);
+        console.log('  Using comparables - Estimated value:', estimatedValue);
         return formatCurrency(estimatedValue);
       }
     }
 
-    // Fallback to simple appreciation if no comparable data
-    return formatCurrency(Math.floor(propertyData.price * 1.08));
+    // Fallback: use current price per sqft applied to total livable space
+    const currentPricePsf = propertyData.price / propertyData.sqft;
+    const estimatedValue = Math.floor(totalLivableSqft * currentPricePsf);
+    console.log('  Using fallback - Current price per sqft:', currentPricePsf);
+    console.log('  Using fallback - Estimated value:', estimatedValue);
+    return formatCurrency(estimatedValue);
   };
 
   return (
@@ -177,7 +198,7 @@ export default function Report() {
                   </div>
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600" data-testid="text-property-estimated-price">
-                      {calculateEstimatedCurrentValue(propertyData, comparableProperties)}
+                      {calculateEstimatedCurrentValue(propertyData, comparableProperties, renovationProjects)}
                     </div>
                     <div className="text-sm text-gray-600">Estimated Current Value</div>
                   </div>

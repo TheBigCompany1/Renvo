@@ -40,10 +40,11 @@ export async function extractLocationFromProperty(
     
     // Extract additional location info from URL if possible
     if (propertyUrl.includes('redfin.com')) {
-      const urlMatch = propertyUrl.match(/\/city\/(\d+)\/([A-Z]{2})\/([^\/]+)/);
+      // Redfin URL format: /CA/Los-Angeles/12630-Bonaparte-Ave-90066/home/6732264
+      const urlMatch = propertyUrl.match(/\/([A-Z]{2})\/([^\/]+)\//);
       if (urlMatch) {
-        location.state = urlMatch[2];
-        location.city = urlMatch[3].replace(/-/g, ' ');
+        location.state = urlMatch[1]; // CA
+        location.city = urlMatch[2].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()); // Los Angeles
       }
     }
     

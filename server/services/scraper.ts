@@ -22,13 +22,13 @@ function extractPropertyLocation(url: string, address: string, $ : any): Propert
   let zipCode = '';
   
   try {
-    // Try to extract from URL path (Redfin format: /city/CA/123-main-st/)
+    // Try to extract from URL path (Redfin format: /CA/Los-Angeles/123-main-st/)
     const urlPath = new URL(url).pathname;
     const pathParts = urlPath.split('/').filter(part => part.length > 0);
     
     if (pathParts.length >= 2) {
-      city = pathParts[0].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      state = pathParts[1].toUpperCase();
+      state = pathParts[0].toUpperCase(); // First part is state (CA)
+      city = pathParts[1].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()); // Second part is city (Los-Angeles)
     }
   } catch (error) {
     console.log('Could not extract location from URL');
