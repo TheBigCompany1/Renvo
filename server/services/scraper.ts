@@ -495,8 +495,12 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     if (propertyData.price && propertyData.sqft) {
       const actualPricePsf = propertyData.price / propertyData.sqft;
       
-      // Get market context for location-based pricing expectations
-      const marketExpectedPsf = getLocationBasedPricingPsf(location);
+      // Get market context for location-based pricing expectations  
+      const marketExpectedPsf = getLocationBasedPricingPsf({
+        city: location.city || 'Los Angeles',
+        state: location.state || 'CA',
+        zipCode: location.zipCode || '90066'
+      });
       const expectedPrice = propertyData.sqft * marketExpectedPsf;
       const priceRatio = propertyData.price / expectedPrice;
       
