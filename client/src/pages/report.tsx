@@ -189,15 +189,13 @@ export default function Report() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Property Details */}
               <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-2xl font-bold text-teal-600" data-testid="text-property-price">
                       {propertyData.price ? formatCurrency(propertyData.price) : 'N/A'}
                     </div>
                     <div className="text-sm text-gray-600">Last Price Sold</div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-2xl font-bold text-teal-600" data-testid="text-property-beds">
                       {propertyData.beds || 'N/A'}
