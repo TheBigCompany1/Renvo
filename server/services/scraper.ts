@@ -209,6 +209,7 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     }
 
     console.log(`Starting to scrape Redfin property: ${url}`);
+    console.log('Debug: About to fetch URL with headers...');
     
     // Fetch the HTML content
     const response = await fetch(url, {
@@ -230,6 +231,7 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     const $ = cheerio.load(html);
     
     console.log('Successfully loaded HTML, extracting property data...');
+    console.log(`Debug: HTML length: ${html.length} characters`);
 
     // Helper function to clean text
     const cleanText = (text: string | null) => text?.trim().replace(/\s+/g, ' ') || '';
@@ -268,10 +270,15 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     // Extract price - prefer sold price over estimate
     let price: number | undefined;
     
+    console.log('Debug: Searching for price data...');
+    
     // First try to find sold price
     const soldPriceText = pageText.match(/sold\s+for\s+\$([\d,]+)/i);
     if (soldPriceText) {
       price = parseNumber(soldPriceText[1]);
+      console.log(`Debug: Found sold price: ${price} from match: ${soldPriceText[0]}`);
+    } else {
+      console.log('Debug: No sold price found');
     }
     
     // Fallback to current price/estimate
