@@ -70,9 +70,8 @@ export default function Report() {
   }
 
   const propertyData = report.propertyData as PropertyData;
-  const renovationProjects = report.renovationProjects as RenovationProject[];
+  const renovationProjects = (report.renovationProjects as RenovationProject[]).sort((a, b) => b.roi - a.roi);
   const comparableProperties = (report.comparableProperties as ComparableProperty[]) || [];
-  const contractors = report.contractors as Contractor[];
   const financialSummary = report.financialSummary as FinancialSummaryType;
 
   const reportDate = report.completedAt ? new Date(report.completedAt).toLocaleDateString() : new Date().toLocaleDateString();
@@ -374,7 +373,7 @@ export default function Report() {
                 </p>
 
                 {/* Project Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-lg font-bold text-teal-600">
                       {formatCurrency((project.costRangeLow + project.costRangeHigh) / 2)}
@@ -386,6 +385,12 @@ export default function Report() {
                       {formatCurrency(project.valueAdd)}
                     </div>
                     <div className="text-sm text-gray-600">Value Add</div>
+                  </div>
+                  <div className="text-center p-4 bg-orange-50 rounded-lg">
+                    <div className="text-lg font-bold text-orange-600">
+                      {formatCurrency(propertyData.price + project.valueAdd)}
+                    </div>
+                    <div className="text-sm text-gray-600">Post-Renovation Value</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-lg font-bold text-blue-600">
@@ -441,7 +446,7 @@ export default function Report() {
                       Recommended Pros
                     </h4>
                     <div className="space-y-3">
-                      {contractors.slice(0, 2).map((contractor, contractorIndex) => (
+                      {(project.contractors || []).slice(0, 2).map((contractor, contractorIndex) => (
                         <div 
                           key={contractorIndex} 
                           className="p-3 bg-blue-50 border border-blue-200 rounded-lg"

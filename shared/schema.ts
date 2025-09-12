@@ -45,6 +45,21 @@ export const propertyDataSchema = z.object({
   location: locationSchema.optional(),
 });
 
+export const contractorSchema = z.object({
+  name: z.string(),
+  specialty: z.string(),
+  rating: z.number(),
+  reviewCount: z.number(),
+  experience: z.string(),
+  contact: z.string().optional(),
+  website: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  distanceMiles: z.number().optional(),
+  source: z.string().optional(), // 'web_search', 'api', 'fallback'
+});
+
 export const renovationProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -60,6 +75,7 @@ export const renovationProjectSchema = z.object({
   costPerSqft: z.number().optional(), // Cost per square foot for this project
   valuePerSqft: z.number().optional(), // Value add per square foot
   detailedDescription: z.string().optional(), // More specific description with sqft details
+  contractors: z.array(contractorSchema).optional(), // Project-specific contractors
 });
 
 export const comparablePropertySchema = z.object({
@@ -73,21 +89,6 @@ export const comparablePropertySchema = z.object({
   distanceMiles: z.number().optional(),
   source: z.string().optional(), // 'web_search', 'api', 'fallback'
   sourceUrl: z.string().optional(),
-});
-
-export const contractorSchema = z.object({
-  name: z.string(),
-  specialty: z.string(),
-  rating: z.number(),
-  reviewCount: z.number(),
-  experience: z.string(),
-  contact: z.string().optional(),
-  website: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  distanceMiles: z.number().optional(),
-  source: z.string().optional(), // 'web_search', 'api', 'fallback'
 });
 
 export const financialSummarySchema = z.object({

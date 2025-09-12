@@ -114,24 +114,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         financialSummary 
       });
 
-      // Step 5: Get location-based contractor recommendations
-      const topProject = projects.length > 0 ? projects[0].name : 'Kitchen Remodel';
-      let contractors;
-      try {
-        console.log(`Finding location-based contractors for ${topProject} in ${location.city}, ${location.state}`);
-        contractors = await findLocationBasedContractors(location, topProject);
-        
-        if (contractors.length === 0) {
-          console.log('Location-based contractors returned empty, falling back to AI generation');
-          const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
-          contractors = await generateContractorRecommendations(locationQuery, topProject);
-        }
-      } catch (error) {
-        console.log('Location-based contractors failed, falling back to AI generation:', error);
-        const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
-        contractors = await generateContractorRecommendations(locationQuery, topProject);
-      }
-      await storage.updateAnalysisReportData(reportId, { contractors });
+      // Step 5: Generate project-specific contractor recommendations
+      const projectsWithContractors = await Promise.all(
+        projects.map(async (project) => {
+          let projectContractors;
+          try {
+            console.log(`Finding contractors for ${project.name} in ${location.city}, ${location.state}`);
+            projectContractors = await findLocationBasedContractors(location, project.name);
+            
+            if (projectContractors.length === 0) {
+              console.log(`Location-based contractors returned empty for ${project.name}, falling back to AI generation`);
+              const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
+              projectContractors = await generateContractorRecommendations(locationQuery, project.name);
+            }
+          } catch (error) {
+            console.log(`Location-based contractors failed for ${project.name}, falling back to AI generation:`, error);
+            const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
+            projectContractors = await generateContractorRecommendations(locationQuery, project.name);
+          }
+          
+          return {
+            ...project,
+            contractors: projectContractors
+          };
+        })
+      );
+
+      // Update with projects that now include contractors
+      await storage.updateAnalysisReportData(reportId, { 
+        renovationProjects: projectsWithContractors,
+        contractors: [] // Keep empty for backward compatibility
+      });
 
       // Mark as completed
       await storage.updateAnalysisReportData(reportId, { 

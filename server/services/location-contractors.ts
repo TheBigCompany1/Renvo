@@ -158,16 +158,34 @@ function getRelevantSpecialties(renovationType: string): Array<{name: string}> {
       { name: 'Kitchen & Bath Remodeling' },
       { name: 'Tile & Plumbing Experts' }
     ];
+  } else if (type.includes('second story') || type.includes('story addition')) {
+    return [
+      { name: 'Second Story Specialists' },
+      { name: 'Structural Engineering' },
+      { name: 'ADU Specialists' }
+    ];
+  } else if (type.includes('basement conversion') || type.includes('basement')) {
+    return [
+      { name: 'Basement Finishing' },
+      { name: 'Foundation Specialists' },
+      { name: 'Waterproofing Experts' }
+    ];
+  } else if (type.includes('outdoor') && type.includes('entertainment')) {
+    return [
+      { name: 'Outdoor Kitchen Specialists' },
+      { name: 'Landscape Architecture' },
+      { name: 'Hardscaping & Entertainment Areas' }
+    ];
+  } else if (type.includes('outdoor') || type.includes('patio') || type.includes('deck')) {
+    return [
+      { name: 'Outdoor Living Specialists' },
+      { name: 'Landscape Contractors' },
+      { name: 'Hardscaping & Patios' }
+    ];
   } else if (type.includes('adu') || type.includes('addition')) {
     return [
       { name: 'ADU Specialists' },
       { name: 'Home Additions' },
-      { name: 'General Contractors' }
-    ];
-  } else if (type.includes('basement')) {
-    return [
-      { name: 'Basement Finishing' },
-      { name: 'Foundation & Waterproofing' },
       { name: 'General Contractors' }
     ];
   }
