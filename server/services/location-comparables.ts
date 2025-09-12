@@ -196,8 +196,10 @@ async function searchForRealComparables(searchQuery: string, location: LocationD
 function generateMarketBasedComparables(location: LocationData): ComparableProperty[] {
   const comparables: ComparableProperty[] = [];
   const zip = location.zip || '00000';
-  const city = location.city || 'Unknown City';
   const state = location.state || 'Unknown State';
+  
+  // Map ZIP codes to correct city names
+  const city = getCorrectCityForZip(location.zip, location.city || 'Unknown City');
   
   // Get market context to determine realistic pricing
   const marketContext = getMarketContext(location);
@@ -263,6 +265,31 @@ function generateRealisticStreetNames(location: LocationData): string[] {
   
   // Generic realistic street names
   return ['Maple', 'Oak', 'Pine', 'Cedar', 'Elm'];
+}
+
+/**
+ * Map ZIP codes to correct city names for accurate comparable addresses
+ */
+function getCorrectCityForZip(zip: string | undefined, fallbackCity: string): string {
+  if (!zip) return fallbackCity;
+  
+  // Map ZIP codes to correct city names
+  const zipToCityMap: Record<string, string> = {
+    '90066': 'Marina del Rey',
+    '90210': 'Beverly Hills', 
+    '90405': 'Santa Monica',
+    '90028': 'Hollywood',
+    '90291': 'Venice',
+    '94102': 'San Francisco',
+    '94110': 'San Francisco',
+    '10001': 'New York',
+    '11201': 'Brooklyn',
+    '78701': 'Austin',
+    '33101': 'Miami',
+    // Add more ZIP to city mappings as needed
+  };
+  
+  return zipToCityMap[zip] || fallbackCity;
 }
 
 
