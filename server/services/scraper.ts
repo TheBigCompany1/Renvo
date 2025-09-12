@@ -546,7 +546,7 @@ export async function findComparableProperties(propertyData: PropertyData, prope
               dateSold = dateMatch ? dateMatch[1] : 'Recently';
             }
             
-            if (address && price && sqft > 0) {
+            if (address && price && sqft && sqft > 0) {
               comparables.push({
                 address,
                 price,
