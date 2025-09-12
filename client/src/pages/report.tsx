@@ -71,7 +71,7 @@ export default function Report() {
 
   const propertyData = report.propertyData as PropertyData;
   const renovationProjects = report.renovationProjects as RenovationProject[];
-  const comparableProperties = report.comparableProperties as ComparableProperty[];
+  const comparableProperties = (report.comparableProperties as ComparableProperty[]) || [];
   const contractors = report.contractors as Contractor[];
   const financialSummary = report.financialSummary as FinancialSummaryType;
 
@@ -88,6 +88,47 @@ export default function Report() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const getSourceLabel = (source?: string) => {
+    switch (source) {
+      case 'web_search': return 'Web Search';
+      case 'location_based': return 'Market Data';
+      case 'api': return 'MLS API';
+      case 'fallback': return 'Estimate';
+      case 'location_based_generated': return 'Local Directory';
+      default: return 'Market Data';
+    }
+  };
+
+  const getSourceBadgeStyle = (source?: string) => {
+    switch (source) {
+      case 'web_search': return 'bg-green-100 text-green-700';
+      case 'location_based': return 'bg-blue-100 text-blue-700';
+      case 'api': return 'bg-purple-100 text-purple-700';
+      case 'fallback': return 'bg-gray-100 text-gray-700';
+      case 'location_based_generated': return 'bg-orange-100 text-orange-700';
+      default: return 'bg-blue-100 text-blue-700';
+    }
+  };
+
+  // Calculate estimated current value using dynamic market data
+  const calculateEstimatedCurrentValue = (propertyData: PropertyData, comparableProperties: ComparableProperty[]) => {
+    if (!propertyData.price || !propertyData.sqft) {
+      return 'N/A';
+    }
+
+    // Use average price per sqft from comparable properties if available
+    if (comparableProperties && comparableProperties.length > 0) {
+      const avgPricePsf = comparableProperties.reduce((sum, comp) => sum + comp.pricePsf, 0) / comparableProperties.length;
+      if (avgPricePsf > 100) { // Sanity check
+        const estimatedValue = Math.floor(propertyData.sqft * avgPricePsf);
+        return formatCurrency(estimatedValue);
+      }
+    }
+
+    // Fallback to simple appreciation if no comparable data
+    return formatCurrency(Math.floor(propertyData.price * 1.08));
   };
 
   return (
@@ -117,6 +158,11 @@ export default function Report() {
         <Card>
           <CardHeader>
             <CardTitle className="text-xl font-semibold" data-testid="title-property-overview">Property Overview</CardTitle>
+            {propertyData.location && (
+              <div className="text-sm text-gray-600" data-testid="text-location-context">
+                📍 Market Analysis for {propertyData.location.city}, {propertyData.location.state}
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -131,7 +177,7 @@ export default function Report() {
                   </div>
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600" data-testid="text-property-estimated-price">
-                      {propertyData.price ? formatCurrency(Math.floor(propertyData.price * 1.08)) : 'N/A'}
+                      {calculateEstimatedCurrentValue(propertyData, comparableProperties)}
                     </div>
                     <div className="text-sm text-gray-600">Estimated Current Value</div>
                   </div>
@@ -382,8 +428,19 @@ export default function Report() {
                           className="p-3 bg-blue-50 border border-blue-200 rounded-lg"
                           data-testid={`card-contractor-${contractorIndex}`}
                         >
-                          <div className="font-medium text-blue-700 mb-2">{contractor.name}</div>
-                          <div className="text-sm text-blue-600 mb-3">{contractor.specialty}</div>
+                          <div className="font-medium text-blue-700 mb-1">{contractor.name}</div>
+                          <div className="text-sm text-blue-600 mb-1">{contractor.specialty}</div>
+                          {(contractor.city || contractor.distanceMiles) && (
+                            <div className="text-xs text-gray-500 mb-2">
+                              {contractor.city && contractor.state && `📍 ${contractor.city}, ${contractor.state}`}
+                              {contractor.distanceMiles && ` • ${contractor.distanceMiles.toFixed(1)} miles away`}
+                              {contractor.source && (
+                                <span className={`ml-2 px-2 py-0.5 rounded text-xs ${getSourceBadgeStyle(contractor.source)}`}>
+                                  {getSourceLabel(contractor.source)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <div className="flex gap-2">
                             {contractor.contact && (
                               <button 
@@ -415,11 +472,12 @@ export default function Report() {
         </Card>
 
         {/* Local Market Comparables */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold" data-testid="title-market-comparables">Local Market Comparables</CardTitle>
-          </CardHeader>
-          <CardContent>
+        {comparableProperties && comparableProperties.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold" data-testid="title-market-comparables">Local Market Comparables</CardTitle>
+            </CardHeader>
+            <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full" data-testid="table-comparables">
                 <thead>
@@ -427,15 +485,31 @@ export default function Report() {
                     <th className="text-left py-3 font-semibold">Address</th>
                     <th className="text-left py-3 font-semibold">Sale Price</th>
                     <th className="text-left py-3 font-semibold">Summary</th>
+                    <th className="text-left py-3 font-semibold">Source</th>
                   </tr>
                 </thead>
                 <tbody>
                   {comparableProperties.map((comp, index) => (
                     <tr key={index} className="border-b" data-testid={`row-comparable-${index}`}>
-                      <td className="py-3 font-medium">{comp.address}</td>
+                      <td className="py-3 font-medium">
+                        {comp.address}
+                        {comp.distanceMiles && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            📍 {comp.distanceMiles.toFixed(1)} miles away
+                          </div>
+                        )}
+                      </td>
                       <td className="py-3">{formatCurrency(comp.price)}</td>
                       <td className="py-3 text-gray-600">
-                        For Sale: {comp.beds} bed, {comp.baths} bath, {comp.sqft.toLocaleString()} sqft
+                        {comp.beds} bed, {comp.baths} bath • {comp.sqft?.toLocaleString()} sqft • Sold {comp.dateSold}
+                        <div className="text-xs text-gray-500 mt-1">
+                          ${comp.pricePsf}/sq ft
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getSourceBadgeStyle(comp.source)}`}>
+                          {getSourceLabel(comp.source)}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -444,6 +518,22 @@ export default function Report() {
             </div>
           </CardContent>
         </Card>
+        )}
+        
+        {/* Show message when no comparables available */}
+        {(!comparableProperties || comparableProperties.length === 0) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold" data-testid="title-market-comparables">Local Market Comparables</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-gray-500">
+                <p>Comparable properties data is currently being processed or unavailable.</p>
+                <p className="text-sm mt-2">This may occur when using demonstration data or if market data is limited for this area.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

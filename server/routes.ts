@@ -2,9 +2,12 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAnalysisReportSchema } from "@shared/schema";
-import { scrapeRedfinProperty, findComparableProperties } from "./services/scraper";
+import { scrapeRedfinProperty, findComparableProperties, getDynamicComparableProperties } from "./services/scraper";
 import { processRenovationAnalysis } from "./services/renovation-analyzer";
 import { generateContractorRecommendations } from "./services/openai";
+import { extractLocationFromProperty } from "./services/location-service";
+import { findLocationBasedComparables } from "./services/location-comparables";
+import { findLocationBasedContractors } from "./services/location-contractors";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create new analysis report
@@ -12,11 +15,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { propertyUrl } = insertAnalysisReportSchema.parse(req.body);
       
-      // Validate Redfin URL
-      if (!propertyUrl.includes('redfin.com')) {
-        return res.status(400).json({ 
-          message: "Invalid URL. Please provide a valid Redfin property URL." 
-        });
+      // Secure URL validation to prevent SSRF
+      try {
+        const parsedUrl = new URL(propertyUrl);
+        const allowedHosts = ['redfin.com', 'www.redfin.com', 'zillow.com', 'www.zillow.com'];
+        if (!allowedHosts.includes(parsedUrl.hostname.toLowerCase())) {
+          return res.status(400).json({ 
+            message: "Invalid URL. Please provide a valid Redfin or Zillow property URL." 
+          });
+        }
+        if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+          return res.status(400).json({ message: "Invalid URL protocol" });
+        }
+      } catch (urlError) {
+        return res.status(400).json({ message: "Invalid URL format" });
       }
 
       const report = await storage.createAnalysisReport({ propertyUrl });
@@ -67,20 +79,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const propertyData = await scrapeRedfinProperty(report.propertyUrl);
       await storage.updateAnalysisReportData(reportId, { propertyData });
 
-      // Step 2: Find comparable properties
-      const comparableProperties = await findComparableProperties(propertyData, report.propertyUrl);
+      // Step 2: Extract location from property data using new location service
+      const location = await extractLocationFromProperty(propertyData.address, report.propertyUrl);
+      
+      // Update property data with location
+      const updatedPropertyData = {
+        ...propertyData,
+        location
+      };
+      await storage.updateAnalysisReportData(reportId, { propertyData: updatedPropertyData });
+      
+      console.log(`Extracted location: ${location.city}, ${location.state} ${location.zip}`);
+
+      // Step 3: Find comparable properties using location-based approach
+      let comparableProperties;
+      try {
+        console.log(`Finding location-based comparables for ${location.city}, ${location.state}`);
+        comparableProperties = await findLocationBasedComparables(updatedPropertyData, location);
+        
+        if (comparableProperties.length === 0) {
+          console.log('Location-based comparables returned empty, falling back to scraper method');
+          comparableProperties = await findComparableProperties(updatedPropertyData, report.propertyUrl);
+        }
+      } catch (error) {
+        console.log('Location-based comparables failed, falling back to scraper method:', error);
+        comparableProperties = await findComparableProperties(updatedPropertyData, report.propertyUrl);
+      }
       await storage.updateAnalysisReportData(reportId, { comparableProperties });
 
-      // Step 3: Analyze renovations and calculate financials
+      // Step 4: Analyze renovations and calculate financials
       const { projects, financialSummary } = await processRenovationAnalysis(propertyData, comparableProperties);
       await storage.updateAnalysisReportData(reportId, { 
         renovationProjects: projects,
         financialSummary 
       });
 
-      // Step 4: Get contractor recommendations
+      // Step 5: Get location-based contractor recommendations
       const topProject = projects.length > 0 ? projects[0].name : 'Kitchen Remodel';
-      const contractors = await generateContractorRecommendations(propertyData.address, topProject);
+      let contractors;
+      try {
+        console.log(`Finding location-based contractors for ${topProject} in ${location.city}, ${location.state}`);
+        contractors = await findLocationBasedContractors(location, topProject);
+        
+        if (contractors.length === 0) {
+          console.log('Location-based contractors returned empty, falling back to AI generation');
+          const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
+          contractors = await generateContractorRecommendations(locationQuery, topProject);
+        }
+      } catch (error) {
+        console.log('Location-based contractors failed, falling back to AI generation:', error);
+        const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
+        contractors = await generateContractorRecommendations(locationQuery, topProject);
+      }
       await storage.updateAnalysisReportData(reportId, { contractors });
 
       // Mark as completed

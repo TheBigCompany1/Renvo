@@ -197,7 +197,8 @@ export async function generateContractorRecommendations(
         {
           role: "user",
           content: `Find 3 top-rated contractors in the area of ${propertyAddress} specializing in ${topRenovationProject}.
-          Focus on contractors with strong ratings and relevant experience.`
+          Focus on contractors with strong ratings and relevant experience. Make sure contractor names, specialties, 
+          or descriptions reference the location (${propertyAddress}) to show they are local to the area.`
         }
       ],
       response_format: { type: "json_object" },

@@ -23,6 +23,15 @@ export const analysisReports = pgTable("analysis_reports", {
 });
 
 // Types for the analysis data structures
+export const locationSchema = z.object({
+  address: z.string(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+});
+
 export const propertyDataSchema = z.object({
   address: z.string(),
   price: z.number().optional(),
@@ -33,6 +42,7 @@ export const propertyDataSchema = z.object({
   lotSize: z.string().optional(),
   description: z.string().optional(),
   images: z.array(z.string()).optional(),
+  location: locationSchema.optional(),
 });
 
 export const renovationProjectSchema = z.object({
@@ -60,6 +70,9 @@ export const comparablePropertySchema = z.object({
   sqft: z.number(),
   dateSold: z.string(),
   pricePsf: z.number(),
+  distanceMiles: z.number().optional(),
+  source: z.string().optional(), // 'web_search', 'api', 'fallback'
+  sourceUrl: z.string().optional(),
 });
 
 export const contractorSchema = z.object({
@@ -69,7 +82,12 @@ export const contractorSchema = z.object({
   reviewCount: z.number(),
   experience: z.string(),
   contact: z.string().optional(),
-  website: z.string().optional(), // Website URL for the contractor
+  website: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  distanceMiles: z.number().optional(),
+  source: z.string().optional(), // 'web_search', 'api', 'fallback'
 });
 
 export const financialSummarySchema = z.object({
