@@ -27,6 +27,7 @@ export interface IStorage {
       comparableProperties?: ComparableProperty[];
       contractors?: Contractor[];
       financialSummary?: FinancialSummary;
+      validationSummary?: any;
       status?: string;
       completedAt?: Date;
     }
@@ -70,6 +71,7 @@ export class MemStorage implements IStorage {
       comparableProperties: null,
       contractors: null,
       financialSummary: null,
+      validationSummary: null,
       createdAt: new Date(),
       completedAt: null,
     };
@@ -97,6 +99,7 @@ export class MemStorage implements IStorage {
       comparableProperties?: ComparableProperty[];
       contractors?: Contractor[];
       financialSummary?: FinancialSummary;
+      validationSummary?: any;
       status?: string;
       completedAt?: Date;
     }
@@ -108,6 +111,7 @@ export class MemStorage implements IStorage {
       if (data.comparableProperties) report.comparableProperties = data.comparableProperties;
       if (data.contractors) report.contractors = data.contractors;
       if (data.financialSummary) report.financialSummary = data.financialSummary;
+      if (data.validationSummary) report.validationSummary = data.validationSummary;
       if (data.status) report.status = data.status;
       if (data.completedAt) report.completedAt = data.completedAt;
       this.analysisReports.set(id, report);

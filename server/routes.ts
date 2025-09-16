@@ -107,11 +107,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       await storage.updateAnalysisReportData(reportId, { comparableProperties });
 
-      // Step 4: Analyze renovations and calculate financials
-      const { projects, financialSummary } = await processRenovationAnalysis(propertyData, comparableProperties);
+      // Step 4: Analyze renovations and calculate financials with validation
+      const { projects, financialSummary, validationSummary } = await processRenovationAnalysis(
+        updatedPropertyData, 
+        comparableProperties, 
+        location
+      );
       await storage.updateAnalysisReportData(reportId, { 
         renovationProjects: projects,
-        financialSummary 
+        financialSummary,
+        validationSummary 
       });
 
       // Step 5: Generate project-specific contractor recommendations

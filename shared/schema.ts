@@ -18,6 +18,7 @@ export const analysisReports = pgTable("analysis_reports", {
   comparableProperties: jsonb("comparable_properties"),
   contractors: jsonb("contractors"),
   financialSummary: jsonb("financial_summary"),
+  validationSummary: jsonb("validation_summary"),
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
 });

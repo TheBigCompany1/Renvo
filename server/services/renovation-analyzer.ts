@@ -1,16 +1,18 @@
 import { PropertyData, RenovationProject, FinancialSummary, ComparableProperty } from "@shared/schema";
 import { analyzePropertyForRenovations } from "./gemini";
+import { validateRenovationProjects, sortProjectsByROI } from "./renovation-validator";
 
 export async function processRenovationAnalysis(
   propertyData: PropertyData,
-  comparableProperties: ComparableProperty[]
-): Promise<{ projects: RenovationProject[]; financialSummary: FinancialSummary }> {
+  comparableProperties: ComparableProperty[],
+  location: { city?: string; state?: string; zip?: string }
+): Promise<{ projects: RenovationProject[]; financialSummary: FinancialSummary; validationSummary?: any }> {
   try {
     // Get AI analysis
     const aiAnalysis = await analyzePropertyForRenovations(propertyData, propertyData.images);
     
-    // Convert AI analysis to our schema format
-    const projects: RenovationProject[] = (aiAnalysis.renovation_ideas || []).map((project: any, index: number) => {
+    // Convert AI analysis to our schema format  
+    const rawProjects: RenovationProject[] = (aiAnalysis.renovation_ideas || []).map((project: any, index: number) => {
       const sqftAdded = project.sqft_added || (project.new_total_sqft ? project.new_total_sqft - propertyData.sqft : undefined);
       const enhancedDescription = project.detailed_description || project.description;
       
@@ -44,26 +46,30 @@ export async function processRenovationAnalysis(
       };
     });
 
-    // Calculate financial summary
-    const currentValue = propertyData.price || calculateEstimatedValue(propertyData, comparableProperties);
-    const totalRenovationCost = projects.reduce((sum, project) => sum + ((project.costRangeLow + project.costRangeHigh) / 2), 0);
-    const totalValueAdd = projects.reduce((sum, project) => sum + project.valueAdd, 0);
-    const afterRepairValue = currentValue + totalValueAdd;
-    const totalROI = Math.round(((totalValueAdd - totalRenovationCost) / totalRenovationCost) * 100);
-    const avgPricePsf = comparableProperties.length > 0 
-      ? Math.round(comparableProperties.reduce((sum, comp) => sum + comp.pricePsf, 0) / comparableProperties.length)
-      : Math.round(currentValue / propertyData.sqft);
+    // Apply deterministic validation and correction
+    console.log("🔍 Applying renovation validation and accuracy corrections...");
+    const validationResult = validateRenovationProjects(
+      rawProjects,
+      propertyData,
+      comparableProperties,
+      location
+    );
+    
+    // Sort projects by ROI (highest first) after validation
+    const sortedProjects = sortProjectsByROI(validationResult.correctedProjects);
+    
+    console.log(`✅ Validation complete. ${validationResult.validationSummary.totalCorrections} corrections applied.`);
+    if (validationResult.validationSummary.totalCorrections > 0) {
+      console.log(`  - Avg cost delta: ${validationResult.validationSummary.avgCostDelta.toFixed(1)}%`);
+      console.log(`  - Avg value delta: ${validationResult.validationSummary.avgValueDelta.toFixed(1)}%`);
+      console.log(`  - Corrected projects: ${validationResult.validationSummary.correctedProjectIds.join(', ')}`);
+    }
 
-    const financialSummary: FinancialSummary = {
-      currentValue,
-      totalRenovationCost,
-      totalValueAdd,
-      afterRepairValue,
-      totalROI,
-      avgPricePsf
+    return { 
+      projects: sortedProjects, 
+      financialSummary: validationResult.financialSummary,
+      validationSummary: validationResult.validationSummary
     };
-
-    return { projects, financialSummary };
   } catch (error) {
     console.error("Error processing renovation analysis:", error);
     throw new Error("Failed to process renovation analysis: " + (error as Error).message);
