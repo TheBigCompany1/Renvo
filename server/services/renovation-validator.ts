@@ -190,6 +190,12 @@ function validateSingleProject(
     marketPricePsfUsed: marketPricingResult.value,
     costPerSqftUsed: costPerSqftToUse, // Use the actual cost per sqft that was selected
     
+    // Frontend expects these fields directly on the project object
+    corrected: isAdditionProject ? corrected : false,
+    computedCost: computedCostMed,
+    computedValue: postRenovationValue,
+    pricePsfUsed: marketPricingResult.value,
+    
     // Apply corrections only if this is an addition project and deviations exceed threshold
     costRangeLow: (isAdditionProject && needsCostCorrection) ? computedCostLow : project.costRangeLow,
     costRangeHigh: (isAdditionProject && needsCostCorrection) ? computedCostHigh : project.costRangeHigh,
