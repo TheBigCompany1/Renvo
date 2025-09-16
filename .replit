@@ -23,8 +23,16 @@ localPort = 34031
 externalPort = 3002
 
 [[ports]]
+localPort = 38927
+externalPort = 5000
+
+[[ports]]
 localPort = 42255
 externalPort = 3003
+
+[[ports]]
+localPort = 44075
+externalPort = 4200
 
 [[ports]]
 localPort = 46013
@@ -34,7 +42,7 @@ externalPort = 3000
 PORT = "5000"
 
 [agent]
-integrations = ["javascript_mem_db:1.0.0", "javascript_openai:1.0.0"]
+integrations = ["javascript_mem_db:1.0.0", "javascript_openai:1.0.0", "javascript_gemini:1.0.0"]
 
 [workflows]
 runButton = "Project"

@@ -1,5 +1,5 @@
 import { PropertyData, RenovationProject, FinancialSummary, ComparableProperty } from "@shared/schema";
-import { analyzePropertyForRenovations } from "./openai";
+import { analyzePropertyForRenovations } from "./gemini";
 
 export async function processRenovationAnalysis(
   propertyData: PropertyData,
@@ -10,7 +10,7 @@ export async function processRenovationAnalysis(
     const aiAnalysis = await analyzePropertyForRenovations(propertyData, propertyData.images);
     
     // Convert AI analysis to our schema format
-    const projects: RenovationProject[] = (aiAnalysis.renovation_ideas || aiAnalysis.projects || []).map((project: any, index: number) => {
+    const projects: RenovationProject[] = (aiAnalysis.renovation_ideas || []).map((project: any, index: number) => {
       const sqftAdded = project.sqft_added || (project.new_total_sqft ? project.new_total_sqft - propertyData.sqft : undefined);
       const enhancedDescription = project.detailed_description || project.description;
       
