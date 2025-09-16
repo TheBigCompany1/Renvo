@@ -71,11 +71,31 @@ export const renovationProjectSchema = z.object({
   timeline: z.string(),
   priority: z.number(),
   // Enhanced details for better breakdown
-  sqftAdded: z.number().optional(), // Square footage being added
-  costPerSqft: z.number().optional(), // Cost per square foot for this project
-  valuePerSqft: z.number().optional(), // Value add per square foot
+  sqftAdded: z.number().nonnegative().optional(), // Square footage being added
+  costPerSqft: z.number().nonnegative().optional(), // Cost per square foot for this project
+  valuePerSqft: z.number().nonnegative().optional(), // Value add per square foot
   detailedDescription: z.string().optional(), // More specific description with sqft details
   contractors: z.array(contractorSchema).optional(), // Project-specific contractors
+  
+  // Computed fields for accuracy validation
+  newTotalSqft: z.number().nonnegative().optional(), // Computed total sqft after renovation
+  postRenovationValue: z.number().nonnegative().optional(), // Computed value after renovation
+  marketPricePsfUsed: z.number().nonnegative().optional(), // Market price per sqft used for calculations
+  costPerSqftUsed: z.number().nonnegative().optional(), // Construction cost per sqft used
+  
+  // Pricing sources and validation
+  pricingSources: z.object({
+    constructionCost: z.string(), // Source of construction cost data
+    marketPpsf: z.string(), // Source of market price per sqft data
+    modelVersion: z.string().optional(), // Version of pricing model used
+    region: z.string().optional(), // Market region for pricing context
+  }).optional(),
+  
+  validation: z.object({
+    costDeltaPct: z.number(), // Percentage difference from AI estimate
+    valueDeltaPct: z.number(), // Percentage difference from AI estimate  
+    corrected: z.boolean(), // Whether values were corrected from AI output
+  }).optional(),
 });
 
 export const comparablePropertySchema = z.object({
@@ -92,12 +112,13 @@ export const comparablePropertySchema = z.object({
 });
 
 export const financialSummarySchema = z.object({
-  currentValue: z.number(),
-  totalRenovationCost: z.number(),
+  currentValue: z.number().nonnegative(),
+  totalRenovationCost: z.number().nonnegative(),
   totalValueAdd: z.number(),
-  afterRepairValue: z.number(),
+  afterRepairValue: z.number().nonnegative(),
   totalROI: z.number(),
-  avgPricePsf: z.number(),
+  avgPricePsf: z.number().nonnegative(),
+  postRenovationSqft: z.number().nonnegative().optional(), // Total sqft after all renovations
 });
 
 export const insertAnalysisReportSchema = createInsertSchema(analysisReports).pick({
