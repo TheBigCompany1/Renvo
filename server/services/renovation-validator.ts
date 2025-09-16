@@ -5,6 +5,13 @@ import {
   classifyProjectType, 
   parseSquareFootageFromDescription 
 } from "./pricing";
+import { getDynamicConstructionCosts } from "./rag-pricing";
+import { 
+  getAggregatedPricing, 
+  getEnsemblePricing, 
+  performAdvancedCrossValidation,
+  AggregatedPricingResult 
+} from "./pricing-aggregator";
 
 interface ValidationResult {
   correctedProjects: RenovationProject[];
@@ -26,27 +33,48 @@ interface Location {
 /**
  * Validate and correct renovation projects for mathematical consistency
  */
-export function validateRenovationProjects(
+export async function validateRenovationProjects(
   projects: RenovationProject[],
   propertyData: PropertyData,
   comparableProperties: ComparableProperty[],
   location: Location
-): ValidationResult {
+): Promise<ValidationResult> {
   
   const correctedProjects: RenovationProject[] = [];
   const validationStats: Array<{ costDelta: number; valueDelta: number }> = [];
   const correctedProjectIds: string[] = [];
 
-  // Get market pricing data
-  const marketPricingResult = estimateMarketPpsf(comparableProperties, propertyData, location);
-  const marketPpsf = marketPricingResult.value;
+  // Get aggregated pricing data with enhanced intelligence
+  console.log(`🧠 Using intelligent pricing aggregator for validation in ${location.zip || 'unknown location'}`);
+  
+  // We'll get aggregated pricing for the primary project type to establish market baseline
+  const primaryProjectType = projects.length > 0 ? classifyProjectType(projects[0].name, projects[0].description) : 'default';
+  
+  const aggregatedPricing = await getAggregatedPricing(
+    location.zip || '90210', // fallback zip for API calls
+    primaryProjectType,
+    location,
+    comparableProperties,
+    propertyData
+  );
+  
+  const marketPpsf = aggregatedPricing.market.ppsf;
+  const marketPricingResult = {
+    value: marketPpsf,
+    source: aggregatedPricing.market.source,
+    modelVersion: '2024.2-aggregated',
+    region: aggregatedPricing.metadata.region
+  };
+  
+  console.log(`💡 Aggregated pricing confidence: ${(aggregatedPricing.overall.confidence * 100).toFixed(1)}% | Strategy: ${aggregatedPricing.overall.strategy}`);
 
   for (const project of projects) {
-    const correctedProject = validateSingleProject(
+    const correctedProject = await validateSingleProject(
       project, 
       propertyData, 
       marketPricingResult, 
-      location
+      location,
+      aggregatedPricing // Pass aggregated pricing for enhanced validation
     );
     
     correctedProjects.push(correctedProject);
@@ -88,12 +116,13 @@ export function validateRenovationProjects(
 /**
  * Validate and correct a single renovation project
  */
-function validateSingleProject(
+async function validateSingleProject(
   project: RenovationProject,
   propertyData: PropertyData,
   marketPricingResult: { value: number; source: string; modelVersion: string; region: string },
-  location: Location
-): RenovationProject {
+  location: Location,
+  aggregatedPricing?: AggregatedPricingResult
+): Promise<RenovationProject> {
   
   // Step 1: Determine square footage added
   let sqftAdded = project.sqftAdded;
@@ -113,9 +142,67 @@ function validateSingleProject(
     }
   }
 
-  // Step 2: Classify project type and get construction costs
+  // Step 2: Classify project type and get enhanced construction costs using aggregated pricing
   const projectType = classifyProjectType(project.name, project.description);
-  const constructionCostResult = estimateConstructionCostPpsf(location, projectType);
+  
+  let constructionCostResult;
+  let validationWarnings: string[] = [];
+  let validationRecommendations: string[] = [];
+  let pricingStrategy = 'unknown';
+  let pricingConfidence = 0;
+  let dataFreshness: 'current' | 'recent' | 'stale' | 'static' = 'static';
+  
+  // Always try to use aggregated pricing system which has built-in fallbacks
+  try {
+    console.log(`🧠 Using aggregated pricing system for project-specific costs: ${projectType}`);
+    const projectPricing = await getAggregatedPricing(
+      location.zip || '90210', // Use fallback zip if not available - aggregator handles this
+      projectType,
+      location,
+      undefined, // Don't pass comparables again for individual projects
+      propertyData
+    );
+    
+    constructionCostResult = {
+      low: projectPricing.construction.low,
+      medium: projectPricing.construction.medium,
+      high: projectPricing.construction.high,
+      source: projectPricing.construction.source,
+      modelVersion: '2024.2-aggregated',
+      region: projectPricing.metadata.region
+    };
+    
+    // Extract enhanced pricing metadata
+    pricingStrategy = projectPricing.overall.strategy;
+    pricingConfidence = projectPricing.construction.confidence;
+    dataFreshness = projectPricing.construction.dataFreshness;
+    
+    // Perform advanced cross-validation
+    const crossValidation = performAdvancedCrossValidation(
+      constructionCostResult,
+      marketPricingResult.value,
+      location
+    );
+    
+    validationWarnings = crossValidation.warnings;
+    validationRecommendations = crossValidation.recommendations;
+    
+    console.log(`🎯 Project-specific pricing: $${constructionCostResult.medium}/sqft (confidence: ${(pricingConfidence * 100).toFixed(1)}%)`);
+    console.log(`🔍 Cross-validation score: ${(crossValidation.consistencyScore * 100).toFixed(1)}%`);
+    console.log(`📊 Strategy: ${pricingStrategy} | Data: ${dataFreshness} | Fallbacks: ${projectPricing.metadata.fallbacksUsed.length}`);
+    
+  } catch (error) {
+    console.error(`❌ Aggregated pricing system failed for ${projectType}: ${error}`);
+    
+    // Emergency fallback to static pricing only if aggregated pricing completely fails
+    console.log(`🔄 Using emergency static fallback for ${projectType}`);
+    constructionCostResult = estimateConstructionCostPpsf(location, projectType);
+    pricingStrategy = 'Emergency Static Fallback';
+    pricingConfidence = 0.2;
+    dataFreshness = 'static';
+    validationWarnings.push('Pricing system temporarily unavailable - using static estimates');
+    validationRecommendations.push('Pricing accuracy may be reduced - consider re-running analysis');
+  }
 
   // Step 3: Compute deterministic values
   const newTotalSqft = propertyData.sqft + sqftAdded;
@@ -215,18 +302,28 @@ function validateSingleProject(
     valuePerSqft: (isAdditionProject && needsValueCorrection && sqftAdded > 0) ? 
       (computedValueAdd / sqftAdded) : project.valuePerSqft,
     
-    // Set pricing sources and validation
+    // Set enhanced pricing sources and validation
     pricingSources: {
       constructionCost: constructionCostResult.source,
       marketPpsf: marketPricingResult.source,
       modelVersion: marketPricingResult.modelVersion,
-      region: marketPricingResult.region
+      region: marketPricingResult.region,
+      // Enhanced pricing metadata
+      pricingStrategy,
+      confidence: pricingConfidence,
+      dataFreshness,
+      methodology: constructionCostResult.methodology || 'Standard pricing analysis'
     },
     
     validation: {
       costDeltaPct,
       valueDeltaPct,
-      corrected: isAdditionProject ? corrected : false // Only mark as corrected for addition projects
+      corrected: isAdditionProject ? corrected : false, // Only mark as corrected for addition projects
+      // Enhanced validation information
+      warnings: validationWarnings,
+      recommendations: validationRecommendations,
+      confidence: pricingConfidence,
+      pricingAccuracy: pricingConfidence > 0.7 ? 'high' : pricingConfidence > 0.4 ? 'medium' : 'low'
     }
   };
 

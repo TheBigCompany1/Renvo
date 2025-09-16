@@ -46,23 +46,48 @@ export async function processRenovationAnalysis(
       };
     });
 
-    // Apply deterministic validation and correction
-    console.log("🔍 Applying renovation validation and accuracy corrections...");
-    const validationResult = validateRenovationProjects(
+    // Apply deterministic validation and correction with enhanced RAG pricing
+    console.log("🔍 Applying renovation validation with dynamic RAG pricing...");
+    console.log(`📍 Location: ${location.city || 'Unknown'}, ${location.state || 'Unknown'} ${location.zip || '(no zip)'}`);
+    
+    const validationStartTime = Date.now();
+    const validationResult = await validateRenovationProjects(
       rawProjects,
       propertyData,
       comparableProperties,
       location
     );
+    const validationDuration = Date.now() - validationStartTime;
     
     // Sort projects by ROI (highest first) after validation
     const sortedProjects = sortProjectsByROI(validationResult.correctedProjects);
     
-    console.log(`✅ Validation complete. ${validationResult.validationSummary.totalCorrections} corrections applied.`);
+    // Enhanced validation summary with pricing strategy analysis
+    console.log(`✅ Validation complete in ${validationDuration}ms. ${validationResult.validationSummary.totalCorrections} corrections applied.`);
+    
+    // Analyze pricing strategies used across projects
+    const pricingStrategies = sortedProjects.map(p => p.pricingSources?.pricingStrategy).filter(Boolean);
+    const uniqueStrategies = [...new Set(pricingStrategies)];
+    const avgConfidence = sortedProjects.reduce((sum, p) => sum + (p.pricingSources?.confidence || 0), 0) / sortedProjects.length;
+    
+    console.log(`📊 Pricing Analysis:`);
+    console.log(`  - Strategies used: ${uniqueStrategies.join(', ')}`);
+    console.log(`  - Average pricing confidence: ${(avgConfidence * 100).toFixed(1)}%`);
+    console.log(`  - Data freshness: ${sortedProjects.map(p => p.pricingSources?.dataFreshness).filter(Boolean).join(', ')}`);
+    
     if (validationResult.validationSummary.totalCorrections > 0) {
+      console.log(`📈 Corrections Applied:`);
       console.log(`  - Avg cost delta: ${validationResult.validationSummary.avgCostDelta.toFixed(1)}%`);
       console.log(`  - Avg value delta: ${validationResult.validationSummary.avgValueDelta.toFixed(1)}%`);
       console.log(`  - Corrected projects: ${validationResult.validationSummary.correctedProjectIds.join(', ')}`);
+    }
+    
+    // Log any validation warnings across all projects
+    const allWarnings = sortedProjects.flatMap(p => p.validation?.warnings || []);
+    if (allWarnings.length > 0) {
+      console.log(`⚠️ Validation Warnings: ${allWarnings.length} issues detected`);
+      allWarnings.slice(0, 3).forEach(warning => console.log(`  - ${warning}`));
+      if (allWarnings.length > 3) console.log(`  - ... and ${allWarnings.length - 3} more`);
     }
 
     return { 

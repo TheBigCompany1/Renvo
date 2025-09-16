@@ -126,15 +126,16 @@ function getLocationMultiplier(location: { city?: string; state?: string }): num
 }
 
 /**
- * Estimate market price per square foot from comparable properties
+ * Estimate market price per square foot from comparable properties with dynamic RAG data
  */
-export function estimateMarketPpsf(
+export async function estimateMarketPpsf(
   comparableProperties: ComparableProperty[],
   propertyData: PropertyData,
   location: { city?: string; state?: string; zip?: string }
-): PricingResult {
+): Promise<PricingResult> {
   let ppsf: number;
   let source: string;
+  let modelVersion = "2024.1";
   
   if (comparableProperties && comparableProperties.length > 0) {
     // Calculate weighted average PPSF from comparables
@@ -152,17 +153,43 @@ export function estimateMarketPpsf(
       source = "Property price analysis";
     }
   } else {
-    // Market fallback based on location
+    // Try dynamic RAG market data if we have a zip code
+    if (location.zip) {
+      try {
+        const { getDynamicMarketPpsf } = await import('./rag-market-pricing');
+        const dynamicResult = await getDynamicMarketPpsf(location.zip, {
+          city: location.city,
+          state: location.state
+        });
+        
+        // Use dynamic data if we got a valid result
+        if (dynamicResult.value > 0) {
+          console.log(`Using dynamic market pricing for ${location.zip}: $${dynamicResult.value}/sqft`);
+          return {
+            value: dynamicResult.value,
+            source: dynamicResult.source,
+            modelVersion: dynamicResult.modelVersion,
+            region: dynamicResult.region
+          };
+        } else {
+          console.log(`No dynamic market data available for ${location.zip}, using static fallback`);
+        }
+      } catch (error) {
+        console.error(`Error getting dynamic market pricing for ${location.zip}:`, error);
+      }
+    }
+    
+    // Static fallback based on location
     const basePrice = location.state === "CA" ? 1000 : 800;
     const locationMultiplier = getLocationMultiplier(location);
     ppsf = Math.round(basePrice * locationMultiplier);
-    source = "Market analysis estimate";
+    source = "Static market analysis estimate";
   }
   
   return {
     value: ppsf,
     source,
-    modelVersion: "2024.1",
+    modelVersion,
     region: `${location.city || "Unknown"}, ${location.state || "Unknown"}`
   };
 }
