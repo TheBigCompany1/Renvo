@@ -73,6 +73,7 @@ export default function Report() {
   const renovationProjects = (report.renovationProjects as RenovationProject[]).sort((a, b) => b.roi - a.roi);
   const comparableProperties = (report.comparableProperties as ComparableProperty[]) || [];
   const financialSummary = report.financialSummary as FinancialSummaryType;
+  const validationSummary = report.validationSummary as any;
 
   const reportDate = report.completedAt ? new Date(report.completedAt).toLocaleDateString() : new Date().toLocaleDateString();
   const propertyImage = propertyData.images?.[0] || "https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=400";
@@ -361,10 +362,19 @@ export default function Report() {
                     <h3 className="text-lg font-semibold" data-testid={`text-project-name-${index}`}>
                       {project.name}
                     </h3>
+                    {/* Validation Badge */}
+                    {(project as any).corrected && (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200" data-testid={`badge-corrected-${index}`}>
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Validated
+                      </Badge>
+                    )}
                   </div>
-                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-bold">
-                    {project.roi}% ROI
-                  </Badge>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-bold">
+                      {project.roi}% ROI
+                    </Badge>
+                  </div>
                 </div>
 
                 {/* Project Description */}
@@ -376,21 +386,43 @@ export default function Report() {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-lg font-bold text-teal-600">
-                      {formatCurrency((project.costRangeLow + project.costRangeHigh) / 2)}
+                      {(project as any).computedCost ? formatCurrency((project as any).computedCost) : formatCurrency((project.costRangeLow + project.costRangeHigh) / 2)}
                     </div>
-                    <div className="text-sm text-gray-600">Est. Cost</div>
+                    <div className="text-sm text-gray-600">
+                      {(project as any).computedCost ? 'Validated Cost' : 'Est. Cost'}
+                    </div>
+                    {(project as any).costPerSqftUsed && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        ${(project as any).costPerSqftUsed}/sqft
+                      </div>
+                    )}
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-lg font-bold text-green-600">
-                      {formatCurrency(project.valueAdd)}
+                      {(project as any).computedValue ? formatCurrency((project as any).computedValue - (propertyData.price || 0)) : formatCurrency(project.valueAdd)}
                     </div>
-                    <div className="text-sm text-gray-600">Value Add</div>
+                    <div className="text-sm text-gray-600">
+                      {(project as any).computedValue ? 'Validated Value Add' : 'Value Add'}
+                    </div>
+                    {(project as any).pricePsfUsed && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        ${(project as any).pricePsfUsed}/sqft
+                      </div>
+                    )}
                   </div>
                   <div className="text-center p-4 bg-orange-50 rounded-lg">
                     <div className="text-lg font-bold text-orange-600">
-                      {formatCurrency(propertyData.price + project.valueAdd)}
+                      {(project as any).computedValue ? 
+                        formatCurrency((project as any).computedValue) : 
+                        (propertyData.price ? formatCurrency(propertyData.price + project.valueAdd) : 'N/A')
+                      }
                     </div>
                     <div className="text-sm text-gray-600">Post-Renovation Value</div>
+                    {(project as any).newTotalSqft && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {(project as any).newTotalSqft.toLocaleString()} sqft total
+                      </div>
+                    )}
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-lg font-bold text-blue-600">
@@ -494,6 +526,113 @@ export default function Report() {
             ))}
           </CardContent>
         </Card>
+
+        {/* Validation Summary */}
+        {validationSummary && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold flex items-center" data-testid="title-validation-summary">
+                <CheckCircle className="w-5 h-5 mr-2 text-blue-600" />
+                Accuracy Validation Summary
+              </CardTitle>
+              <div className="text-sm text-gray-600">
+                Mathematical consistency checks and pricing validation applied to ensure accurate calculations
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Validation Statistics */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-900">Validation Statistics</h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                      <span className="text-sm font-medium">Projects Analyzed</span>
+                      <span className="font-bold text-blue-700">{validationSummary.totalProjects || renovationProjects.length}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                      <span className="text-sm font-medium">Projects Corrected</span>
+                      <span className="font-bold text-green-700">{validationSummary.totalCorrected || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                      <span className="text-sm font-medium">Avg. Deviation Fixed</span>
+                      <span className="font-bold text-orange-700">
+                        {validationSummary.avgCostDelta ? `${validationSummary.avgCostDelta.toFixed(1)}%` : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pricing Sources */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-900">Pricing Sources</h4>
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-600">Cost Models:</div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className="bg-blue-100 text-blue-700">Market Data</Badge>
+                      <Badge className="bg-green-100 text-green-700">Regional Costs</Badge>
+                    </div>
+                    <div className="text-sm text-gray-600 mt-3">Value Models:</div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className="bg-purple-100 text-purple-700">Comparable Sales</Badge>
+                      <Badge className="bg-orange-100 text-orange-700">Price/SqFt Analysis</Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Accuracy Improvements */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-900">Accuracy Improvements</h4>
+                  <div className="space-y-3 text-sm">
+                    {validationSummary.correctedProjectIds && validationSummary.correctedProjectIds.length > 0 ? (
+                      <>
+                        <div className="p-3 bg-green-50 rounded-lg">
+                          <div className="font-medium text-green-800">✓ Mathematical Consistency</div>
+                          <div className="text-green-700 text-xs mt-1">
+                            Square footage × cost per sqft = total cost
+                          </div>
+                        </div>
+                        <div className="p-3 bg-blue-50 rounded-lg">
+                          <div className="font-medium text-blue-800">✓ Market-Based Pricing</div>
+                          <div className="text-blue-700 text-xs mt-1">
+                            Values based on local comparable sales
+                          </div>
+                        </div>
+                        <div className="p-3 bg-purple-50 rounded-lg">
+                          <div className="font-medium text-purple-800">✓ ROI Recalculation</div>
+                          <div className="text-purple-700 text-xs mt-1">
+                            Return calculations updated with validated costs
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <div className="font-medium text-gray-800">✓ AI Estimates Verified</div>
+                        <div className="text-gray-700 text-xs mt-1">
+                          Original calculations within acceptable range
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Validation Details */}
+              {validationSummary.correctedProjectIds && validationSummary.correctedProjectIds.length > 0 && (
+                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-sm">
+                    <div className="font-medium text-blue-900 mb-2">🔍 Validation Process Details</div>
+                    <div className="text-blue-800 space-y-1 text-xs">
+                      <div>• Addition projects automatically corrected when AI estimates deviated over 10% from market data</div>
+                      <div>• Remodel projects (kitchens, bathrooms) preserve AI estimates as they're harder to standardize</div>
+                      <div>• All corrections logged with before/after values for transparency</div>
+                      <div>• ROI rankings updated based on corrected financial projections</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Local Market Comparables */}
         {comparableProperties && comparableProperties.length > 0 && (
