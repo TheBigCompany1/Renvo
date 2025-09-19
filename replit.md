@@ -2,6 +2,30 @@
 
 Renvo is an AI-powered real estate renovation analysis platform that helps investors make data-driven decisions. The application scrapes property data from Redfin URLs, analyzes renovation opportunities using AI, finds comparable properties, and provides comprehensive reports with financial projections and contractor recommendations.
 
+The platform now includes comprehensive marketing pages and lead generation capabilities to convert visitors into users and capture valuable contact information for nurturing potential customers.
+
+# Recent Changes
+
+## Marketing Pages and Lead Generation (September 2025)
+
+Added comprehensive marketing infrastructure to enhance user acquisition and lead generation:
+
+- **How It Works Page**: Step-by-step explanation of the property analysis process with clear value propositions
+- **Pricing Page**: Tiered pricing structure (Free/Pro/Enterprise) with integrated email signup functionality
+- **About Page**: Company mission, technology features, team expertise, and vision with trust-building metrics
+- **Header Navigation**: Updated to include links to all marketing pages for improved discoverability
+- **Email Capture System**: Complete lead generation infrastructure integrated throughout the user journey
+
+## Email Capture and Lead Generation
+
+Implemented comprehensive email capture system for lead generation:
+
+- **Database Schema**: Added emailSignups table with fields for email, signupSource, and timestamps
+- **API Endpoints**: RESTful endpoints for email signup creation and retrieval
+- **Reusable Component**: Flexible EmailSignup component with customizable styling and messaging
+- **Analysis Flow Integration**: Email capture gate added before users can access property analysis results
+- **Source Tracking**: Tracks signup sources (pricing-page, property-analysis, etc.) for analytics
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -19,10 +43,13 @@ The client is built with React and TypeScript, using a modern component-based ar
 - **State Management**: TanStack Query for server state management and caching
 - **Build Tool**: Vite for fast development and optimized builds
 
-The frontend follows a page-based routing structure with three main views:
-- Home page for URL input
-- Processing page showing real-time analysis progress
-- Report page displaying comprehensive results
+The frontend follows a page-based routing structure with comprehensive views:
+- Home page for URL input and property analysis initiation
+- Processing page showing real-time analysis progress with email capture gate
+- Report page displaying comprehensive analysis results
+- How It Works page explaining the 3-step analysis process
+- Pricing page with tiered plans and integrated email signup
+- About page showcasing company mission and technology
 
 ## Backend Architecture
 
@@ -44,7 +71,7 @@ The application uses a hybrid storage approach:
 - **Development Storage**: In-memory storage implementation for rapid development
 - **Connection**: Neon Database serverless PostgreSQL for production
 
-The schema includes tables for users and analysis reports, with JSONB columns for flexible storage of complex data structures like renovation projects and comparable properties.
+The schema includes tables for users, analysis reports, and email signups, with JSONB columns for flexible storage of complex data structures like renovation projects and comparable properties. The email signups table tracks lead generation with signup source attribution for marketing analytics.
 
 ## Authentication and Authorization
 
