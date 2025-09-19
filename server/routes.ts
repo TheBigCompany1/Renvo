@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAnalysisReportSchema } from "@shared/schema";
+import { insertAnalysisReportSchema, insertEmailSignupSchema } from "@shared/schema";
 import { scrapeRedfinProperty, findComparableProperties, getDynamicComparableProperties } from "./services/scraper";
 import { processRenovationAnalysis } from "./services/renovation-analyzer";
 import { generateContractorRecommendations } from "./services/openai";
@@ -62,6 +62,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching analysis report:", error);
       res.status(500).json({ 
         message: "Failed to retrieve analysis report. Please try again." 
+      });
+    }
+  });
+
+  // Create new email signup
+  app.post("/api/email-signups", async (req, res) => {
+    try {
+      const validatedData = insertEmailSignupSchema.parse(req.body);
+      
+      const emailSignup = await storage.createEmailSignup(validatedData);
+      
+      res.json(emailSignup);
+    } catch (error) {
+      console.error("Error creating email signup:", error);
+      
+      // Handle Zod validation errors
+      if (error instanceof Error && 'issues' in error) {
+        return res.status(400).json({ 
+          message: "Invalid email signup data. Please check your input.",
+          errors: (error as any).issues
+        });
+      }
+      
+      res.status(500).json({ 
+        message: "Failed to create email signup. Please try again." 
       });
     }
   });

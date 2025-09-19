@@ -7,7 +7,9 @@ import {
   type RenovationProject,
   type ComparableProperty,
   type Contractor,
-  type FinancialSummary
+  type FinancialSummary,
+  type EmailSignup,
+  type InsertEmailSignup
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -32,15 +34,21 @@ export interface IStorage {
       completedAt?: Date;
     }
   ): Promise<void>;
+  
+  createEmailSignup(emailSignup: InsertEmailSignup): Promise<EmailSignup>;
+  getEmailSignups(): Promise<EmailSignup[]>;
+  getEmailSignupsBySource(source: string): Promise<EmailSignup[]>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private analysisReports: Map<string, AnalysisReport>;
+  private emailSignups: Map<string, EmailSignup>;
 
   constructor() {
     this.users = new Map();
     this.analysisReports = new Map();
+    this.emailSignups = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -116,6 +124,27 @@ export class MemStorage implements IStorage {
       if (data.completedAt) report.completedAt = data.completedAt;
       this.analysisReports.set(id, report);
     }
+  }
+
+  async createEmailSignup(insertEmailSignup: InsertEmailSignup): Promise<EmailSignup> {
+    const id = randomUUID();
+    const emailSignup: EmailSignup = {
+      id,
+      ...insertEmailSignup,
+      createdAt: new Date(),
+    };
+    this.emailSignups.set(id, emailSignup);
+    return emailSignup;
+  }
+
+  async getEmailSignups(): Promise<EmailSignup[]> {
+    return Array.from(this.emailSignups.values());
+  }
+
+  async getEmailSignupsBySource(source: string): Promise<EmailSignup[]> {
+    return Array.from(this.emailSignups.values()).filter(
+      (signup) => signup.signupSource === source
+    );
   }
 }
 

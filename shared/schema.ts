@@ -23,6 +23,13 @@ export const analysisReports = pgTable("analysis_reports", {
   completedAt: timestamp("completed_at"),
 });
 
+export const emailSignups = pgTable("email_signups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  signupSource: text("signup_source").notNull(), // e.g., "analysis_form", "homepage", "newsletter"
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Types for the analysis data structures
 export const locationSchema = z.object({
   address: z.string(),
@@ -139,5 +146,14 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
 });
 
+export const insertEmailSignupSchema = createInsertSchema(emailSignups).pick({
+  email: true,
+  signupSource: true,
+}).extend({
+  email: z.string().trim().toLowerCase().email("Please enter a valid email address"),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+export type InsertEmailSignup = z.infer<typeof insertEmailSignupSchema>;
+export type EmailSignup = typeof emailSignups.$inferSelect;
