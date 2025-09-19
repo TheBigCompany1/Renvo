@@ -1,16 +1,8 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
-import { insertEmailSignupSchema, type InsertEmailSignup } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { EmailSignup } from "@/components/email-signup";
 import { 
   Check, 
   Star, 
@@ -27,41 +19,6 @@ import {
 } from "lucide-react";
 
 export default function Pricing() {
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const { toast } = useToast();
-
-  const form = useForm<InsertEmailSignup>({
-    resolver: zodResolver(insertEmailSignupSchema),
-    defaultValues: {
-      email: "",
-      signupSource: "pricing_page"
-    }
-  });
-
-  const emailSignupMutation = useMutation({
-    mutationFn: async (data: InsertEmailSignup) => {
-      return apiRequest("POST", "/api/email-signups", data);
-    },
-    onSuccess: () => {
-      setIsSubmitted(true);
-      toast({
-        title: "Success!",
-        description: "Thanks for signing up! We'll keep you updated on new features."
-      });
-    },
-    onError: (error) => {
-      console.error("Email signup error:", error);
-      toast({
-        title: "Error",
-        description: "Failed to sign up. Please try again.",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const handleEmailSubmit = (data: InsertEmailSignup) => {
-    emailSignupMutation.mutate(data);
-  };
 
   const freePlanFeatures = [
     "Complete property analysis report",
@@ -151,46 +108,21 @@ export default function Pricing() {
 
               {/* Email Capture */}
               <div className="pt-6 border-t border-white/20">
-                <p className="text-white/90 font-medium mb-4 text-center" data-testid="text-email-prompt">
-                  Get notified when new features launch
-                </p>
-                {!isSubmitted ? (
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleEmailSubmit)} className="space-y-3">
-                      <FormField
-                        control={form.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <Input
-                                type="email"
-                                placeholder="Enter your email"
-                                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                                data-testid="input-email"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage className="text-red-300" />
-                          </FormItem>
-                        )}
-                      />
-                      <Button
-                        type="submit"
-                        disabled={emailSignupMutation.isPending}
-                        className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border-0 shadow-lg disabled:opacity-50"
-                        data-testid="button-submit-email"
-                      >
-                        {emailSignupMutation.isPending ? "Signing up..." : "Get Updates"}
-                      </Button>
-                    </form>
-                  </Form>
-                ) : (
-                  <div className="text-center p-4 bg-green-500/20 rounded-lg" data-testid="message-email-success">
-                    <Check className="w-6 h-6 text-green-400 mx-auto mb-2" />
-                    <p className="text-green-400 font-medium">Thanks! We'll keep you updated.</p>
-                  </div>
-                )}
+                <EmailSignup
+                  signupSource="pricing_page"
+                  description="Get notified when new features launch"
+                  placeholder="Enter your email"
+                  buttonText="Get Updates"
+                  loadingText="Signing up..."
+                  successMessage="Thanks! We'll keep you updated."
+                  styling={{
+                    input: "bg-white/10 border-white/20 text-white placeholder:text-white/50",
+                    button: "w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border-0 shadow-lg",
+                    description: "text-white/90 font-medium mb-4 text-center",
+                    successContainer: "text-center p-4 bg-green-500/20 rounded-lg"
+                  }}
+                  testIdPrefix="pricing-email"
+                />
               </div>
 
               <Link href="/" data-testid="link-start-free">
