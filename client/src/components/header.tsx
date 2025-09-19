@@ -14,9 +14,9 @@ export default function Header() {
             </div>
           </Link>
           <nav className="hidden md:flex space-x-8">
-            <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/how-it-works" className="text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-how-it-works">
               How it Works
-            </a>
+            </Link>
             <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
               Pricing
             </a>
