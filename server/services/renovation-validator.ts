@@ -124,80 +124,71 @@ async function validateSingleProject(
   aggregatedPricing?: AggregatedPricingResult
 ): Promise<RenovationProject> {
   
-  // Step 1: Determine square footage added - special handling for garage conversions
+  // Step 1: Dynamically determine NEW livable space being added
+  // Key insight: scraped property sqft = existing livable space only (no garages/attics/basements)
+  // So any conversion (garage→livable) or addition represents NEW livable space
   let sqftAdded = project.sqftAdded;
   const projectType = classifyProjectType(project.name, project.description);
-  const isGarageConversion = projectType === "adu" && 
-    (project.name.toLowerCase().includes("garage") || 
-     project.description.toLowerCase().includes("garage") ||
-     (project.detailedDescription && project.detailedDescription.toLowerCase().includes("garage")));
   
-  if (isGarageConversion) {
-    // For garage conversions, we need to calculate TOTAL livable space added
-    // This includes both the garage space becoming livable + any additional space
-    console.log(`🏠 Detected garage conversion project: ${project.name}`);
-    
-    const fullDescription = `${project.name} ${project.description} ${project.detailedDescription || ""}`;
-    const allSqftInDescription = parseSquareFootageFromDescription(fullDescription);
-    
-    // Try to extract garage size and total space from description
-    const garagePattern = /garage.*?(\d+)\s*(?:sq\.?\s*ft\.?|sqft)/i;
-    const totalPattern = /total.*?(\d+)\s*(?:sq\.?\s*ft\.?|sqft)/i;
-    const additionPattern = /addition.*?(\d+)\s*(?:sq\.?\s*ft\.?|sqft)/i;
-    
-    let garageSize = 0;
-    let totalSpace = 0;
-    let additionSpace = 0;
-    
-    const garageMatch = fullDescription.match(garagePattern);
-    const totalMatch = fullDescription.match(totalPattern);
-    const additionMatch = fullDescription.match(additionPattern);
-    
-    if (garageMatch) garageSize = parseInt(garageMatch[1]);
-    if (totalMatch) totalSpace = parseInt(totalMatch[1]);
-    if (additionMatch) additionSpace = parseInt(additionMatch[1]);
-    
-    console.log(`🔍 Garage conversion analysis:
-      - Garage size: ${garageSize} sqft
-      - Total space mentioned: ${totalSpace} sqft  
-      - Addition mentioned: ${additionSpace} sqft
-      - AI sqftAdded: ${project.sqftAdded} sqft`);
-    
-    if (garageSize > 0 && additionSpace > 0) {
-      // Best case: we found both garage size and addition
-      sqftAdded = garageSize + additionSpace;
-      console.log(`✅ Using garage (${garageSize}) + addition (${additionSpace}) = ${sqftAdded} total livable sqft added`);
-    } else if (totalSpace > 0 && project.sqftAdded > 0) {
-      // We have total space and the AI's additional space
-      sqftAdded = totalSpace - propertyData.sqft; // Total new livable space
-      console.log(`✅ Using total space calculation: ${totalSpace} - ${propertyData.sqft} = ${sqftAdded} total livable sqft added`);
-    } else if (allSqftInDescription > project.sqftAdded) {
-      // Use all square footage found in description as it likely includes garage conversion
-      sqftAdded = allSqftInDescription;
-      console.log(`✅ Using all sqft from description: ${sqftAdded} total livable sqft added`);
-    } else {
-      // Fallback: estimate garage as 400 sqft + AI addition
-      const estimatedGarageSize = 400; // Typical 2-car garage
-      sqftAdded = estimatedGarageSize + (project.sqftAdded || 0);
-      console.log(`⚠️ Using estimated garage size (${estimatedGarageSize}) + AI addition (${project.sqftAdded}) = ${sqftAdded} total livable sqft added`);
-    }
-  } else {
-    // Non-garage conversion logic (original)
-    if (!sqftAdded || sqftAdded <= 0) {
-      // Parse from description if missing
-      const parsedSqft = parseSquareFootageFromDescription(
-        `${project.name} ${project.description} ${project.detailedDescription || ""}`
-      );
-      
-      if (parsedSqft > 0) {
-        sqftAdded = parsedSqft;
-      } else {
-        // Only apply default for addition-like projects, otherwise use 0
-        const additionTypes = ["adu", "addition", "second_story", "garage_conversion"];
-        sqftAdded = additionTypes.includes(projectType) ? 500 : 0;
-      }
+  console.log(`🏗️ Analyzing renovation project: ${project.name}`);
+  console.log(`📐 Current property livable sqft: ${propertyData.sqft} (garages/non-livable spaces not included)`);
+  
+  // Parse the renovation description intelligently to understand what's happening
+  const fullDescription = `${project.name} ${project.description} ${project.detailedDescription || ""}`.toLowerCase();
+  
+  // Check if this involves converting non-livable space to livable space
+  const conversionKeywords = ['convert', 'conversion', 'into', 'above', 'garage', 'attic', 'basement', 'shed'];
+  const isConversion = conversionKeywords.some(keyword => fullDescription.includes(keyword));
+  
+  // Extract all square footage numbers from description
+  const allSqftNumbers = parseSquareFootageFromDescription(
+    `${project.name} ${project.description} ${project.detailedDescription || ""}`
+  );
+  
+  // Look for key phrases that indicate total livable space being created
+  const totalLivablePatterns = [
+    /(?:total|creating|into)\s+(?:a\s+)?(\d+)\s*(?:sq\.?\s*ft\.?|sqft)/i,
+    /(\d+)\s*(?:sq\.?\s*ft\.?|sqft)\s+(?:adu|unit|space|addition)/i,
+    /(?:adu|unit|space|addition).*?(\d+)\s*(?:sq\.?\s*ft\.?|sqft)/i
+  ];
+  
+  let detectedTotalLivableSpace = 0;
+  for (const pattern of totalLivablePatterns) {
+    const match = fullDescription.match(pattern);
+    if (match) {
+      detectedTotalLivableSpace = Math.max(detectedTotalLivableSpace, parseInt(match[1]));
     }
   }
+  
+  // Intelligent calculation based on project characteristics
+  if (detectedTotalLivableSpace > 0) {
+    // We found explicit mention of total livable space being created
+    sqftAdded = detectedTotalLivableSpace;
+    console.log(`✅ Detected total new livable space: ${sqftAdded} sqft`);
+  } else if (isConversion && allSqftNumbers > 0) {
+    // This is a conversion project with space numbers - likely all new livable space
+    sqftAdded = allSqftNumbers;
+    console.log(`🔄 Conversion project detected - all space becomes livable: ${sqftAdded} sqft`);
+  } else if (project.newTotalSqft && project.newTotalSqft > propertyData.sqft) {
+    // AI provided new total sqft - calculate the difference
+    sqftAdded = project.newTotalSqft - propertyData.sqft;
+    console.log(`🧠 Using AI's new total sqft calculation: ${project.newTotalSqft} - ${propertyData.sqft} = ${sqftAdded} sqft added`);
+  } else if (project.sqftAdded && project.sqftAdded > 0) {
+    // Use AI's provided sqft added if available
+    sqftAdded = project.sqftAdded;
+    console.log(`🤖 Using AI's sqft added: ${sqftAdded} sqft`);
+  } else if (allSqftNumbers > 0) {
+    // Fallback to parsed numbers from description
+    sqftAdded = allSqftNumbers;
+    console.log(`📖 Using parsed sqft from description: ${sqftAdded} sqft`);
+  } else {
+    // Last resort: reasonable defaults for addition projects only
+    const additionTypes = ["adu", "addition", "second_story", "garage_conversion"];
+    sqftAdded = additionTypes.includes(projectType) ? 500 : 0;
+    console.log(`⚠️ Using default estimate for ${projectType}: ${sqftAdded} sqft`);
+  }
+  
+  console.log(`📊 Final calculation - New livable space added: ${sqftAdded} sqft`);
 
   // Step 2: Get enhanced construction costs using aggregated pricing (projectType already declared above)
   
