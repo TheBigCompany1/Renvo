@@ -308,9 +308,14 @@ async function validateSingleProject(
     - New sqft: ${sqftAdded}
     - Validated costs: $${constructionPPSF} × ${sqftAdded} = $${computedCostMed.toLocaleString()}`);
   
-  // Compute ROI: ((valueAdd - cost) / cost) * 100  
+  // USER ROI FORMULA: (valueAdd / cost) * 100  
   const computedROI = computedCostMed > 0 ? 
-    ((computedValueAdd - computedCostMed) / computedCostMed) * 100 : 0;
+    (computedValueAdd / computedCostMed) * 100 : 0;
+  
+  console.log(`💸 ROI calculation:
+    - Value add: $${computedValueAdd.toLocaleString()}
+    - Cost: $${computedCostMed.toLocaleString()}  
+    - ROI: $${computedValueAdd.toLocaleString()} ÷ $${computedCostMed.toLocaleString()} = ${computedROI.toFixed(1)}%`);
 
   // Step 4: Determine if this is an addition-like project that should use deterministic corrections
   const additionTypes = ["adu", "addition", "second_story", "garage_conversion"];
@@ -434,8 +439,9 @@ function computeFinancialSummary(
     }
   }, 0);
   
+  // USER ROI FORMULA: (valueAdd / cost) * 100
   const totalROI = totalRenovationCost > 0 ? 
-    ((totalValueAdd - totalRenovationCost) / totalRenovationCost) * 100 : 0;
+    (totalValueAdd / totalRenovationCost) * 100 : 0;
   
   console.log(`📊 Financial Summary using exact user formulas:
     - Existing sqft: ${propertyData.sqft}
