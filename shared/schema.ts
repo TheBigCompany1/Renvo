@@ -27,6 +27,7 @@ export const emailSignups = pgTable("email_signups", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull(),
   signupSource: text("signup_source").notNull(), // e.g., "analysis_form", "homepage", "newsletter"
+  reportId: varchar("report_id").references(() => analysisReports.id), // Optional link to specific report
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -149,8 +150,10 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export const insertEmailSignupSchema = createInsertSchema(emailSignups).pick({
   email: true,
   signupSource: true,
+  reportId: true,
 }).extend({
   email: z.string().trim().toLowerCase().email("Please enter a valid email address"),
+  reportId: z.string().uuid().optional(), // Optional UUID for report linking
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

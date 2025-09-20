@@ -18,6 +18,11 @@ export interface EmailSignupProps {
   signupSource: string;
   
   /**
+   * Optional report ID to link this email signup to a specific analysis report
+   */
+  reportId?: string;
+  
+  /**
    * Placeholder text for the email input
    * @default "Enter your email"
    */
@@ -111,6 +116,7 @@ export interface EmailSignupProps {
 
 export function EmailSignup({
   signupSource,
+  reportId,
   placeholder = "Enter your email",
   buttonText = "Subscribe",
   loadingText = "Subscribing...",
@@ -134,7 +140,8 @@ export function EmailSignup({
     resolver: zodResolver(insertEmailSignupSchema),
     defaultValues: {
       email: "",
-      signupSource
+      signupSource,
+      reportId
     }
   });
 
@@ -163,7 +170,7 @@ export function EmailSignup({
 
   const handleEmailSubmit = (data: InsertEmailSignup) => {
     if (disabled) return;
-    emailSignupMutation.mutate({ ...data, signupSource });
+    emailSignupMutation.mutate({ ...data, signupSource, reportId });
   };
 
   // Size-based styling

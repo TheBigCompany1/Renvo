@@ -131,6 +131,7 @@ export class MemStorage implements IStorage {
     const emailSignup: EmailSignup = {
       id,
       ...insertEmailSignup,
+      reportId: insertEmailSignup.reportId || null,
       createdAt: new Date(),
     };
     this.emailSignups.set(id, emailSignup);

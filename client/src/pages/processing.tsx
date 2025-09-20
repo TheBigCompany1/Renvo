@@ -92,6 +92,7 @@ export default function Processing() {
               
               <EmailSignup
                 signupSource="property-analysis"
+                reportId={id}
                 placeholder="Enter your email to access your report"
                 buttonText="Get My Report"
                 loadingText="Preparing your report..."
