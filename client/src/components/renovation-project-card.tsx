@@ -50,7 +50,7 @@ export default function RenovationProjectCard({ project, isTopRated }: Renovatio
           <div className="p-4 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground">ROI</p>
             <p className="text-lg font-semibold text-chart-2" data-testid={`text-roi-${project.id}`}>
-              {project.roi}%
+              {Math.round(project.roi)}%
             </p>
           </div>
           <div className="p-4 bg-muted/50 rounded-lg">

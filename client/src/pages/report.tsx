@@ -266,7 +266,7 @@ export default function Report() {
               <div>
                 <p className="text-gray-700 mb-4" data-testid="text-investment-summary">
                   The top recommendation is an <strong>ADU Conversion</strong>. This project scores an 
-                  <strong> Average Opportunity</strong> due to its high potential ROI of {renovationProjects[0]?.roi || 0}% and strong 
+                  <strong> Average Opportunity</strong> due to its high potential ROI of {Math.round(renovationProjects[0]?.roi || 0)}% and strong 
                   rental income opportunities in this market. The existing property features, particularly the {propertyData.sqft} 
                   sq ft of space and {propertyData.lotSize} lot, make this the most strategic investment for this property.
                 </p>
@@ -274,7 +274,7 @@ export default function Report() {
               <div className="text-center space-y-6">
                 <div className="inline-block p-6 bg-orange-50 rounded-full">
                   <div className="text-3xl font-bold text-orange-600" data-testid="text-opportunity-score">
-                    {opportunityScore}%
+                    {Math.round(opportunityScore)}%
                   </div>
                   <div className="text-sm text-gray-600 mt-2">Opportunity Score</div>
                   <Badge variant="secondary" className="mt-2 bg-orange-100 text-orange-700">
@@ -307,7 +307,7 @@ export default function Report() {
                     <div key={project.id} className="space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium">{project.name}</span>
-                        <span className="text-sm font-bold text-orange-600">{project.roi}%</span>
+                        <span className="text-sm font-bold text-orange-600">{Math.round(project.roi)}%</span>
                       </div>
                       <Progress 
                         value={project.roi} 
@@ -372,7 +372,7 @@ export default function Report() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-bold">
-                      {project.roi}% ROI
+                      {Math.round(project.roi)}% ROI
                     </Badge>
                   </div>
                 </div>
@@ -489,7 +489,7 @@ export default function Report() {
                           {(contractor.city || contractor.distanceMiles) && (
                             <div className="text-xs text-gray-500 mb-2">
                               {contractor.city && contractor.state && `📍 ${contractor.city}, ${contractor.state}`}
-                              {contractor.distanceMiles && ` • ${contractor.distanceMiles.toFixed(1)} miles away`}
+                              {contractor.distanceMiles && ` • ${Math.round(contractor.distanceMiles)} miles away`}
                               {contractor.source && (
                                 <span className={`ml-2 px-2 py-0.5 rounded text-xs ${getSourceBadgeStyle(contractor.source)}`}>
                                   {getSourceLabel(contractor.source)}
@@ -556,7 +556,7 @@ export default function Report() {
                     <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
                       <span className="text-sm font-medium">Avg. Deviation Fixed</span>
                       <span className="font-bold text-orange-700">
-                        {validationSummary.avgCostDelta ? `${validationSummary.avgCostDelta.toFixed(1)}%` : 'N/A'}
+                        {validationSummary.avgCostDelta ? `${Math.round(validationSummary.avgCostDelta)}%` : 'N/A'}
                       </span>
                     </div>
                   </div>
@@ -658,7 +658,7 @@ export default function Report() {
                         {comp.address}
                         {comp.distanceMiles && (
                           <div className="text-xs text-gray-500 mt-1">
-                            📍 {comp.distanceMiles.toFixed(1)} miles away
+                            📍 {Math.round(comp.distanceMiles)} miles away
                           </div>
                         )}
                       </td>

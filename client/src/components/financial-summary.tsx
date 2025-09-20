@@ -44,7 +44,7 @@ export default function FinancialSummaryComponent({ financialSummary }: Financia
           <div className="flex justify-between items-center p-4 bg-chart-2/10 border border-chart-2/20 rounded-lg">
             <span className="text-foreground font-medium">Total ROI</span>
             <span className="font-bold text-xl text-chart-2" data-testid="text-financial-total-roi">
-              {financialSummary.totalROI}%
+              {Math.round(financialSummary.totalROI)}%
             </span>
           </div>
         </div>
