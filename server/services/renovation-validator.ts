@@ -407,6 +407,13 @@ async function validateSingleProject(
     }
   };
 
+  console.log(`🚀 Final project object being returned for "${correctedProject.name}":
+    - valueAdd: $${correctedProject.valueAdd?.toLocaleString() || 'N/A'}
+    - valuePerSqft: $${correctedProject.valuePerSqft?.toLocaleString() || 'N/A'}
+    - sqftAdded: ${correctedProject.sqftAdded || 'N/A'}
+    - costPerSqft: $${correctedProject.costPerSqft?.toLocaleString() || 'N/A'}
+    - roi: ${correctedProject.roi?.toFixed(1) || 'N/A'}%`);
+
   return correctedProject;
 }
 
