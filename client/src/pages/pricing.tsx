@@ -282,7 +282,7 @@ export default function Pricing() {
             </Link>
           </div>
           <div className="text-white/60 text-sm">
-            <p>✓ 100% Free to start • ✓ No signup required • ✓ Results in minutes</p>
+            <p>✓ 100% Free to start • ✓ Just email for results • ✓ Results in minutes</p>
           </div>
         </div>
       </div>

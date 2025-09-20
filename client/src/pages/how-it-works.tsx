@@ -201,7 +201,7 @@ export default function HowItWorks() {
             Ready to Analyze Your First Property?
           </h2>
           <p className="text-lg text-white/70" data-testid="text-cta-description">
-            Get started with your property analysis today. No signup required, results in 2-3 minutes.
+            Get started with your property analysis today. Just provide your email for results in 2-3 minutes.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/" data-testid="link-start-analysis">

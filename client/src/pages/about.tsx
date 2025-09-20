@@ -301,7 +301,7 @@ export default function About() {
             </Link>
           </div>
           <div className="text-white/60 text-sm">
-            <p>✓ Free analysis • ✓ No signup required • ✓ Results in 2-3 minutes</p>
+            <p>✓ Free analysis • ✓ Just email for results • ✓ Results in 2-3 minutes</p>
           </div>
         </div>
       </div>

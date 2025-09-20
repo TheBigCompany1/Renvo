@@ -130,7 +130,7 @@ export default function Home() {
 
           {/* Benefits */}
           <div className="mt-8 text-white/80 text-sm">
-            <p>✓ Free analysis • ✓ No signup required • ✓ Results in 2-3 minutes</p>
+            <p>✓ Free analysis • ✓ Just email for results • ✓ Results in 2-3 minutes</p>
           </div>
         </div>
       </div>
