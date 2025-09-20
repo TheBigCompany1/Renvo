@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, jsonb, timestamp, decimal, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { legitimateEmailValidator } from "./email-validation";
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -152,7 +153,7 @@ export const insertEmailSignupSchema = createInsertSchema(emailSignups).pick({
   signupSource: true,
   reportId: true,
 }).extend({
-  email: z.string().trim().toLowerCase().email("Please enter a valid email address"),
+  email: legitimateEmailValidator,
   reportId: z.string().uuid().optional(), // Optional UUID for report linking
 });
 
