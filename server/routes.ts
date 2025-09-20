@@ -57,6 +57,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Debug: Log exactly what we're sending to frontend  
+      if (report.renovationProjects && report.renovationProjects.length > 0) {
+        console.log(`🚀 API GET Response Debug - Sending to frontend:`);
+        report.renovationProjects.forEach((project, index) => {
+          console.log(`  Project ${index + 1}: "${project.name}"`);
+          console.log(`    - valueAdd: $${project.valueAdd?.toLocaleString()}`);
+          console.log(`    - sqftAdded: ${project.sqftAdded}`);
+          console.log(`    - costPerSqft: $${project.costPerSqft}`);
+          console.log(`    - valuePerSqft: $${project.valuePerSqft}`);
+          console.log(`    - roi: ${project.roi}%`);
+        });
+      }
+      
       res.json(report);
     } catch (error) {
       console.error("Error fetching analysis report:", error);
