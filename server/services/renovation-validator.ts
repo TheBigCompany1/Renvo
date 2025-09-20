@@ -321,6 +321,12 @@ async function validateSingleProject(
   const additionTypes = ["adu", "addition", "second_story", "garage_conversion"];
   const isAdditionProject = additionTypes.includes(projectType) && sqftAdded > 0;
   
+  console.log(`🔍 Addition project check for "${project.name}":
+    - Project type: "${projectType}"
+    - Sqft added: ${sqftAdded}
+    - Is addition project: ${isAdditionProject}
+    - Will use corrected values: ${isAdditionProject}`);
+  
   let costDeltaPct = 0;
   let valueDeltaPct = 0;
   let needsCostCorrection = false;
