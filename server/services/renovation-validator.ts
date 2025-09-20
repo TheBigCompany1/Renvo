@@ -347,6 +347,14 @@ async function validateSingleProject(
   }
 
   // Step 5: Apply corrections if needed (only for addition projects)
+  const finalValueAdd = isAdditionProject ? computedValueAdd : project.valueAdd;
+  
+  console.log(`🔧 Setting final values for "${project.name}":
+    - Original AI valueAdd: $${project.valueAdd?.toLocaleString() || 'N/A'}
+    - Computed valueAdd: $${computedValueAdd.toLocaleString()}
+    - Is addition project: ${isAdditionProject}
+    - Final valueAdd being set: $${finalValueAdd.toLocaleString()}`);
+    
   const correctedProject: RenovationProject = {
     ...project,
     
@@ -366,7 +374,7 @@ async function validateSingleProject(
     // For addition projects: ALWAYS use exact user formulas (no AI values)
     costRangeLow: isAdditionProject ? computedCostLow : project.costRangeLow,
     costRangeHigh: isAdditionProject ? computedCostHigh : project.costRangeHigh,
-    valueAdd: isAdditionProject ? computedValueAdd : project.valueAdd, // Always use computed value for additions
+    valueAdd: finalValueAdd, // Always use computed value for additions
     // For addition projects: ALWAYS use computed ROI with exact formulas (no AI costs)
     roi: isAdditionProject ? computedROI : project.roi,
     
