@@ -93,18 +93,32 @@ export const renovationProjectSchema = z.object({
   marketPricePsfUsed: z.number().nonnegative().optional(), // Market price per sqft used for calculations
   costPerSqftUsed: z.number().nonnegative().optional(), // Construction cost per sqft used
   
+  // Additional computed fields for frontend display
+  corrected: z.boolean().optional(), // Whether this project was corrected
+  computedCost: z.number().optional(), // Computed cost for display
+  computedValue: z.number().optional(), // Computed value for display  
+  pricePsfUsed: z.number().optional(), // Price per sqft used in calculations
+  
   // Pricing sources and validation
   pricingSources: z.object({
     constructionCost: z.string(), // Source of construction cost data
     marketPpsf: z.string(), // Source of market price per sqft data
     modelVersion: z.string().optional(), // Version of pricing model used
     region: z.string().optional(), // Market region for pricing context
+    pricingStrategy: z.string().optional(), // Pricing strategy used
+    confidence: z.number().optional(), // Confidence score (0-1)
+    dataFreshness: z.enum(['current', 'recent', 'stale', 'static']).optional(), // Data freshness indicator
+    methodology: z.string().optional(), // Methodology used for pricing
   }).optional(),
   
   validation: z.object({
     costDeltaPct: z.number(), // Percentage difference from AI estimate
     valueDeltaPct: z.number(), // Percentage difference from AI estimate  
     corrected: z.boolean(), // Whether values were corrected from AI output
+    warnings: z.array(z.string()).optional(), // Validation warnings
+    recommendations: z.array(z.string()).optional(), // Validation recommendations
+    confidence: z.number().optional(), // Validation confidence score
+    pricingAccuracy: z.enum(['high', 'medium', 'low']).optional(), // Pricing accuracy level
   }).optional(),
 });
 

@@ -286,21 +286,25 @@ async function validateSingleProject(
     // Apply corrections only if this is an addition project and deviations exceed threshold
     costRangeLow: (isAdditionProject && needsCostCorrection) ? computedCostLow : project.costRangeLow,
     costRangeHigh: (isAdditionProject && needsCostCorrection) ? computedCostHigh : project.costRangeHigh,
-    valueAdd: (isAdditionProject && needsValueCorrection) ? computedValueAdd : project.valueAdd,
+    valueAdd: isAdditionProject ? computedValueAdd : project.valueAdd, // Always use computed value for additions
     roi: (() => {
       if (!isAdditionProject) return project.roi; // Preserve AI ROI for remodels
-      if (needsCostCorrection || needsValueCorrection) return computedROI; // Use computed ROI for corrected additions
       
-      // For additions where cost isn't corrected, compute ROI from AI cost median
-      const aiCostMed = (project.costRangeLow + project.costRangeHigh) / 2;
-      const valueAddToUse = needsValueCorrection ? computedValueAdd : project.valueAdd;
-      return aiCostMed > 0 ? ((valueAddToUse - aiCostMed) / aiCostMed) * 100 : project.roi;
+      // For addition projects, always use computed ROI with computed value add
+      if (needsCostCorrection) {
+        // Use computed costs and computed value add
+        return computedROI;
+      } else {
+        // Use AI costs but computed value add for mathematical consistency
+        const aiCostMed = (project.costRangeLow + project.costRangeHigh) / 2;
+        return aiCostMed > 0 ? ((computedValueAdd - aiCostMed) / aiCostMed) * 100 : computedROI;
+      }
     })(),
     
     // Update per-sqft values if corrected
     costPerSqft: (isAdditionProject && needsCostCorrection) ? costPerSqftToUse : project.costPerSqft,
-    valuePerSqft: (isAdditionProject && needsValueCorrection && sqftAdded > 0) ? 
-      (computedValueAdd / sqftAdded) : project.valuePerSqft,
+    valuePerSqft: (isAdditionProject && sqftAdded > 0) ? 
+      (computedValueAdd / sqftAdded) : project.valuePerSqft, // Always use computed value per sqft for additions
     
     // Set enhanced pricing sources and validation
     pricingSources: {
