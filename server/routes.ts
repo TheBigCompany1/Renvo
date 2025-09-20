@@ -57,18 +57,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Debug: Log exactly what we're sending to frontend  
-      if (report.renovationProjects && Array.isArray(report.renovationProjects) && report.renovationProjects.length > 0) {
-        console.log(`🚀 API GET Response Debug - Sending to frontend:`);
-        report.renovationProjects.forEach((project: any, index: number) => {
-          console.log(`  Project ${index + 1}: "${project.name}"`);
-          console.log(`    - valueAdd: $${project.valueAdd?.toLocaleString()}`);
-          console.log(`    - sqftAdded: ${project.sqftAdded}`);
-          console.log(`    - costPerSqft: $${project.costPerSqft}`);
-          console.log(`    - valuePerSqft: $${project.valuePerSqft}`);
-          console.log(`    - roi: ${project.roi}%`);
-        });
-      }
       
       res.json(report);
     } catch (error) {

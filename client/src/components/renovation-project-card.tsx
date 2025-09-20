@@ -8,16 +8,6 @@ interface RenovationProjectCardProps {
 }
 
 export default function RenovationProjectCard({ project, isTopRated }: RenovationProjectCardProps) {
-  // Debug: Log the exact data being received from API
-  console.log(`🔍 Component "${project.name}" received:`, {
-    valueAdd: project.valueAdd,
-    valuePerSqft: project.valuePerSqft,
-    sqftAdded: project.sqftAdded,
-    costPerSqft: project.costPerSqft,
-    roi: project.roi,
-    description: project.description?.substring(0, 100) + "..."
-  });
-  
   return (
     <Card className="hover:shadow-md transition-shadow" data-testid={`card-project-${project.id}`}>
       <CardContent className="p-6">

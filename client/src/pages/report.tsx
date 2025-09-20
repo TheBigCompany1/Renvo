@@ -399,10 +399,10 @@ export default function Report() {
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-lg font-bold text-green-600">
-                      {(project as any).computedValue ? formatCurrency((project as any).computedValue - (propertyData.price || 0)) : formatCurrency(project.valueAdd)}
+                      {formatCurrency(project.valueAdd)}
                     </div>
                     <div className="text-sm text-gray-600">
-                      {(project as any).computedValue ? 'Validated Value Add' : 'Value Add'}
+                      {(project as any).corrected ? 'Validated Value Add' : 'Est. Value Add'}
                     </div>
                     {(project as any).pricePsfUsed && (
                       <div className="text-xs text-gray-500 mt-1">
