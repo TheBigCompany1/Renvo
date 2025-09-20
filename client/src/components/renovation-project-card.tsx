@@ -42,10 +42,11 @@ export default function RenovationProjectCard({ project, isTopRated }: Renovatio
             </p>
           </div>
           <div className="p-4 bg-muted/50 rounded-lg">
-            <p className="text-sm text-muted-foreground">Value Add</p>
-            <p className="text-lg font-semibold text-foreground" data-testid={`text-value-add-${project.id}`}>
+            <p className="text-sm text-muted-foreground">Validated Value Add</p>
+            <p className="text-lg font-semibold text-green-600" data-testid={`text-value-add-${project.id}`}>
               ${project.valueAdd.toLocaleString()}
             </p>
+            <p className="text-xs text-muted-foreground">${project.valuePerSqft}/sqft</p>
           </div>
           <div className="p-4 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground">ROI</p>
@@ -61,32 +62,32 @@ export default function RenovationProjectCard({ project, isTopRated }: Renovatio
           </div>
         </div>
 
-        {/* Cost & Value Breakdown */}
+        {/* Cost & Value Breakdown - Using Validated Values */}
         {(project.costPerSqft || project.valuePerSqft || project.sqftAdded) && (
           <div className="bg-gray-50 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-3">Cost & Value Breakdown</h4>
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Validated Cost & Value Breakdown</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               {project.costPerSqft && project.sqftAdded && (
                 <div>
-                  <p className="text-gray-600">Construction Cost</p>
+                  <p className="text-gray-600">Validated Cost</p>
                   <p className="font-semibold" data-testid={`text-cost-breakdown-${project.id}`}>
                     ${project.costPerSqft.toLocaleString()}/sq ft × {project.sqftAdded.toLocaleString()} sq ft = ${(project.costPerSqft * project.sqftAdded).toLocaleString()}
                   </p>
                 </div>
               )}
-              {project.valuePerSqft && project.sqftAdded && (
+              {project.valueAdd && project.valuePerSqft && project.sqftAdded && (
                 <div>
-                  <p className="text-gray-600">Value Added</p>
+                  <p className="text-gray-600">Validated Value Add</p>
                   <p className="font-semibold text-green-600" data-testid={`text-value-breakdown-${project.id}`}>
-                    ${project.valuePerSqft.toLocaleString()}/sq ft × {project.sqftAdded.toLocaleString()} sq ft = ${(project.valuePerSqft * project.sqftAdded).toLocaleString()}
+                    ${project.valuePerSqft.toLocaleString()}/sq ft × {project.sqftAdded.toLocaleString()} sq ft = ${project.valueAdd.toLocaleString()}
                   </p>
                 </div>
               )}
-              {project.valuePerSqft && project.costPerSqft && (
+              {project.valueAdd && project.costPerSqft && project.sqftAdded && (
                 <div>
-                  <p className="text-gray-600">Value to Cost Ratio</p>
-                  <p className="font-semibold text-blue-600" data-testid={`text-ratio-${project.id}`}>
-                    {(project.valuePerSqft / project.costPerSqft).toFixed(1)}:1
+                  <p className="text-gray-600">ROI Calculation</p>
+                  <p className="font-semibold text-blue-600" data-testid={`text-roi-calculation-${project.id}`}>
+                    ${project.valueAdd.toLocaleString()} ÷ ${(project.costPerSqft * project.sqftAdded).toLocaleString()} = {Math.round(project.roi)}%
                   </p>
                 </div>
               )}
