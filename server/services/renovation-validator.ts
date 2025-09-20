@@ -251,22 +251,38 @@ async function validateSingleProject(
     validationRecommendations.push('Pricing accuracy may be reduced - consider re-running analysis');
   }
 
-  // Step 3: Compute deterministic values
+  // Step 3: Compute values using EXACT user formulas
   const newTotalSqft = propertyData.sqft + sqftAdded;
-  const currentValue = propertyData.price || (propertyData.sqft * marketPricingResult.value);
+  const marketPPSF = marketPricingResult.value;
   
-  // For addition projects, use sqft-based valuation; for remodels, use current + AI valueAdd
+  // USER FORMULAS:
+  // Validated costs = construction price per sqft × new sqft
+  // Validated value add = market price per sqft × added sqft from renovation  
+  // Post-renovation value = market price per sqft × total livable sqft (existing + renovation)
+  
   let postRenovationValue: number;
   let computedValueAdd: number;
   
   if (sqftAdded > 0) {
-    // Addition projects: use deterministic sqft-based calculation
-    postRenovationValue = newTotalSqft * marketPricingResult.value;
-    computedValueAdd = postRenovationValue - currentValue;
+    // Addition projects: use EXACT user formulas
+    // Formula 3: Post-renovation value = market PPSF × total livable sqft
+    postRenovationValue = marketPPSF * newTotalSqft;
+    
+    // Formula 2: Validated value add = market PPSF × added sqft  
+    computedValueAdd = marketPPSF * sqftAdded;
+    
+    console.log(`💰 Using exact user formulas:
+      - Market PPSF: $${marketPPSF}
+      - Existing sqft: ${propertyData.sqft}
+      - Added sqft: ${sqftAdded}
+      - Total sqft: ${newTotalSqft}
+      - Value add: $${marketPPSF} × ${sqftAdded} = $${computedValueAdd.toLocaleString()}
+      - Post-reno value: $${marketPPSF} × ${newTotalSqft} = $${postRenovationValue.toLocaleString()}`);
   } else {
     // Remodel projects: preserve AI valueAdd and compute postRenovationValue from it
     computedValueAdd = project.valueAdd || 0;
-    postRenovationValue = currentValue + computedValueAdd;
+    const currentValueEstimate = propertyData.sqft * marketPPSF;
+    postRenovationValue = currentValueEstimate + computedValueAdd;
   }
   
   // Step 3a: Determine cost per sqft - use AI if within 20% of model, otherwise use model
@@ -281,10 +297,16 @@ async function validateSingleProject(
     }
   }
   
-  // Compute costs using selected cost per sqft
-  const computedCostMed = sqftAdded * costPerSqftToUse;
-  const computedCostLow = sqftAdded * (usingAICost ? costPerSqftToUse * 0.85 : constructionCostResult.low);
-  const computedCostHigh = sqftAdded * (usingAICost ? costPerSqftToUse * 1.15 : constructionCostResult.high);
+  // Formula 1: Validated costs = construction price per sqft × new sqft
+  const constructionPPSF = costPerSqftToUse;
+  const computedCostMed = sqftAdded * constructionPPSF;
+  const computedCostLow = sqftAdded * constructionCostResult.low;
+  const computedCostHigh = sqftAdded * constructionCostResult.high;
+  
+  console.log(`🔨 Using exact cost formula:
+    - Construction PPSF: $${constructionPPSF}
+    - New sqft: ${sqftAdded}
+    - Validated costs: $${constructionPPSF} × ${sqftAdded} = $${computedCostMed.toLocaleString()}`);
   
   // Compute ROI: ((valueAdd - cost) / cost) * 100  
   const computedROI = computedCostMed > 0 ? 
@@ -330,28 +352,16 @@ async function validateSingleProject(
     computedValue: postRenovationValue,
     pricePsfUsed: marketPricingResult.value,
     
-    // Apply corrections only if this is an addition project and deviations exceed threshold
-    costRangeLow: (isAdditionProject && needsCostCorrection) ? computedCostLow : project.costRangeLow,
-    costRangeHigh: (isAdditionProject && needsCostCorrection) ? computedCostHigh : project.costRangeHigh,
+    // For addition projects: ALWAYS use exact user formulas (no AI values)
+    costRangeLow: isAdditionProject ? computedCostLow : project.costRangeLow,
+    costRangeHigh: isAdditionProject ? computedCostHigh : project.costRangeHigh,
     valueAdd: isAdditionProject ? computedValueAdd : project.valueAdd, // Always use computed value for additions
-    roi: (() => {
-      if (!isAdditionProject) return project.roi; // Preserve AI ROI for remodels
-      
-      // For addition projects, always use computed ROI with computed value add
-      if (needsCostCorrection) {
-        // Use computed costs and computed value add
-        return computedROI;
-      } else {
-        // Use AI costs but computed value add for mathematical consistency
-        const aiCostMed = (project.costRangeLow + project.costRangeHigh) / 2;
-        return aiCostMed > 0 ? ((computedValueAdd - aiCostMed) / aiCostMed) * 100 : computedROI;
-      }
-    })(),
+    // For addition projects: ALWAYS use computed ROI with exact formulas (no AI costs)
+    roi: isAdditionProject ? computedROI : project.roi,
     
-    // Update per-sqft values if corrected
-    costPerSqft: (isAdditionProject && needsCostCorrection) ? costPerSqftToUse : project.costPerSqft,
-    valuePerSqft: (isAdditionProject && sqftAdded > 0) ? 
-      (computedValueAdd / sqftAdded) : project.valuePerSqft, // Always use computed value per sqft for additions
+    // For addition projects: ALWAYS use exact per-sqft values from formulas  
+    costPerSqft: isAdditionProject ? constructionPPSF : project.costPerSqft,
+    valuePerSqft: isAdditionProject ? marketPPSF : project.valuePerSqft, // Market PPSF for additions
     
     // Set enhanced pricing sources and validation
     pricingSources: {
@@ -390,23 +400,12 @@ function computeFinancialSummary(
   marketPpsf: number
 ): FinancialSummary {
   
-  const currentValue = propertyData.price || (propertyData.sqft * marketPpsf);
+  // USER FORMULAS - use these EXACT calculations:
+  // Formula 1: Validated costs = construction price per sqft × new sqft
+  // Formula 2: Validated value add = market price per sqft × added sqft from renovation  
+  // Formula 3: Post-renovation value = market price per sqft × total livable sqft
   
-  // Use corrected values, not AI estimates
-  const totalRenovationCost = projects.reduce((sum, project) => {
-    return sum + ((project.costRangeLow + project.costRangeHigh) / 2);
-  }, 0);
-  
-  const totalValueAdd = projects.reduce((sum, project) => {
-    return sum + (project.valueAdd || 0);
-  }, 0);
-  
-  const afterRepairValue = currentValue + totalValueAdd;
-  const totalROI = totalRenovationCost > 0 ? 
-    ((totalValueAdd - totalRenovationCost) / totalRenovationCost) * 100 : 0;
-  
-  // Calculate post-renovation square footage
-  // Sum sqftAdded for projects that increase living area
+  // Calculate total added sqft from addition projects
   const livingAreaIncreasingTypes = ["adu", "addition", "second_story", "garage_conversion"];
   const totalAddedSqft = projects.reduce((sum, project) => {
     const projectType = classifyProjectType(project.name, project.description);
@@ -415,7 +414,41 @@ function computeFinancialSummary(
     }
     return sum;
   }, 0);
+  
+  // Formula 3: Post-renovation value = market PPSF × total livable sqft
   const postRenovationSqft = propertyData.sqft + totalAddedSqft;
+  const afterRepairValue = marketPpsf * postRenovationSqft;
+  
+  // Formula 2: Total validated value add = market PPSF × total added sqft  
+  const totalValueAdd = marketPpsf * totalAddedSqft;
+  
+  // Formula 1: Total validated costs = sum of (construction PPSF × project sqft)
+  const totalRenovationCost = projects.reduce((sum, project) => {
+    const projectType = classifyProjectType(project.name, project.description);
+    if (livingAreaIncreasingTypes.includes(projectType)) {
+      // Use the validated cost per sqft × sqft for addition projects
+      return sum + (project.costPerSqft * (project.sqftAdded || 0));
+    } else {
+      // For remodels, use the average cost range  
+      return sum + ((project.costRangeLow + project.costRangeHigh) / 2);
+    }
+  }, 0);
+  
+  const totalROI = totalRenovationCost > 0 ? 
+    ((totalValueAdd - totalRenovationCost) / totalRenovationCost) * 100 : 0;
+  
+  console.log(`📊 Financial Summary using exact user formulas:
+    - Existing sqft: ${propertyData.sqft}
+    - Total added sqft: ${totalAddedSqft}  
+    - Post-renovation sqft: ${postRenovationSqft}
+    - Market PPSF: $${marketPpsf}
+    - Total value add: $${marketPpsf} × ${totalAddedSqft} = $${totalValueAdd.toLocaleString()}
+    - After repair value: $${marketPpsf} × ${postRenovationSqft} = $${afterRepairValue.toLocaleString()}
+    - Total renovation cost: $${totalRenovationCost.toLocaleString()}
+    - Total ROI: ${totalROI.toFixed(1)}%`);
+  
+  // Current value based on existing livable space  
+  const currentValue = propertyData.sqft * marketPpsf;
 
   return {
     currentValue,
