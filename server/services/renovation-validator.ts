@@ -124,26 +124,82 @@ async function validateSingleProject(
   aggregatedPricing?: AggregatedPricingResult
 ): Promise<RenovationProject> {
   
-  // Step 1: Determine square footage added
+  // Step 1: Determine square footage added - special handling for garage conversions
   let sqftAdded = project.sqftAdded;
-  if (!sqftAdded || sqftAdded <= 0) {
-    // Parse from description if missing
-    const parsedSqft = parseSquareFootageFromDescription(
-      `${project.name} ${project.description} ${project.detailedDescription || ""}`
-    );
+  const projectType = classifyProjectType(project.name, project.description);
+  const isGarageConversion = projectType === "adu" && 
+    (project.name.toLowerCase().includes("garage") || 
+     project.description.toLowerCase().includes("garage") ||
+     (project.detailedDescription && project.detailedDescription.toLowerCase().includes("garage")));
+  
+  if (isGarageConversion) {
+    // For garage conversions, we need to calculate TOTAL livable space added
+    // This includes both the garage space becoming livable + any additional space
+    console.log(`🏠 Detected garage conversion project: ${project.name}`);
     
-    if (parsedSqft > 0) {
-      sqftAdded = parsedSqft;
+    const fullDescription = `${project.name} ${project.description} ${project.detailedDescription || ""}`;
+    const allSqftInDescription = parseSquareFootageFromDescription(fullDescription);
+    
+    // Try to extract garage size and total space from description
+    const garagePattern = /garage.*?(\d+)\s*(?:sq\.?\s*ft\.?|sqft)/i;
+    const totalPattern = /total.*?(\d+)\s*(?:sq\.?\s*ft\.?|sqft)/i;
+    const additionPattern = /addition.*?(\d+)\s*(?:sq\.?\s*ft\.?|sqft)/i;
+    
+    let garageSize = 0;
+    let totalSpace = 0;
+    let additionSpace = 0;
+    
+    const garageMatch = fullDescription.match(garagePattern);
+    const totalMatch = fullDescription.match(totalPattern);
+    const additionMatch = fullDescription.match(additionPattern);
+    
+    if (garageMatch) garageSize = parseInt(garageMatch[1]);
+    if (totalMatch) totalSpace = parseInt(totalMatch[1]);
+    if (additionMatch) additionSpace = parseInt(additionMatch[1]);
+    
+    console.log(`🔍 Garage conversion analysis:
+      - Garage size: ${garageSize} sqft
+      - Total space mentioned: ${totalSpace} sqft  
+      - Addition mentioned: ${additionSpace} sqft
+      - AI sqftAdded: ${project.sqftAdded} sqft`);
+    
+    if (garageSize > 0 && additionSpace > 0) {
+      // Best case: we found both garage size and addition
+      sqftAdded = garageSize + additionSpace;
+      console.log(`✅ Using garage (${garageSize}) + addition (${additionSpace}) = ${sqftAdded} total livable sqft added`);
+    } else if (totalSpace > 0 && project.sqftAdded > 0) {
+      // We have total space and the AI's additional space
+      sqftAdded = totalSpace - propertyData.sqft; // Total new livable space
+      console.log(`✅ Using total space calculation: ${totalSpace} - ${propertyData.sqft} = ${sqftAdded} total livable sqft added`);
+    } else if (allSqftInDescription > project.sqftAdded) {
+      // Use all square footage found in description as it likely includes garage conversion
+      sqftAdded = allSqftInDescription;
+      console.log(`✅ Using all sqft from description: ${sqftAdded} total livable sqft added`);
     } else {
-      // Only apply default for addition-like projects, otherwise use 0
-      const projectType = classifyProjectType(project.name, project.description);
-      const additionTypes = ["adu", "addition", "second_story", "garage_conversion"];
-      sqftAdded = additionTypes.includes(projectType) ? 500 : 0;
+      // Fallback: estimate garage as 400 sqft + AI addition
+      const estimatedGarageSize = 400; // Typical 2-car garage
+      sqftAdded = estimatedGarageSize + (project.sqftAdded || 0);
+      console.log(`⚠️ Using estimated garage size (${estimatedGarageSize}) + AI addition (${project.sqftAdded}) = ${sqftAdded} total livable sqft added`);
+    }
+  } else {
+    // Non-garage conversion logic (original)
+    if (!sqftAdded || sqftAdded <= 0) {
+      // Parse from description if missing
+      const parsedSqft = parseSquareFootageFromDescription(
+        `${project.name} ${project.description} ${project.detailedDescription || ""}`
+      );
+      
+      if (parsedSqft > 0) {
+        sqftAdded = parsedSqft;
+      } else {
+        // Only apply default for addition-like projects, otherwise use 0
+        const additionTypes = ["adu", "addition", "second_story", "garage_conversion"];
+        sqftAdded = additionTypes.includes(projectType) ? 500 : 0;
+      }
     }
   }
 
-  // Step 2: Classify project type and get enhanced construction costs using aggregated pricing
-  const projectType = classifyProjectType(project.name, project.description);
+  // Step 2: Get enhanced construction costs using aggregated pricing (projectType already declared above)
   
   let constructionCostResult;
   let validationWarnings: string[] = [];
