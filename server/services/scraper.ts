@@ -292,10 +292,10 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
         
         if (match.length > 2) {
           // Pattern with date
-          priceValue = parseNumber(match[2]) || parseNumber(match[1]);
+          priceValue = parseNumber(match[2]) || parseNumber(match[1]) || 0;
           dateStr = match[1] || match[2];
         } else {
-          priceValue = parseNumber(match[1]);
+          priceValue = parseNumber(match[1]) || 0;
         }
         
         if (priceValue && priceValue > 10000) { // Sanity check
