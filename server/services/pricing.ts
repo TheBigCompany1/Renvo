@@ -27,16 +27,16 @@ const LOCATION_COST_MULTIPLIERS: Record<string, number> = {
   "default": 1.0,
 };
 
-// Base construction costs per sqft by project type (national average)
+// Base construction costs per sqft by project type (updated with 2024 market data)
 const BASE_CONSTRUCTION_COSTS: Record<string, { low: number; medium: number; high: number }> = {
-  "adu": { low: 275, medium: 325, high: 400 },
-  "addition": { low: 250, medium: 300, high: 375 },
-  "second_story": { low: 300, medium: 350, high: 425 },
-  "garage_conversion": { low: 200, medium: 250, high: 325 },
-  "full_remodel": { low: 200, medium: 275, high: 350 },
-  "kitchen_remodel": { low: 150, medium: 200, high: 275 },
-  "bathroom_addition": { low: 250, medium: 300, high: 375 },
-  "default": { low: 225, medium: 275, high: 350 },
+  "adu": { low: 350, medium: 425, high: 500 },
+  "addition": { low: 325, medium: 400, high: 475 },
+  "second_story": { low: 400, medium: 475, high: 550 },
+  "garage_conversion": { low: 275, medium: 350, high: 425 },
+  "full_remodel": { low: 300, medium: 375, high: 450 },
+  "kitchen_remodel": { low: 200, medium: 275, high: 350 },
+  "bathroom_addition": { low: 325, medium: 400, high: 475 },
+  "default": { low: 325, medium: 400, high: 475 },
 };
 
 export interface PricingResult {
