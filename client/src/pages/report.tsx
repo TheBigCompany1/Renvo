@@ -527,7 +527,72 @@ export default function Report() {
           </CardContent>
         </Card>
 
-        {/* Validation Summary */}
+
+        {/* Local Market Comparables */}
+        {comparableProperties && comparableProperties.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold" data-testid="title-market-comparables">Local Market Comparables</CardTitle>
+            </CardHeader>
+            <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full" data-testid="table-comparables">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 font-semibold">Address</th>
+                    <th className="text-left py-3 font-semibold">Sale Price</th>
+                    <th className="text-left py-3 font-semibold">Summary</th>
+                    <th className="text-left py-3 font-semibold">Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparableProperties.map((comp, index) => (
+                    <tr key={index} className="border-b" data-testid={`row-comparable-${index}`}>
+                      <td className="py-3 font-medium">
+                        {comp.address}
+                        {comp.distanceMiles && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            📍 {Math.round(comp.distanceMiles)} miles away
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3">{formatCurrency(comp.price)}</td>
+                      <td className="py-3 text-gray-600">
+                        {comp.beds} bed, {comp.baths} bath • {comp.sqft?.toLocaleString()} sqft • Sold {comp.dateSold}
+                        <div className="text-xs text-gray-500 mt-1">
+                          ${comp.pricePsf}/sq ft
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getSourceBadgeStyle(comp.source)}`}>
+                          {getSourceLabel(comp.source)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+        )}
+        
+        {/* Show message when no comparables available */}
+        {(!comparableProperties || comparableProperties.length === 0) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold" data-testid="title-market-comparables">Local Market Comparables</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-gray-500">
+                <p>Comparable properties data is currently being processed or unavailable.</p>
+                <p className="text-sm mt-2">This may occur when using demonstration data or if market data is limited for this area.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Accuracy Validation Summary - Moved to Bottom */}
         {validationSummary && (
           <Card>
             <CardHeader>
@@ -630,70 +695,6 @@ export default function Report() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Local Market Comparables */}
-        {comparableProperties && comparableProperties.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold" data-testid="title-market-comparables">Local Market Comparables</CardTitle>
-            </CardHeader>
-            <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full" data-testid="table-comparables">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 font-semibold">Address</th>
-                    <th className="text-left py-3 font-semibold">Sale Price</th>
-                    <th className="text-left py-3 font-semibold">Summary</th>
-                    <th className="text-left py-3 font-semibold">Source</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparableProperties.map((comp, index) => (
-                    <tr key={index} className="border-b" data-testid={`row-comparable-${index}`}>
-                      <td className="py-3 font-medium">
-                        {comp.address}
-                        {comp.distanceMiles && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            📍 {Math.round(comp.distanceMiles)} miles away
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3">{formatCurrency(comp.price)}</td>
-                      <td className="py-3 text-gray-600">
-                        {comp.beds} bed, {comp.baths} bath • {comp.sqft?.toLocaleString()} sqft • Sold {comp.dateSold}
-                        <div className="text-xs text-gray-500 mt-1">
-                          ${comp.pricePsf}/sq ft
-                        </div>
-                      </td>
-                      <td className="py-3">
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getSourceBadgeStyle(comp.source)}`}>
-                          {getSourceLabel(comp.source)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-        )}
-        
-        {/* Show message when no comparables available */}
-        {(!comparableProperties || comparableProperties.length === 0) && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold" data-testid="title-market-comparables">Local Market Comparables</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-gray-500">
-                <p>Comparable properties data is currently being processed or unavailable.</p>
-                <p className="text-sm mt-2">This may occur when using demonstration data or if market data is limited for this area.</p>
-              </div>
             </CardContent>
           </Card>
         )}
