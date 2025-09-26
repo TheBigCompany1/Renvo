@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 // DON'T DELETE THIS COMMENT
 // Follow these instructions when using this blueprint:
@@ -6,7 +6,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 //   - do not change this unless explicitly requested by the user
 
 // This API key is from Gemini Developer API Key, not vertex AI API Key
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 export interface RenovationAnalysis {
   renovation_ideas: Array<{
@@ -40,10 +40,9 @@ export async function analyzePropertyForRenovations(
   try {
     console.log("DEBUG: Starting Gemini analysis...");
     console.log("DEBUG: GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    console.log("DEBUG: Model initialized successfully");
-    
-    const systemPrompt = `You are an expert real estate renovation analyst with 20+ years of experience specializing in transformative, high-ROI projects. 
+    console.log("DEBUG: Using Gemini 2.5 Flash model");
+
+    const prompt = `You are an expert real estate renovation analyst with 20+ years of experience specializing in transformative, high-ROI projects. 
         
         Your mission: Generate 3–5 large, transformative renovation ideas that maximize property value and ROI. Think bigger than basic updates—consider ADUs, adding levels, duplex conversions, major additions, or complete reimagining of the space.
         
@@ -79,9 +78,9 @@ export async function analyzePropertyForRenovations(
               "potential_risks": ["Permit delays in LA market", "Cost overruns due to foundation issues", "Neighbor objections to height increase"]
             }
           ]
-        }`;
+        }
 
-    const userPrompt = `Analyze this property for renovation opportunities:
+        Analyze this property for renovation opportunities:
         
         Property Details:
         - Address: ${propertyData.address}
@@ -97,26 +96,14 @@ export async function analyzePropertyForRenovations(
 
     console.log("DEBUG: About to call Gemini API...");
     
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: systemPrompt + "\n\n" + userPrompt }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 2048
-      }
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
     });
     
     console.log("DEBUG: Gemini API call completed");
 
-    const rawContent = result.response.text();
+    const rawContent = response.text;
     console.log("Gemini Response Content:", rawContent);
     
     if (!rawContent) {
