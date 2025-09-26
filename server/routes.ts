@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAnalysisReportSchema, insertEmailSignupSchema } from "@shared/schema";
+import { insertAnalysisReportSchema, insertEmailSignupSchema, type AnalysisReport, type EmailSignup } from "@shared/schema";
 import { scrapeRedfinProperty, findComparableProperties, getDynamicComparableProperties } from "./services/scraper";
 import { processRenovationAnalysis } from "./services/renovation-analyzer";
 import { generateContractorRecommendations } from "./services/openai";
@@ -88,6 +88,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(500).json({ 
         message: "Failed to create email signup. Please try again." 
+      });
+    }
+  });
+
+  // Get all email signups
+  app.get("/api/email-signups", async (req, res) => {
+    try {
+      const emailSignups = await storage.getEmailSignups();
+      res.json(emailSignups);
+    } catch (error) {
+      console.error("Error fetching email signups:", error);
+      res.status(500).json({ 
+        message: "Failed to retrieve email signups. Please try again." 
+      });
+    }
+  });
+
+  // Get email signups by source
+  app.get("/api/email-signups/by-source/:source", async (req, res) => {
+    try {
+      const { source } = req.params;
+      const emailSignups = await storage.getEmailSignupsBySource(source);
+      res.json(emailSignups);
+    } catch (error) {
+      console.error("Error fetching email signups by source:", error);
+      res.status(500).json({ 
+        message: "Failed to retrieve email signups. Please try again." 
+      });
+    }
+  });
+
+  // Get analytics summary
+  app.get("/api/analytics/summary", async (req, res) => {
+    try {
+      // Get all email signups and analysis reports for analytics
+      const [emailSignups, allReports] = await Promise.all([
+        storage.getEmailSignups(),
+        storage.getAllAnalysisReports()
+      ]);
+
+      // Calculate analytics
+      const totalEmailSignups = emailSignups.length;
+      const totalReports = allReports.length;
+      const completedReports = allReports.filter((r: AnalysisReport) => r.status === 'completed').length;
+      
+      // Group by signup source
+      const signupsBySource = emailSignups.reduce((acc: Record<string, number>, signup: EmailSignup) => {
+        acc[signup.signupSource] = (acc[signup.signupSource] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Get popular URLs (top 10)
+      const urlCounts = allReports.reduce((acc: Record<string, number>, report: AnalysisReport) => {
+        acc[report.propertyUrl] = (acc[report.propertyUrl] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      const popularUrls = Object.entries(urlCounts)
+        .sort(([,a], [,b]) => (b as number) - (a as number))
+        .slice(0, 10)
+        .map(([url, count]) => ({ url, count }));
+
+      // Calculate time-based metrics
+      const now = new Date();
+      const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const reportsLast7Days = allReports.filter((r: AnalysisReport) => r.createdAt && new Date(r.createdAt) >= last7Days).length;
+      const reportsLast30Days = allReports.filter((r: AnalysisReport) => r.createdAt && new Date(r.createdAt) >= last30Days).length;
+      const emailsLast7Days = emailSignups.filter((e: EmailSignup) => e.createdAt && new Date(e.createdAt) >= last7Days).length;
+      const emailsLast30Days = emailSignups.filter((e: EmailSignup) => e.createdAt && new Date(e.createdAt) >= last30Days).length;
+
+      const analytics = {
+        totalEmailSignups,
+        totalReports,
+        completedReports,
+        signupsBySource,
+        popularUrls,
+        timeBasedMetrics: {
+          reportsLast7Days,
+          reportsLast30Days,
+          emailsLast7Days,
+          emailsLast30Days
+        },
+        conversionRate: totalEmailSignups > 0 ? (totalReports / totalEmailSignups * 100).toFixed(1) : '0'
+      };
+
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+      res.status(500).json({ 
+        message: "Failed to retrieve analytics. Please try again." 
       });
     }
   });
