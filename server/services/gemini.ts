@@ -40,7 +40,7 @@ export async function analyzePropertyForRenovations(
   try {
     console.log("DEBUG: Starting Gemini analysis...");
     console.log("DEBUG: GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     console.log("DEBUG: Model initialized successfully");
     
     const systemPrompt = `You are an expert real estate renovation analyst with 20+ years of experience specializing in transformative, high-ROI projects. 
@@ -185,7 +185,7 @@ export async function generateContractorRecommendations(
   website: string;
 }>> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const systemPrompt = `You are a local contractor directory expert. Generate realistic contractor recommendations 
           for a specific area and renovation type. Base recommendations on typical contractor profiles in the area.
