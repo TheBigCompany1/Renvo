@@ -34,19 +34,18 @@ export default function Home() {
     if (!propertyUrl) {
       toast({
         title: "URL Required",
-        description: "Please enter a Redfin or Zillow property URL",
+        description: "Please enter a Redfin property URL",
         variant: "destructive",
       });
       return;
     }
 
     const isRedfin = propertyUrl.includes('redfin.com') || propertyUrl.includes('redf.in');
-    const isZillow = propertyUrl.includes('zillow.com') || propertyUrl.includes('goo.gl');
     
-    if (!isRedfin && !isZillow) {
+    if (!isRedfin) {
       toast({
         title: "Invalid URL",
-        description: "Please enter a valid Redfin or Zillow property URL",
+        description: "Please enter a valid Redfin property URL (www.redfin.com or redf.in)",
         variant: "destructive",
       });
       return;
@@ -114,7 +113,7 @@ export default function Home() {
             <div className="flex-1">
               <Input
                 type="url"
-                placeholder="Enter Redfin or Zillow URL (e.g., https://www.redfin.com/...)"
+                placeholder="Enter Redfin URL (e.g., https://www.redfin.com/...)"
                 value={propertyUrl}
                 onChange={(e) => setPropertyUrl(e.target.value)}
                 className="h-14 text-lg px-6 bg-white/95 backdrop-blur-sm border-0 shadow-lg text-gray-900 placeholder:text-gray-500"

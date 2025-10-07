@@ -18,10 +18,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Secure URL validation to prevent SSRF
       try {
         const parsedUrl = new URL(propertyUrl);
-        const allowedHosts = ['redfin.com', 'www.redfin.com', 'redf.in', 'zillow.com', 'www.zillow.com', 'goo.gl'];
+        const allowedHosts = ['redfin.com', 'www.redfin.com', 'redf.in'];
         if (!allowedHosts.includes(parsedUrl.hostname.toLowerCase())) {
           return res.status(400).json({ 
-            message: "Invalid URL. Please provide a valid Redfin or Zillow property URL." 
+            message: "Invalid URL. Please provide a valid Redfin property URL (www.redfin.com or redf.in)." 
           });
         }
         if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
@@ -193,18 +193,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update status to processing
       await storage.updateAnalysisReportStatus(reportId, 'processing');
 
-      // Step 1: Extract property data - detect platform and use appropriate scraper
-      let propertyData;
-      const url = report.propertyUrl.toLowerCase();
-      const isZillow = url.includes('zillow.com') || url.includes('goo.gl');
-      
-      if (isZillow) {
-        console.log('Detected Zillow URL, using Zillow scraper');
-        propertyData = await scrapeZillowProperty(report.propertyUrl);
-      } else {
-        console.log('Detected Redfin URL, using Redfin scraper');
-        propertyData = await scrapeRedfinProperty(report.propertyUrl);
-      }
+      // Step 1: Extract property data using Redfin scraper
+      console.log('Using Redfin scraper for property data');
+      const propertyData = await scrapeRedfinProperty(report.propertyUrl);
       
       await storage.updateAnalysisReportData(reportId, { propertyData });
 
