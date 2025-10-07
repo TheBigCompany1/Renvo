@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAnalysisReportSchema, insertEmailSignupSchema, type AnalysisReport, type EmailSignup } from "@shared/schema";
-import { scrapeRedfinProperty, findComparableProperties, getDynamicComparableProperties } from "./services/scraper";
+import { scrapeRedfinProperty, scrapeZillowProperty, findComparableProperties, getDynamicComparableProperties } from "./services/scraper";
 import { processRenovationAnalysis } from "./services/renovation-analyzer";
 import { generateContractorRecommendations } from "./services/openai";
 import { extractLocationFromProperty } from "./services/location-service";
@@ -193,8 +193,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update status to processing
       await storage.updateAnalysisReportStatus(reportId, 'processing');
 
-      // Step 1: Extract property data
-      const propertyData = await scrapeRedfinProperty(report.propertyUrl);
+      // Step 1: Extract property data - detect platform and use appropriate scraper
+      let propertyData;
+      const url = report.propertyUrl.toLowerCase();
+      const isZillow = url.includes('zillow.com') || url.includes('goo.gl');
+      
+      if (isZillow) {
+        console.log('Detected Zillow URL, using Zillow scraper');
+        propertyData = await scrapeZillowProperty(report.propertyUrl);
+      } else {
+        console.log('Detected Redfin URL, using Redfin scraper');
+        propertyData = await scrapeRedfinProperty(report.propertyUrl);
+      }
+      
       await storage.updateAnalysisReportData(reportId, { propertyData });
 
       // Step 2: Extract location from property data using new location service
