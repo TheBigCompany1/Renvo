@@ -18,7 +18,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Secure URL validation to prevent SSRF
       try {
         const parsedUrl = new URL(propertyUrl);
-        const allowedHosts = ['redfin.com', 'www.redfin.com', 'redf.in', 'zillow.com', 'www.zillow.com'];
+        const allowedHosts = ['redfin.com', 'www.redfin.com', 'redf.in', 'zillow.com', 'www.zillow.com', 'goo.gl'];
         if (!allowedHosts.includes(parsedUrl.hostname.toLowerCase())) {
           return res.status(400).json({ 
             message: "Invalid URL. Please provide a valid Redfin or Zillow property URL." 

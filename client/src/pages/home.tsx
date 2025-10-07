@@ -34,16 +34,19 @@ export default function Home() {
     if (!propertyUrl) {
       toast({
         title: "URL Required",
-        description: "Please enter a Redfin property URL",
+        description: "Please enter a Redfin or Zillow property URL",
         variant: "destructive",
       });
       return;
     }
 
-    if (!propertyUrl.includes('redfin.com') && !propertyUrl.includes('redf.in')) {
+    const isRedfin = propertyUrl.includes('redfin.com') || propertyUrl.includes('redf.in');
+    const isZillow = propertyUrl.includes('zillow.com') || propertyUrl.includes('goo.gl');
+    
+    if (!isRedfin && !isZillow) {
       toast({
         title: "Invalid URL",
-        description: "Please enter a valid Redfin property URL",
+        description: "Please enter a valid Redfin or Zillow property URL",
         variant: "destructive",
       });
       return;
