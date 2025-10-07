@@ -40,7 +40,7 @@ export default function Home() {
       return;
     }
 
-    if (!propertyUrl.includes('redfin.com')) {
+    if (!propertyUrl.includes('redfin.com') && !propertyUrl.includes('redf.in')) {
       toast({
         title: "Invalid URL",
         description: "Please enter a valid Redfin property URL",
