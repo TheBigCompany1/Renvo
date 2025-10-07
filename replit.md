@@ -6,6 +6,16 @@ The platform now includes comprehensive marketing pages and lead generation capa
 
 # Recent Changes
 
+## Redfin Deep Link Support (October 2025)
+
+Added support for Redfin mobile app deep link URLs (redf.in):
+
+- **URL Validation**: Updated routes to accept redf.in URLs alongside redfin.com and zillow.com
+- **Scraper Integration**: Modified scraper to validate and process redf.in short links
+- **Automatic Redirect Following**: Leverages Node's built-in fetch to automatically follow redirects from short links to full property pages
+- **Security**: Maintains strict SSRF protections with explicit host whitelist validation
+- **User Experience**: Users can now paste URLs directly from the Redfin mobile app share function
+
 ## Marketing Pages and Lead Generation (September 2025)
 
 Added comprehensive marketing infrastructure to enhance user acquisition and lead generation:
