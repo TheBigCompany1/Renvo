@@ -1,5 +1,6 @@
 import { PropertyData, ComparableProperty } from "@shared/schema";
 import * as cheerio from "cheerio";
+import puppeteer from "puppeteer";
 
 interface PropertyLocation {
   city: string;
@@ -607,6 +608,7 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
 }
 
 export async function scrapeZillowProperty(url: string): Promise<PropertyData> {
+  let browser;
   try {
     // Validate Zillow URL with proper hostname checking
     try {
@@ -624,27 +626,46 @@ export async function scrapeZillowProperty(url: string): Promise<PropertyData> {
       throw new Error("Invalid Zillow URL format provided");
     }
 
-    console.log(`Starting to scrape Zillow property: ${url}`);
-    console.log('Debug: About to fetch Zillow URL with headers...');
+    console.log(`Starting to scrape Zillow property with Puppeteer: ${url}`);
     
-    // Fetch the HTML content
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-      }
+    // Launch headless browser with system Chromium
+    browser = await puppeteer.launch({
+      headless: true,
+      executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium-browser',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--window-size=1920x1080',
+        '--disable-blink-features=AutomationControlled'
+      ]
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch Zillow page: ${response.status} ${response.statusText}`);
-    }
-
-    const html = await response.text();
+    
+    const page = await browser.newPage();
+    
+    // Set realistic viewport and user agent
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    console.log('Puppeteer: Navigating to Zillow page...');
+    
+    // Navigate to the page with timeout
+    await page.goto(url, { 
+      waitUntil: 'networkidle2',
+      timeout: 30000 
+    });
+    
+    console.log('Puppeteer: Page loaded, extracting HTML...');
+    
+    // Get the page content
+    const html = await page.content();
     const $ = cheerio.load(html);
+    
+    // Close browser
+    await browser.close();
+    browser = null;
     
     console.log('Successfully loaded Zillow HTML, extracting property data...');
     console.log(`Debug: HTML length: ${html.length} characters`);
@@ -877,6 +898,15 @@ export async function scrapeZillowProperty(url: string): Promise<PropertyData> {
     
   } catch (error) {
     console.error("Error scraping Zillow property:", error);
+    
+    // Ensure browser is closed
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error("Error closing browser:", closeError);
+      }
+    }
     
     // Return fallback data
     const urlBasedAddress = (() => {
