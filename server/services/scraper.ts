@@ -198,7 +198,10 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     // Validate Redfin URL with proper hostname checking
     try {
       const parsedUrl = new URL(url);
-      if (!parsedUrl.hostname.endsWith('redfin.com') && parsedUrl.hostname !== 'redfin.com') {
+      const isRedfinDomain = parsedUrl.hostname.endsWith('redfin.com') || parsedUrl.hostname === 'redfin.com';
+      const isRedfinShortLink = parsedUrl.hostname === 'redf.in';
+      
+      if (!isRedfinDomain && !isRedfinShortLink) {
         throw new Error("Invalid Redfin URL provided");
       }
       if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
