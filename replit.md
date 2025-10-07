@@ -1,16 +1,28 @@
 # Overview
 
-Renvo is an AI-powered real estate renovation analysis platform that helps investors make data-driven decisions. The application scrapes property data from Redfin URLs, analyzes renovation opportunities using AI, finds comparable properties, and provides comprehensive reports with financial projections and contractor recommendations.
+Renvo is an AI-powered real estate renovation analysis platform that helps investors make data-driven decisions. The application scrapes property data from both Redfin and Zillow URLs, analyzes renovation opportunities using AI, finds comparable properties, and provides comprehensive reports with financial projections and contractor recommendations.
 
 The platform now includes comprehensive marketing pages and lead generation capabilities to convert visitors into users and capture valuable contact information for nurturing potential customers.
 
 # Recent Changes
 
+## Multi-Platform URL Support: Zillow Integration (October 2025)
+
+Expanded platform support to accept Zillow URLs alongside existing Redfin support:
+
+- **Dual Platform Support**: Now accepts URLs from both Redfin (redfin.com, redf.in) and Zillow (zillow.com, www.zillow.com, goo.gl)
+- **Intelligent Platform Detection**: Backend automatically detects URL type and routes to appropriate scraper
+- **Zillow-Specific Scraper**: Created dedicated scrapeZillowProperty function with Zillow-specific CSS selectors
+- **Robust Error Handling**: Both scrapers include fallback mechanisms that return mock data when scraping fails
+- **Frontend Validation**: Updated URL input validation to accept both platforms with clear error messaging
+- **Security**: Maintained strict SSRF protections with extended host whitelist for both platforms
+- **Known Limitation**: Zillow actively blocks automated scraping with 403 responses; fallback data ensures reports still generate
+
 ## Redfin Deep Link Support (October 2025)
 
 Added support for Redfin mobile app deep link URLs (redf.in):
 
-- **URL Validation**: Updated routes to accept redf.in URLs alongside redfin.com and zillow.com
+- **URL Validation**: Updated routes to accept redf.in URLs alongside redfin.com
 - **Scraper Integration**: Modified scraper to validate and process redf.in short links
 - **Automatic Redirect Following**: Leverages Node's built-in fetch to automatically follow redirects from short links to full property pages
 - **Security**: Maintains strict SSRF protections with explicit host whitelist validation
@@ -105,7 +117,7 @@ The AI system considers current market trends, property characteristics, and fin
 
 - **Database**: Neon Database (PostgreSQL serverless)
 - **AI Services**: OpenAI API for property analysis and renovation recommendations
-- **Web Scraping**: Property data extraction from Redfin (currently mocked for development)
+- **Web Scraping**: Property data extraction from both Redfin and Zillow with intelligent platform detection
 - **UI Components**: Radix UI primitives for accessible component foundation
 - **Styling**: Tailwind CSS for utility-first styling
 - **State Management**: TanStack Query for server state and caching
