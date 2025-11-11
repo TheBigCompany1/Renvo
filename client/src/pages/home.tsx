@@ -10,7 +10,7 @@ export default function Home() {
   // Using public directory paths for video files
   const background1 = "/background1.mp4";
   const background2 = "/background2.mp4";
-  const [propertyUrl, setPropertyUrl] = useState("");
+  const [propertyInput, setPropertyInput] = useState("");
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
@@ -22,7 +22,7 @@ export default function Home() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to start analysis. Please check your URL and try again.",
+        description: error.message || "Failed to start analysis. Please try again.",
         variant: "destructive",
       });
     },
@@ -31,27 +31,18 @@ export default function Home() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!propertyUrl) {
+    if (!propertyInput.trim()) {
       toast({
-        title: "URL Required",
-        description: "Please enter a Redfin property URL",
+        title: "Input Required",
+        description: "Please enter a Redfin URL or property address",
         variant: "destructive",
       });
       return;
     }
 
-    const isRedfin = propertyUrl.includes('redfin.com') || propertyUrl.includes('redf.in');
-    
-    if (!isRedfin) {
-      toast({
-        title: "Invalid URL",
-        description: "Please enter a valid Redfin property URL (www.redfin.com or redf.in)",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    createReportMutation.mutate(propertyUrl);
+    // The backend will automatically detect if it's a URL or address
+    // No validation needed here - let the API handle it
+    createReportMutation.mutate(propertyInput.trim());
   };
 
   // Create video grid items
@@ -112,12 +103,12 @@ export default function Home() {
           <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <Input
-                type="url"
-                placeholder="Enter Redfin URL (e.g., https://www.redfin.com/...)"
-                value={propertyUrl}
-                onChange={(e) => setPropertyUrl(e.target.value)}
+                type="text"
+                placeholder="Enter Redfin URL or property address (e.g., 123 Main St, Los Angeles, CA 90001)"
+                value={propertyInput}
+                onChange={(e) => setPropertyInput(e.target.value)}
                 className="h-14 text-lg px-6 bg-white/95 backdrop-blur-sm border-0 shadow-lg text-gray-900 placeholder:text-gray-500"
-                data-testid="input-property-url"
+                data-testid="input-property"
               />
             </div>
             <Button
@@ -126,7 +117,7 @@ export default function Home() {
               disabled={createReportMutation.isPending}
               data-testid="button-analyze-property"
             >
-              {createReportMutation.isPending ? "Analyzing..." : "Search"}
+              {createReportMutation.isPending ? "Analyzing..." : "Analyze"}
             </Button>
           </form>
 
