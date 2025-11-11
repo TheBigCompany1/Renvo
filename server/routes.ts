@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAnalysisReportSchema, insertEmailSignupSchema, type AnalysisReport, type EmailSignup } from "@shared/schema";
+import { insertAnalysisReportSchema, insertEmailSignupSchema, type AnalysisReport, type EmailSignup, type ComparableProperty } from "@shared/schema";
 import { scrapeRedfinProperty, scrapeZillowProperty, findComparableProperties, getDynamicComparableProperties } from "./services/scraper";
 import { processRenovationAnalysis } from "./services/renovation-analyzer";
 import { generateContractorRecommendations } from "./services/openai";
@@ -13,25 +13,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new analysis report
   app.post("/api/reports", async (req, res) => {
     try {
-      const { propertyUrl } = insertAnalysisReportSchema.parse(req.body);
+      const validatedData = insertAnalysisReportSchema.parse(req.body);
       
-      // Secure URL validation to prevent SSRF
-      try {
-        const parsedUrl = new URL(propertyUrl);
-        const allowedHosts = ['redfin.com', 'www.redfin.com', 'redf.in'];
-        if (!allowedHosts.includes(parsedUrl.hostname.toLowerCase())) {
+      // Determine input type and validate accordingly
+      if (validatedData.inputType === 'url' && validatedData.propertyUrl) {
+        // Secure URL validation to prevent SSRF
+        try {
+          const parsedUrl = new URL(validatedData.propertyUrl);
+          const allowedHosts = ['redfin.com', 'www.redfin.com', 'redf.in'];
+          if (!allowedHosts.includes(parsedUrl.hostname.toLowerCase())) {
+            return res.status(400).json({ 
+              message: "Invalid URL. Please provide a valid Redfin property URL (www.redfin.com or redf.in)." 
+            });
+          }
+          if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+            return res.status(400).json({ message: "Invalid URL protocol" });
+          }
+        } catch (urlError) {
+          return res.status(400).json({ message: "Invalid URL format" });
+        }
+      } else if (validatedData.inputType === 'address' && validatedData.propertyAddress) {
+        // Address validation - basic check
+        if (validatedData.propertyAddress.trim().length < 10) {
           return res.status(400).json({ 
-            message: "Invalid URL. Please provide a valid Redfin property URL (www.redfin.com or redf.in)." 
+            message: "Please provide a complete address (street, city, state, zip)" 
           });
         }
-        if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
-          return res.status(400).json({ message: "Invalid URL protocol" });
-        }
-      } catch (urlError) {
-        return res.status(400).json({ message: "Invalid URL format" });
+      } else {
+        return res.status(400).json({ 
+          message: "Please provide either a Redfin URL or a property address" 
+        });
       }
 
-      const report = await storage.createAnalysisReport({ propertyUrl });
+      const report = await storage.createAnalysisReport(validatedData);
       
       // Start async processing
       processAnalysisReport(report.id);
@@ -39,8 +53,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ reportId: report.id, status: 'pending' });
     } catch (error) {
       console.error("Error creating analysis report:", error);
+      
+      // Handle Zod validation errors
+      if (error instanceof Error && 'issues' in error) {
+        return res.status(400).json({ 
+          message: "Invalid input data. Please check your input.",
+          errors: (error as any).issues
+        });
+      }
+      
       res.status(500).json({ 
-        message: "Failed to create analysis report. Please check your URL and try again." 
+        message: "Failed to create analysis report. Please check your input and try again." 
       });
     }
   });
@@ -139,11 +162,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return acc;
       }, {} as Record<string, number>);
 
-      // Get popular URLs (top 10)
-      const urlCounts = allReports.reduce((acc: Record<string, number>, report: AnalysisReport) => {
-        acc[report.propertyUrl] = (acc[report.propertyUrl] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      // Get popular URLs (top 10) - filter out null URLs from address-based reports
+      const urlCounts = allReports
+        .filter((report: AnalysisReport) => report.propertyUrl !== null)
+        .reduce((acc: Record<string, number>, report: AnalysisReport) => {
+          if (report.propertyUrl) {
+            acc[report.propertyUrl] = (acc[report.propertyUrl] || 0) + 1;
+          }
+          return acc;
+        }, {} as Record<string, number>);
       
       const popularUrls = Object.entries(urlCounts)
         .sort(([,a], [,b]) => (b as number) - (a as number))
@@ -193,14 +220,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update status to processing
       await storage.updateAnalysisReportStatus(reportId, 'processing');
 
-      // Step 1: Extract property data using Redfin scraper
-      console.log('Using Redfin scraper for property data');
-      const propertyData = await scrapeRedfinProperty(report.propertyUrl);
+      let propertyData;
+
+      // Branch based on input type
+      if (report.inputType === 'url' && report.propertyUrl) {
+        // Step 1a: Extract property data using Redfin scraper (URL input)
+        console.log('Using Redfin scraper for property data from URL');
+        propertyData = await scrapeRedfinProperty(report.propertyUrl);
+      } else if (report.inputType === 'address' && report.propertyAddress) {
+        // Step 1b: Process address input
+        console.log('Processing address input:', report.propertyAddress);
+        
+        // TODO: Implement Google Maps geocoding service
+        // TODO: Implement Google Maps imagery service (Street View + Satellite)
+        // TODO: Implement Gemini vision analysis service
+        // TODO: Optionally search Redfin by address
+        
+        // For now, create mock property data to prevent crash
+        propertyData = {
+          address: report.propertyAddress,
+          beds: 0,
+          baths: 0,
+          sqft: 0,
+          description: 'Address-based analysis - Full implementation coming soon',
+          images: []
+        };
+        
+        console.log('Address-based workflow not yet fully implemented');
+      } else {
+        throw new Error('Invalid report: missing both propertyUrl and propertyAddress');
+      }
       
       await storage.updateAnalysisReportData(reportId, { propertyData });
 
       // Step 2: Extract location from property data using new location service
-      const location = await extractLocationFromProperty(propertyData.address, report.propertyUrl);
+      const location = await extractLocationFromProperty(propertyData.address, report.propertyUrl ?? undefined);
       
       // Update property data with location
       const updatedPropertyData = {
@@ -212,18 +266,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Extracted location: ${location.city}, ${location.state} ${location.zip}`);
 
       // Step 3: Find comparable properties using location-based approach
-      let comparableProperties;
+      let comparableProperties: ComparableProperty[] = [];
       try {
         console.log(`Finding location-based comparables for ${location.city}, ${location.state}`);
         comparableProperties = await findLocationBasedComparables(updatedPropertyData, location);
         
-        if (comparableProperties.length === 0) {
+        if (comparableProperties.length === 0 && report.propertyUrl) {
           console.log('Location-based comparables returned empty, falling back to scraper method');
           comparableProperties = await findComparableProperties(updatedPropertyData, report.propertyUrl);
+        } else if (comparableProperties.length === 0) {
+          console.log('No comparables found for address-based input (scraper fallback skipped)');
+          comparableProperties = []; // Return empty array for address inputs without URL
         }
       } catch (error) {
-        console.log('Location-based comparables failed, falling back to scraper method:', error);
-        comparableProperties = await findComparableProperties(updatedPropertyData, report.propertyUrl);
+        console.log('Location-based comparables failed:', error);
+        if (report.propertyUrl) {
+          console.log('Falling back to scraper method');
+          comparableProperties = await findComparableProperties(updatedPropertyData, report.propertyUrl);
+        } else {
+          console.log('Skipping scraper fallback for address-only input');
+          comparableProperties = [];
+        }
       }
       await storage.updateAnalysisReportData(reportId, { comparableProperties });
 

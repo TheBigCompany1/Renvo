@@ -10,6 +10,10 @@ import {
   type FinancialSummary,
   type EmailSignup,
   type InsertEmailSignup,
+  type GeoData,
+  type Imagery,
+  type VisionAnalysis,
+  type MapsContext,
   users,
   analysisReports,
   emailSignups
@@ -32,6 +36,10 @@ export interface IStorage {
     id: string, 
     data: {
       propertyData?: PropertyData;
+      geoData?: GeoData;
+      imagery?: Imagery;
+      visionAnalysis?: VisionAnalysis;
+      mapsContext?: MapsContext;
       renovationProjects?: RenovationProject[];
       comparableProperties?: ComparableProperty[];
       contractors?: Contractor[];
@@ -79,9 +87,15 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const report: AnalysisReport = {
       id,
-      ...insertReport,
+      propertyUrl: insertReport.propertyUrl || null,
+      propertyAddress: insertReport.propertyAddress || null,
+      inputType: insertReport.inputType,
       status: "pending",
       propertyData: null,
+      geoData: null,
+      imagery: null,
+      visionAnalysis: null,
+      mapsContext: null,
       renovationProjects: null,
       comparableProperties: null,
       contractors: null,
@@ -114,6 +128,10 @@ export class MemStorage implements IStorage {
     id: string, 
     data: {
       propertyData?: PropertyData;
+      geoData?: GeoData;
+      imagery?: Imagery;
+      visionAnalysis?: VisionAnalysis;
+      mapsContext?: MapsContext;
       renovationProjects?: RenovationProject[];
       comparableProperties?: ComparableProperty[];
       contractors?: Contractor[];
@@ -126,6 +144,10 @@ export class MemStorage implements IStorage {
     const report = this.analysisReports.get(id);
     if (report) {
       if (data.propertyData) report.propertyData = data.propertyData;
+      if (data.geoData) report.geoData = data.geoData;
+      if (data.imagery) report.imagery = data.imagery;
+      if (data.visionAnalysis) report.visionAnalysis = data.visionAnalysis;
+      if (data.mapsContext) report.mapsContext = data.mapsContext;
       if (data.renovationProjects) report.renovationProjects = data.renovationProjects;
       if (data.comparableProperties) report.comparableProperties = data.comparableProperties;
       if (data.contractors) report.contractors = data.contractors;
@@ -211,6 +233,10 @@ export class PostgresStorage implements IStorage {
     id: string, 
     data: {
       propertyData?: PropertyData;
+      geoData?: GeoData;
+      imagery?: Imagery;
+      visionAnalysis?: VisionAnalysis;
+      mapsContext?: MapsContext;
       renovationProjects?: RenovationProject[];
       comparableProperties?: ComparableProperty[];
       contractors?: Contractor[];

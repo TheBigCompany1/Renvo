@@ -12,9 +12,15 @@ export const users = pgTable("users", {
 
 export const analysisReports = pgTable("analysis_reports", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  propertyUrl: text("property_url").notNull(),
+  propertyUrl: text("property_url"), // Optional - used when input is Redfin URL
+  propertyAddress: text("property_address"), // Optional - used when input is plain address
+  inputType: text("input_type").notNull().default("url"), // "url" or "address"
   status: text("status").notNull().default("pending"), // pending, processing, completed, failed
   propertyData: jsonb("property_data"),
+  geoData: jsonb("geo_data"), // Geocoded location data (lat, lng, formatted address)
+  imagery: jsonb("imagery"), // Street View + Satellite image URLs
+  visionAnalysis: jsonb("vision_analysis"), // Gemini visual analysis results
+  mapsContext: jsonb("maps_context"), // Google Maps grounding context (POIs, neighborhood data)
   renovationProjects: jsonb("renovation_projects"),
   comparableProperties: jsonb("comparable_properties"),
   contractors: jsonb("contractors"),
@@ -145,9 +151,58 @@ export const financialSummarySchema = z.object({
   postRenovationSqft: z.number().nonnegative().optional(), // Total sqft after all renovations
 });
 
-export const insertAnalysisReportSchema = createInsertSchema(analysisReports).pick({
-  propertyUrl: true,
+export const geoDataSchema = z.object({
+  lat: z.number(),
+  lng: z.number(),
+  formattedAddress: z.string(),
+  placeId: z.string().optional(),
+  addressComponents: z.record(z.string()).optional(),
 });
+
+export const imagerySchema = z.object({
+  streetViewUrl: z.string().optional(),
+  satelliteUrl: z.string().optional(),
+  streetViewMetadata: z.record(z.any()).optional(),
+  satelliteMetadata: z.record(z.any()).optional(),
+});
+
+export const visionAnalysisSchema = z.object({
+  propertyCondition: z.string().optional(),
+  architecturalStyle: z.string().optional(),
+  visibleFeatures: z.array(z.string()).optional(),
+  estimatedSize: z.string().optional(),
+  renovationOpportunities: z.array(z.string()).optional(),
+  lotAnalysis: z.string().optional(),
+  confidence: z.number().optional(),
+});
+
+export const mapsContextSchema = z.object({
+  nearbyPOIs: z.array(z.object({
+    name: z.string(),
+    type: z.string(),
+    distanceMiles: z.number().optional(),
+  })).optional(),
+  neighborhoodInsights: z.string().optional(),
+  areaRating: z.number().optional(),
+  demographics: z.record(z.any()).optional(),
+});
+
+export const insertAnalysisReportSchema = createInsertSchema(analysisReports)
+  .pick({
+    propertyUrl: true,
+    propertyAddress: true,
+    inputType: true,
+  })
+  .extend({
+    // Make URL and address optional but require at least one
+    propertyUrl: z.string().url().optional(),
+    propertyAddress: z.string().min(5).optional(),
+    inputType: z.enum(["url", "address"]),
+  })
+  .refine(
+    (data) => data.propertyUrl || data.propertyAddress,
+    { message: "Either propertyUrl or propertyAddress must be provided" }
+  );
 
 export type InsertAnalysisReport = z.infer<typeof insertAnalysisReportSchema>;
 export type AnalysisReport = typeof analysisReports.$inferSelect;
@@ -156,6 +211,10 @@ export type RenovationProject = z.infer<typeof renovationProjectSchema>;
 export type ComparableProperty = z.infer<typeof comparablePropertySchema>;
 export type Contractor = z.infer<typeof contractorSchema>;
 export type FinancialSummary = z.infer<typeof financialSummarySchema>;
+export type GeoData = z.infer<typeof geoDataSchema>;
+export type Imagery = z.infer<typeof imagerySchema>;
+export type VisionAnalysis = z.infer<typeof visionAnalysisSchema>;
+export type MapsContext = z.infer<typeof mapsContextSchema>;
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,

@@ -9,10 +9,12 @@ export interface LocationData {
 
 /**
  * Extract location data from property address and URL
+ * @param address - Property address string
+ * @param propertyUrl - Optional property URL (for extracting additional location data from Redfin URLs)
  */
 export async function extractLocationFromProperty(
   address: string,
-  propertyUrl: string
+  propertyUrl?: string
 ): Promise<LocationData> {
   try {
     const location: LocationData = { address };
@@ -39,7 +41,7 @@ export async function extractLocationFromProperty(
     }
     
     // Extract additional location info from URL if possible
-    if (propertyUrl.includes('redfin.com')) {
+    if (propertyUrl && propertyUrl.includes('redfin.com')) {
       // Redfin URL format: /CA/Los-Angeles/12630-Bonaparte-Ave-90066/home/6732264
       const urlMatch = propertyUrl.match(/\/([A-Z]{2})\/([^\/]+)\/([^\/]+)/);
       if (urlMatch) {
