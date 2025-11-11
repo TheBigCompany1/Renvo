@@ -33,22 +33,20 @@ function safeParseGeminiJson<T>(responseText: string | undefined, context: strin
 
 export async function geocodeAddress(address: string): Promise<GeoData> {
   try {
-    console.log(`Geocoding address with Gemini Maps grounding: ${address}`);
+    console.log(`Geocoding address with Gemini: ${address}`);
     
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Provide the exact coordinates (lat, lng), formatted address, and place ID for this address: ${address}. 
+      contents: `You are a geocoding expert. Provide the exact coordinates (lat, lng) and formatted address for: ${address}
       
-      Respond ONLY with a JSON object in this exact format:
+      Use your knowledge of real addresses and locations to provide accurate coordinates.
+      
+      Respond ONLY with a JSON object in this exact format (no markdown, no extra text):
       {
         "lat": 34.0522,
         "lng": -118.2437,
-        "formattedAddress": "123 Main St, Los Angeles, CA 90001, USA",
-        "placeId": "ChIJexample123"
+        "formattedAddress": "123 Main St, Los Angeles, CA 90001, USA"
       }`,
-      config: {
-        tools: [{ googleMaps: {} }],
-      },
     });
 
     const responseText = response.text;
@@ -56,14 +54,12 @@ export async function geocodeAddress(address: string): Promise<GeoData> {
       lat: number;
       lng: number;
       formattedAddress: string;
-      placeId?: string;
     }>(responseText, "Geocoding");
     
     return {
       lat: data.lat,
       lng: data.lng,
       formattedAddress: data.formattedAddress,
-      placeId: data.placeId,
     };
   } catch (error) {
     console.error("Error geocoding address:", error);
@@ -81,36 +77,25 @@ export async function getNeighborhoodContext(
     
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Analyze the neighborhood around ${address} (${lat}, ${lng}) for real estate renovation analysis.
+      contents: `You are a real estate neighborhood expert. Analyze the neighborhood around ${address} for real estate investment analysis.
 
-      Provide detailed information about:
+      Use your knowledge of this area to provide:
       1. Nearby points of interest (schools, parks, shopping, transit within 1 mile)
       2. Neighborhood insights and characteristics
-      3. Area quality rating (1-10 scale)
+      3. Area quality rating (1-10 scale based on schools, safety, amenities)
       
-      Respond ONLY with a JSON object in this exact format:
+      Respond ONLY with a JSON object in this exact format (no markdown, no extra text):
       {
         "nearbyPOIs": [
           {
-            "name": "Lincoln Elementary School",
+            "name": "Example Elementary School",
             "type": "school",
             "distanceMiles": 0.3
           }
         ],
-        "neighborhoodInsights": "Quiet residential area with good schools and parks. Property values have increased 8% year-over-year.",
+        "neighborhoodInsights": "Describe the neighborhood characteristics, demographics, and market trends.",
         "areaRating": 8.5
       }`,
-      config: {
-        tools: [{ googleMaps: {} }],
-        toolConfig: {
-          retrievalConfig: {
-            latLng: {
-              latitude: lat,
-              longitude: lng,
-            },
-          },
-        },
-      },
     });
 
     const responseText = response.text;
