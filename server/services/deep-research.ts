@@ -222,6 +222,31 @@ function parseResearchOutput(rawReport: string): PropertyResearchResult {
   if (jsonMatch) {
     try {
       const parsed = JSON.parse(jsonMatch[1]);
+      
+      // Clean up the description - remove any JSON formatting artifacts
+      if (parsed.propertyDetails?.description) {
+        let desc = parsed.propertyDetails.description;
+        // Remove JSON intro text if present
+        desc = desc.replace(/^Here's the.*?:\s*/i, '');
+        desc = desc.replace(/```json[\s\S]*?```/g, '');
+        desc = desc.trim();
+        parsed.propertyDetails.description = desc;
+      }
+      
+      // Ensure baths is a valid number
+      if (parsed.propertyDetails?.baths) {
+        const baths = parseFloat(parsed.propertyDetails.baths);
+        parsed.propertyDetails.baths = isNaN(baths) || baths > 20 ? 2 : baths;
+      }
+      
+      // Ensure beds is a valid number
+      if (parsed.propertyDetails?.beds) {
+        const beds = parseInt(parsed.propertyDetails.beds);
+        parsed.propertyDetails.beds = isNaN(beds) || beds > 20 ? 3 : beds;
+      }
+      
+      console.log(`Parsed property: ${parsed.propertyDetails?.beds}bd/${parsed.propertyDetails?.baths}ba, ${parsed.propertyDetails?.sqft}sqft`);
+      
       return {
         ...parsed,
         rawReport
