@@ -228,62 +228,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Using Redfin scraper for property data from URL');
         propertyData = await scrapeRedfinProperty(report.propertyUrl);
       } else if (report.inputType === 'address' && report.propertyAddress) {
-        // Step 1b: Process address input using Gemini + Google Maps
-        console.log('Processing address input with Gemini Maps:', report.propertyAddress);
+        // Step 1b: Process address input using Deep Research API
+        console.log('🔬 Starting Deep Research for address:', report.propertyAddress);
         
-        // Import Gemini enhanced services dynamically to avoid circular dependencies
-        const { geocodeAddress, getNeighborhoodContext, generateImageryUrls, analyzePropertyFromImages } = await import('./services/gemini-enhanced');
+        // Import Deep Research service
+        const { conductPropertyResearch } = await import('./services/deep-research');
         
-        // Step 1b.1: Geocode the address
-        console.log('Step 1b.1: Geocoding address...');
-        const geoData = await geocodeAddress(report.propertyAddress);
-        await storage.updateAnalysisReportData(reportId, { geoData });
-        console.log(`Geocoded to: ${geoData.lat}, ${geoData.lng}`);
+        // Conduct comprehensive property research using Deep Research API
+        console.log('Step 1b.1: Conducting Deep Research for property data...');
+        const researchResult = await conductPropertyResearch(report.propertyAddress);
+        console.log(`✅ Deep Research completed - found ${researchResult.comparables.length} comparables`);
         
-        // Step 1b.2: Generate imagery URLs
-        console.log('Step 1b.2: Generating Street View and Satellite imagery URLs...');
-        const imagery = await generateImageryUrls(geoData.lat, geoData.lng);
-        await storage.updateAnalysisReportData(reportId, { imagery });
-        console.log(`Imagery URLs generated: Street View and Satellite`);
+        // Store the raw research report for reference
+        await storage.updateAnalysisReportData(reportId, { 
+          mapsContext: {
+            neighborhoodInsights: researchResult.neighborhoodContext?.description || '',
+            nearbyPOIs: (researchResult.neighborhoodContext?.nearbyAmenities || []).map(amenity => ({
+              name: amenity,
+              type: 'amenity'
+            })),
+            areaRating: researchResult.neighborhoodContext?.schoolRating
+          }
+        });
         
-        // Step 1b.3: Get neighborhood context with Maps grounding
-        console.log('Step 1b.3: Getting neighborhood context with Maps grounding...');
-        const mapsContext = await getNeighborhoodContext(
-          report.propertyAddress,
-          geoData.lat,
-          geoData.lng
-        );
-        await storage.updateAnalysisReportData(reportId, { mapsContext });
-        console.log(`Neighborhood context retrieved: ${mapsContext.nearbyPOIs?.length || 0} POIs found`);
+        // Store geo data from research
+        await storage.updateAnalysisReportData(reportId, { 
+          geoData: {
+            formattedAddress: researchResult.propertyDetails.address,
+            lat: 0, // Will be updated if we add geocoding
+            lng: 0
+          }
+        });
         
-        // Step 1b.4: Analyze property from imagery
-        console.log('Step 1b.4: Analyzing property from Street View and Satellite imagery...');
-        const imageUrls = [imagery.streetViewUrl, imagery.satelliteUrl].filter((url): url is string => !!url);
-        const visionAnalysis = await analyzePropertyFromImages(
-          imageUrls,
-          report.propertyAddress
-        );
-        await storage.updateAnalysisReportData(reportId, { visionAnalysis });
-        console.log(`Vision analysis complete: ${visionAnalysis.architecturalStyle || 'Unknown style'}`);
-        
-        // Step 1b.5: Create property data from all gathered information
-        const visionDesc = visionAnalysis.propertyCondition 
-          ? `${visionAnalysis.architecturalStyle || 'Property'} - ${visionAnalysis.propertyCondition}` 
-          : visionAnalysis.architecturalStyle || 'Property';
-        const contextDesc = mapsContext.neighborhoodInsights ? ` Located in ${mapsContext.neighborhoodInsights}` : '';
-        
+        // Create property data from Deep Research results
         propertyData = {
-          address: geoData.formattedAddress || report.propertyAddress,
-          beds: 3, // Default estimate, will be refined by AI
-          baths: 2, // Default estimate, will be refined by AI
-          sqft: 1500, // Default estimate, vision analysis may provide better estimate
-          description: visionDesc + contextDesc,
-          images: imageUrls,
-          yearBuilt: undefined,
-          price: undefined,
+          address: researchResult.propertyDetails.address || report.propertyAddress,
+          beds: researchResult.propertyDetails.beds,
+          baths: researchResult.propertyDetails.baths,
+          sqft: researchResult.propertyDetails.sqft,
+          description: researchResult.propertyDetails.description,
+          images: [],
+          yearBuilt: researchResult.propertyDetails.yearBuilt,
+          price: researchResult.propertyDetails.currentEstimate || researchResult.propertyDetails.lastSoldPrice,
         };
         
-        console.log('Address-based workflow completed successfully');
+        console.log(`📊 Property: ${propertyData.beds}bd/${propertyData.baths}ba, ${propertyData.sqft} sqft`);
+        console.log(`💰 Estimated value: $${propertyData.price?.toLocaleString() || 'Unknown'}`);
+        
+        // Store comparable properties from research
+        if (researchResult.comparables.length > 0) {
+          const researchComps = researchResult.comparables.map(comp => ({
+            address: comp.address,
+            beds: comp.beds,
+            baths: comp.baths,
+            sqft: comp.sqft,
+            price: comp.price,
+            pricePsf: comp.pricePsf,
+            dateSold: comp.dateSold,
+            distanceMiles: comp.distanceMiles,
+            source: 'deep_research' as const
+          }));
+          await storage.updateAnalysisReportData(reportId, { comparableProperties: researchComps });
+          console.log(`📈 Stored ${researchComps.length} comparable properties from research`);
+        }
+        
+        console.log('✅ Deep Research workflow completed successfully');
       } else {
         throw new Error('Invalid report: missing both propertyUrl and propertyAddress');
       }
