@@ -302,7 +302,12 @@ export async function conductPropertyResearch(address: string): Promise<Property
 }
 
 async function fallbackPropertyResearch(address: string): Promise<PropertyResearchResult> {
-  console.log('Using fallback research method with Gemini 2.5 Flash...');
+  console.log('\n========================================');
+  console.log('🔬 DEEP RESEARCH - Starting property analysis');
+  console.log('========================================');
+  console.log(`📍 Property: ${address}`);
+  console.log('🔧 Method: Gemini 2.5 Flash with Google Search grounding');
+  console.log('----------------------------------------\n');
   
   const prompt = `Research this property address and provide real estate data: ${address}
 
@@ -333,6 +338,9 @@ Provide your findings in JSON format at the end of your response:
 \`\`\``;
 
   try {
+    console.log('🌐 Sending request to Gemini with Google Search grounding...');
+    const startTime = Date.now();
+    
     const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -341,10 +349,77 @@ Provide your findings in JSON format at the end of your response:
       }
     });
     
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`⏱️ Response received in ${elapsed}s`);
+    
     const rawReport = response.text || '';
-    return parseResearchOutput(rawReport);
+    
+    // Log grounding metadata if available
+    const groundingMetadata = (response as any).candidates?.[0]?.groundingMetadata;
+    if (groundingMetadata) {
+      console.log('\n📚 GROUNDING SOURCES USED:');
+      console.log('----------------------------------------');
+      
+      if (groundingMetadata.searchEntryPoint?.renderedContent) {
+        console.log('🔍 Search query was executed');
+      }
+      
+      if (groundingMetadata.groundingChunks) {
+        const chunks = groundingMetadata.groundingChunks;
+        console.log(`Found ${chunks.length} source(s):`);
+        chunks.forEach((chunk: any, i: number) => {
+          if (chunk.web) {
+            console.log(`  ${i + 1}. ${chunk.web.title || 'Unknown'}`);
+            console.log(`     URL: ${chunk.web.uri || 'N/A'}`);
+          }
+        });
+      }
+      
+      if (groundingMetadata.webSearchQueries) {
+        console.log('\n🔎 Search queries made:');
+        groundingMetadata.webSearchQueries.forEach((query: string, i: number) => {
+          console.log(`  ${i + 1}. "${query}"`);
+        });
+      }
+      console.log('----------------------------------------\n');
+    } else {
+      console.log('⚠️ No grounding metadata available in response');
+    }
+    
+    // Log raw response length
+    console.log(`📝 Raw response length: ${rawReport.length} characters`);
+    
+    // Log first 500 chars of response for debugging
+    console.log('\n📄 Response preview (first 500 chars):');
+    console.log('----------------------------------------');
+    console.log(rawReport.substring(0, 500));
+    console.log('----------------------------------------\n');
+    
+    const result = parseResearchOutput(rawReport);
+    
+    // Log extracted data summary
+    console.log('\n✅ EXTRACTED DATA SUMMARY:');
+    console.log('========================================');
+    console.log(`🏠 Address: ${result.propertyDetails.address || 'Not found'}`);
+    console.log(`🛏️ Beds: ${result.propertyDetails.beds}`);
+    console.log(`🛁 Baths: ${result.propertyDetails.baths}`);
+    console.log(`📐 Sqft: ${result.propertyDetails.sqft?.toLocaleString() || 'N/A'}`);
+    console.log(`📅 Year Built: ${result.propertyDetails.yearBuilt || 'N/A'}`);
+    console.log(`💰 Current Estimate: $${result.propertyDetails.currentEstimate?.toLocaleString() || 'N/A'}`);
+    console.log(`💵 Last Sold: $${result.propertyDetails.lastSoldPrice?.toLocaleString() || 'N/A'} (${result.propertyDetails.lastSoldDate || 'N/A'})`);
+    console.log(`🏘️ Comparables found: ${result.comparables.length}`);
+    if (result.comparables.length > 0) {
+      result.comparables.forEach((comp, i) => {
+        console.log(`   ${i + 1}. ${comp.address} - $${comp.price?.toLocaleString()} (${comp.sqft} sqft)`);
+      });
+    }
+    console.log(`🏘️ Neighborhood: ${result.neighborhoodContext.description?.substring(0, 100) || 'N/A'}...`);
+    console.log(`📊 Sources cited: ${result.sources?.join(', ') || 'None'}`);
+    console.log('========================================\n');
+    
+    return result;
   } catch (error) {
-    console.error('Fallback research also failed:', error);
+    console.error('❌ Fallback research also failed:', error);
     throw new Error(`All research methods failed: ${(error as Error).message}`);
   }
 }
