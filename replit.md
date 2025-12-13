@@ -36,11 +36,18 @@ Evolved from Redfin-only to a hybrid system that accepts BOTH Redfin URLs and pl
 - Visual analysis capability for ANY property using Street View + Satellite imagery
 - Gemini's Google Maps grounding provides rich neighborhood context
 
-**Next Phase:**
-- Implement Google Maps Places service for geocoding
-- Implement Google Maps Imagery service for Street View/Satellite images
-- Enhance Gemini service with vision analysis and Maps grounding
-- Create analysis coordinator to compose all services
+**Completed Implementation (December 2025):**
+- Gemini-based geocoding and address validation
+- Neighborhood context with POIs and market insights
+- Location parsing for various address formats (including USA suffix)
+- Vision analysis infrastructure (requires Google Maps API key with Static APIs enabled)
+- End-to-end tested with both Redfin URLs and plain addresses
+
+**Configuration Note - Vision Analysis:**
+To enable visual property analysis from Street View and Satellite imagery, a Google Cloud API key with the following services enabled is required:
+- Maps Static API
+- Street View Static API
+The GEMINI_API_KEY is for AI models only and doesn't provide access to Maps imagery. Without a properly configured Maps API key, the system gracefully falls back to text-only analysis.
 
 ## Redfin Deep Link Support (October 2025)
 

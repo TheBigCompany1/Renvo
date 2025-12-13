@@ -22,6 +22,14 @@ export async function extractLocationFromProperty(
     // Parse location from address string
     const addressParts = address.split(',').map(part => part.trim());
     
+    // Remove "USA" or "United States" from the end if present
+    if (addressParts.length > 0) {
+      const lastPart = addressParts[addressParts.length - 1].toLowerCase();
+      if (lastPart === 'usa' || lastPart === 'united states') {
+        addressParts.pop();
+      }
+    }
+    
     if (addressParts.length >= 2) {
       // Try to extract city and state from address
       const lastPart = addressParts[addressParts.length - 1];
@@ -32,10 +40,34 @@ export async function extractLocationFromProperty(
         location.zip = stateZipMatch[2];
         location.city = addressParts[addressParts.length - 2];
       } else {
-        // Try to parse city from second to last part
-        if (addressParts.length >= 3) {
-          location.city = addressParts[addressParts.length - 2];
-          location.state = addressParts[addressParts.length - 1];
+        // Check if last part is just a state abbreviation
+        const stateMatch = lastPart.match(/^([A-Z]{2})$/);
+        if (stateMatch && addressParts.length >= 3) {
+          location.state = stateMatch[1];
+          // Check second to last part for ZIP
+          const secondLast = addressParts[addressParts.length - 2];
+          const zipMatch = secondLast.match(/(\d{5})/);
+          if (zipMatch) {
+            location.zip = zipMatch[1];
+            // City would be the part before that
+            if (addressParts.length >= 4) {
+              location.city = addressParts[addressParts.length - 3];
+            } else {
+              // Extract city from the ZIP part (e.g., "Los Angeles 90066")
+              const cityFromZipPart = secondLast.replace(/\d{5}/, '').trim();
+              if (cityFromZipPart) {
+                location.city = cityFromZipPart;
+              }
+            }
+          } else {
+            location.city = addressParts[addressParts.length - 2];
+          }
+        } else {
+          // Try to parse city from second to last part
+          if (addressParts.length >= 3) {
+            location.city = addressParts[addressParts.length - 2];
+            location.state = addressParts[addressParts.length - 1];
+          }
         }
       }
     }

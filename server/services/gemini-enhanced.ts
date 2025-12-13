@@ -212,8 +212,15 @@ export async function generateImageryUrls(
   lat: number,
   lng: number
 ): Promise<Imagery> {
-  const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${lat},${lng}&fov=90&heading=0&pitch=0`;
-  const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=19&size=640x480&maptype=satellite`;
+  const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || "";
+  
+  // Include API key in URLs for authenticated requests
+  const streetViewUrl = apiKey 
+    ? `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${lat},${lng}&fov=90&heading=0&pitch=0&key=${apiKey}`
+    : `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${lat},${lng}&fov=90&heading=0&pitch=0`;
+  const satelliteUrl = apiKey
+    ? `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=19&size=640x480&maptype=satellite&key=${apiKey}`
+    : `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=19&size=640x480&maptype=satellite`;
   
   return {
     streetViewUrl,
