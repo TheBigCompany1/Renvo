@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { createAnalysisReport } from "@/lib/api";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 export default function Home() {
   // Using public directory paths for video files
@@ -102,11 +102,10 @@ export default function Home() {
         <div className="w-full max-w-3xl">
           <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
-              <Input
-                type="text"
-                placeholder="Enter Redfin URL or property address (e.g., 123 Main St, Los Angeles, CA 90001)"
+              <AddressAutocomplete
                 value={propertyInput}
-                onChange={(e) => setPropertyInput(e.target.value)}
+                onChange={setPropertyInput}
+                placeholder="Enter Redfin URL or property address (e.g., 123 Main St, Los Angeles, CA)"
                 className="h-14 text-lg px-6 bg-white/95 backdrop-blur-sm border-0 shadow-lg text-gray-900 placeholder:text-gray-500"
                 data-testid="input-property"
               />

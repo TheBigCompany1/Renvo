@@ -392,6 +392,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
+  // Address autocomplete endpoint using Google Places API
+  app.get("/api/address-autocomplete", async (req, res) => {
+    try {
+      const { input } = req.query;
+      
+      if (!input || typeof input !== 'string' || input.length < 3) {
+        return res.json({ predictions: [] });
+      }
+
+      const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.error('No Google API key available for Places API');
+        return res.json({ predictions: [] });
+      }
+
+      const url = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
+      url.searchParams.append('input', input);
+      url.searchParams.append('types', 'address');
+      url.searchParams.append('components', 'country:us');
+      url.searchParams.append('key', apiKey);
+
+      const response = await fetch(url.toString());
+      const data = await response.json();
+
+      if (data.status === 'OK' || data.status === 'ZERO_RESULTS') {
+        res.json({ predictions: data.predictions || [] });
+      } else if (data.status === 'REQUEST_DENIED') {
+        console.error('Places API request denied:', data.error_message);
+        res.json({ predictions: [], error: 'API access denied - Places API may need to be enabled' });
+      } else {
+        console.error('Places API error:', data.status, data.error_message);
+        res.json({ predictions: [] });
+      }
+    } catch (error) {
+      console.error("Error in address autocomplete:", error);
+      res.json({ predictions: [] });
+    }
+  });
+
   // Test endpoint for RAG pricing system with 90066 (Marina del Rey)
   app.get("/api/test/rag-90066", async (req, res) => {
     try {
