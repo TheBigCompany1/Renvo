@@ -401,7 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ predictions: [] });
       }
 
-      const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
       if (!apiKey) {
         console.error('No Google API key available for Places API');
         return res.json({ predictions: [] });
