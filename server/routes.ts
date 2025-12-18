@@ -392,7 +392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  // Address autocomplete endpoint using Google Places API
+  // Address autocomplete endpoint using Google Places API (New)
   app.get("/api/address-autocomplete", async (req, res) => {
     try {
       const { input } = req.query;
@@ -407,24 +407,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ predictions: [] });
       }
 
-      const url = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
-      url.searchParams.append('input', input);
-      url.searchParams.append('types', 'address');
-      url.searchParams.append('components', 'country:us');
-      url.searchParams.append('key', apiKey);
+      // Try the new Places API first
+      const newApiUrl = 'https://places.googleapis.com/v1/places:autocomplete';
+      const requestBody = {
+        input: input,
+        includedPrimaryTypes: ['street_address', 'subpremise'],
+        includedRegionCodes: ['us']
+      };
 
-      const response = await fetch(url.toString());
-      const data = await response.json();
+      const newApiResponse = await fetch(newApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat'
+        },
+        body: JSON.stringify(requestBody)
+      });
 
-      if (data.status === 'OK' || data.status === 'ZERO_RESULTS') {
-        res.json({ predictions: data.predictions || [] });
-      } else if (data.status === 'REQUEST_DENIED') {
-        console.error('Places API request denied:', data.error_message);
-        res.json({ predictions: [], error: 'API access denied - Places API may need to be enabled' });
-      } else {
-        console.error('Places API error:', data.status, data.error_message);
-        res.json({ predictions: [] });
+      const newApiData = await newApiResponse.json();
+
+      if (newApiData.suggestions && newApiData.suggestions.length > 0) {
+        // Transform new API format to match old format for frontend compatibility
+        const predictions = newApiData.suggestions.map((suggestion: any) => ({
+          description: suggestion.placePrediction?.text?.text || '',
+          place_id: suggestion.placePrediction?.placeId || '',
+          structured_formatting: {
+            main_text: suggestion.placePrediction?.structuredFormat?.mainText?.text || '',
+            secondary_text: suggestion.placePrediction?.structuredFormat?.secondaryText?.text || ''
+          }
+        }));
+        return res.json({ predictions });
       }
+
+      // If new API returns empty or error, return empty predictions
+      if (newApiData.error) {
+        console.error('Places API (New) error:', newApiData.error.message);
+        return res.json({ predictions: [], error: newApiData.error.message });
+      }
+
+      res.json({ predictions: [] });
     } catch (error) {
       console.error("Error in address autocomplete:", error);
       res.json({ predictions: [] });
