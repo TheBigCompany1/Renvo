@@ -12,6 +12,7 @@ import {
   performAdvancedCrossValidation,
   AggregatedPricingResult 
 } from "./pricing-aggregator";
+import { calculateWeightedCurrentValue, getRoiStarRating } from "./location-comparables";
 
 interface ValidationResult {
   correctedProjects: RenovationProject[];
@@ -89,11 +90,15 @@ export async function validateRenovationProjects(
     }
   }
 
-  // Compute corrected financial summary
+  // Sort projects by ROI and add star ratings and ranking
+  const rankedProjects = sortProjectsByROI(correctedProjects);
+  
+  // Compute corrected financial summary using weighted comparables
   const financialSummary = computeFinancialSummary(
-    correctedProjects, 
+    rankedProjects, 
     propertyData, 
-    marketPpsf
+    marketPpsf,
+    comparableProperties
   );
 
   // Calculate validation summary
@@ -106,8 +111,10 @@ export async function validateRenovationProjects(
       validationStats.reduce((sum, stat) => sum + Math.abs(stat.valueDelta), 0) / validationStats.length : 0
   };
 
+  console.log(`⭐ Ranked ${rankedProjects.length} projects by ROI with star ratings`);
+
   return {
-    correctedProjects,
+    correctedProjects: rankedProjects, // Return ranked projects with star ratings
     financialSummary,
     validationSummary
   };
@@ -214,10 +221,12 @@ async function validateSingleProject(
       low: projectPricing.construction.low,
       medium: projectPricing.construction.medium,
       high: projectPricing.construction.high,
-      source: projectPricing.construction.source,
-      modelVersion: '2024.2-aggregated',
-      region: projectPricing.metadata.region
     };
+    
+    // Store source and model info separately for pricing sources
+    const constructionSource = projectPricing.construction.source;
+    const constructionModelVersion = '2024.2-aggregated';
+    const constructionRegion = projectPricing.metadata.region;
     
     // Extract enhanced pricing metadata
     pricingStrategy = projectPricing.overall.strategy;
@@ -384,7 +393,7 @@ async function validateSingleProject(
     
     // Set enhanced pricing sources and validation
     pricingSources: {
-      constructionCost: constructionCostResult.source,
+      constructionCost: 'Aggregated pricing system',
       marketPpsf: marketPricingResult.source,
       modelVersion: marketPricingResult.modelVersion,
       region: marketPricingResult.region,
@@ -392,7 +401,7 @@ async function validateSingleProject(
       pricingStrategy,
       confidence: pricingConfidence,
       dataFreshness,
-      methodology: constructionCostResult.methodology || 'Standard pricing analysis'
+      methodology: 'Standard pricing analysis'
     },
     
     validation: {
@@ -419,11 +428,13 @@ async function validateSingleProject(
 
 /**
  * Compute corrected financial summary from validated projects
+ * Uses weighted comparables for more accurate current value estimation
  */
 function computeFinancialSummary(
   projects: RenovationProject[],
   propertyData: PropertyData,
-  marketPpsf: number
+  marketPpsf: number,
+  comparables?: ComparableProperty[]
 ): FinancialSummary {
   
   // USER FORMULAS - use these EXACT calculations:
@@ -441,19 +452,36 @@ function computeFinancialSummary(
     return sum;
   }, 0);
   
+  // Calculate current value using weighted comparables if available
+  let currentValue: number;
+  let avgPricePsf = marketPpsf;
+  
+  if (comparables && comparables.length > 0) {
+    // Use weighted average from scored comparables for more accurate estimation
+    const weightedResult = calculateWeightedCurrentValue(comparables, propertyData);
+    currentValue = weightedResult.estimatedValue;
+    avgPricePsf = weightedResult.avgPricePsf;
+    console.log(`🏠 Using weighted comparable analysis for current value (confidence: ${weightedResult.confidence}%)`);
+  } else {
+    // Fallback to simple calculation
+    currentValue = propertyData.sqft * marketPpsf;
+    console.log(`🏠 Using simple sqft × PPSF for current value (no comparables available)`);
+  }
+  
   // Formula 3: Post-renovation value = market PPSF × total livable sqft
   const postRenovationSqft = propertyData.sqft + totalAddedSqft;
-  const afterRepairValue = marketPpsf * postRenovationSqft;
+  const afterRepairValue = avgPricePsf * postRenovationSqft;
   
   // Formula 2: Total validated value add = market PPSF × total added sqft  
-  const totalValueAdd = marketPpsf * totalAddedSqft;
+  const totalValueAdd = avgPricePsf * totalAddedSqft;
   
   // Formula 1: Total validated costs = sum of (construction PPSF × project sqft)
   const totalRenovationCost = projects.reduce((sum, project) => {
     const projectType = classifyProjectType(project.name, project.description);
     if (livingAreaIncreasingTypes.includes(projectType)) {
       // Use the validated cost per sqft × sqft for addition projects
-      return sum + (project.costPerSqft * (project.sqftAdded || 0));
+      const costPerSqft = project.costPerSqft || 400; // Default to $400/sqft if undefined
+      return sum + (costPerSqft * (project.sqftAdded || 0));
     } else {
       // For remodels, use the average cost range  
       return sum + ((project.costRangeLow + project.costRangeHigh) / 2);
@@ -468,14 +496,12 @@ function computeFinancialSummary(
     - Existing sqft: ${propertyData.sqft}
     - Total added sqft: ${totalAddedSqft}  
     - Post-renovation sqft: ${postRenovationSqft}
-    - Market PPSF: $${marketPpsf}
-    - Total value add: $${marketPpsf} × ${totalAddedSqft} = $${totalValueAdd.toLocaleString()}
-    - After repair value: $${marketPpsf} × ${postRenovationSqft} = $${afterRepairValue.toLocaleString()}
+    - Market PPSF: $${avgPricePsf}
+    - Current value: $${currentValue.toLocaleString()}
+    - Total value add: $${avgPricePsf} × ${totalAddedSqft} = $${totalValueAdd.toLocaleString()}
+    - After repair value: $${avgPricePsf} × ${postRenovationSqft} = $${afterRepairValue.toLocaleString()}
     - Total renovation cost: $${totalRenovationCost.toLocaleString()}
     - Total ROI: ${totalROI.toFixed(1)}%`);
-  
-  // Current value based on existing livable space  
-  const currentValue = propertyData.sqft * marketPpsf;
 
   return {
     currentValue,
@@ -483,14 +509,22 @@ function computeFinancialSummary(
     totalValueAdd,
     afterRepairValue,
     totalROI,
-    avgPricePsf: marketPpsf,
+    avgPricePsf,
     postRenovationSqft
   };
 }
 
 /**
- * Sort projects by ROI (highest first) after validation
+ * Sort projects by ROI (highest first) and add star ratings and ranking
  */
 export function sortProjectsByROI(projects: RenovationProject[]): RenovationProject[] {
-  return [...projects].sort((a, b) => (b.roi || 0) - (a.roi || 0));
+  // Sort by ROI (highest first)
+  const sorted = [...projects].sort((a, b) => (b.roi || 0) - (a.roi || 0));
+  
+  // Add star ratings and rank to each project
+  return sorted.map((project, index) => ({
+    ...project,
+    rank: index + 1, // 1-indexed ranking
+    starRating: getRoiStarRating(project.roi || 0),
+  }));
 }

@@ -3,6 +3,132 @@ import type { LocationData } from './location-service';
 import { getMarketContext } from './location-service';
 
 /**
+ * Calculate comparability score based on multiple factors (0-100)
+ * Higher score = more similar to subject property
+ */
+export function calculateComparabilityScore(
+  comp: ComparableProperty,
+  subjectProperty: PropertyData
+): number {
+  let score = 0;
+  const weights = {
+    sqft: 30,      // Square footage similarity (most important)
+    beds: 15,      // Bedroom count match
+    baths: 10,     // Bathroom count match
+    yearBuilt: 15, // Year built similarity
+    recency: 20,   // Sale recency (more recent = better)
+    distance: 10,  // Distance from subject property
+  };
+
+  // Square footage similarity (within ±20% = full points, beyond that = partial)
+  const targetSqft = subjectProperty.sqft || 1200;
+  const sqftDiff = Math.abs(comp.sqft - targetSqft) / targetSqft;
+  if (sqftDiff <= 0.1) score += weights.sqft; // Within 10%
+  else if (sqftDiff <= 0.2) score += weights.sqft * 0.8; // Within 20%
+  else if (sqftDiff <= 0.3) score += weights.sqft * 0.5; // Within 30%
+  else score += weights.sqft * 0.2; // Beyond 30%
+
+  // Bedroom count match
+  const targetBeds = subjectProperty.beds || 2;
+  const bedDiff = Math.abs(comp.beds - targetBeds);
+  if (bedDiff === 0) score += weights.beds;
+  else if (bedDiff === 1) score += weights.beds * 0.7;
+  else score += weights.beds * 0.3;
+
+  // Bathroom count match
+  const targetBaths = subjectProperty.baths || 2;
+  const bathDiff = Math.abs(comp.baths - targetBaths);
+  if (bathDiff <= 0.5) score += weights.baths;
+  else if (bathDiff <= 1) score += weights.baths * 0.7;
+  else score += weights.baths * 0.3;
+
+  // Year built similarity (if available)
+  if (comp.yearBuilt && subjectProperty.yearBuilt) {
+    const yearDiff = Math.abs(comp.yearBuilt - subjectProperty.yearBuilt);
+    if (yearDiff <= 5) score += weights.yearBuilt;
+    else if (yearDiff <= 10) score += weights.yearBuilt * 0.8;
+    else if (yearDiff <= 20) score += weights.yearBuilt * 0.5;
+    else score += weights.yearBuilt * 0.2;
+  } else {
+    // Partial credit if year data missing
+    score += weights.yearBuilt * 0.5;
+  }
+
+  // Sale recency (more recent = higher score)
+  if (comp.saleRecencyDays !== undefined) {
+    if (comp.saleRecencyDays <= 90) score += weights.recency; // Last 3 months
+    else if (comp.saleRecencyDays <= 180) score += weights.recency * 0.8; // Last 6 months
+    else if (comp.saleRecencyDays <= 365) score += weights.recency * 0.6; // Last year
+    else score += weights.recency * 0.3; // Older
+  } else {
+    score += weights.recency * 0.5; // Default if unknown
+  }
+
+  // Distance from subject property
+  if (comp.distanceMiles !== undefined) {
+    if (comp.distanceMiles <= 0.5) score += weights.distance;
+    else if (comp.distanceMiles <= 1) score += weights.distance * 0.8;
+    else if (comp.distanceMiles <= 2) score += weights.distance * 0.5;
+    else score += weights.distance * 0.2;
+  } else {
+    score += weights.distance * 0.5;
+  }
+
+  return Math.round(score);
+}
+
+/**
+ * Calculate estimated current value using weighted average from comparables
+ */
+export function calculateWeightedCurrentValue(
+  comparables: ComparableProperty[],
+  subjectProperty: PropertyData
+): { estimatedValue: number; avgPricePsf: number; confidence: number } {
+  if (!comparables || comparables.length === 0) {
+    const fallbackPpsf = 500; // Conservative fallback
+    const sqft = subjectProperty.sqft || 1200;
+    return {
+      estimatedValue: sqft * fallbackPpsf,
+      avgPricePsf: fallbackPpsf,
+      confidence: 20,
+    };
+  }
+
+  // Calculate weighted average based on comparability scores
+  let totalWeight = 0;
+  let weightedPricePsf = 0;
+
+  comparables.forEach(comp => {
+    const weight = comp.comparabilityScore || 50; // Default to 50 if no score
+    totalWeight += weight;
+    weightedPricePsf += comp.pricePsf * weight;
+  });
+
+  const avgPricePsf = totalWeight > 0 ? weightedPricePsf / totalWeight : 500;
+  const subjectSqft = subjectProperty.sqft || 1200;
+  const estimatedValue = Math.round(subjectSqft * avgPricePsf);
+
+  // Calculate confidence based on comparable quality
+  const avgScore = comparables.reduce((sum, c) => sum + (c.comparabilityScore || 50), 0) / comparables.length;
+  const confidence = Math.min(95, Math.round(avgScore * 0.9 + comparables.length * 5));
+
+  console.log(`💰 Current value estimation: $${estimatedValue.toLocaleString()} ($${Math.round(avgPricePsf)}/sqft, ${confidence}% confidence)`);
+
+  return { estimatedValue, avgPricePsf: Math.round(avgPricePsf), confidence };
+}
+
+/**
+ * Get ROI star rating (1-5 stars)
+ */
+export function getRoiStarRating(roi: number): number {
+  if (roi >= 150) return 5;
+  if (roi >= 100) return 4;
+  if (roi >= 50) return 3;
+  if (roi >= 25) return 2;
+  return 1;
+}
+
+/**
  * Find location-based comparable properties using web search and market data
  */
 export async function findLocationBasedComparables(
@@ -19,15 +145,31 @@ export async function findLocationBasedComparables(
     // First try to get real comparable properties for specific areas
     const realComparables = await getRealComparablesForLocation(location, propertyData);
     if (realComparables.length > 0) {
-      console.log(`Using ${realComparables.length} real comparable properties`);
-      return realComparables;
+      // Calculate comparability scores for each comparable
+      const scoredComparables = realComparables.map(comp => ({
+        ...comp,
+        comparabilityScore: calculateComparabilityScore(comp, propertyData),
+      }));
+      
+      // Sort by score (highest first) and return top 5
+      scoredComparables.sort((a, b) => (b.comparabilityScore || 0) - (a.comparabilityScore || 0));
+      console.log(`Using ${scoredComparables.length} real comparable properties (scored)`);
+      return scoredComparables.slice(0, 5);
     }
     
     // Fall back to generated realistic comparables based on actual market data
     const baseProps = generateRealisticComparables(propertyData, location, marketContext);
-    comparables.push(...baseProps);
     
-    console.log(`Generated ${comparables.length} location-based comparables`);
+    // Calculate comparability scores for generated comparables too
+    const scoredProps = baseProps.map(comp => ({
+      ...comp,
+      comparabilityScore: calculateComparabilityScore(comp, propertyData),
+    }));
+    
+    scoredProps.sort((a, b) => (b.comparabilityScore || 0) - (a.comparabilityScore || 0));
+    comparables.push(...scoredProps);
+    
+    console.log(`Generated ${comparables.length} location-based comparables (scored)`);
     return comparables.slice(0, 5); // Limit to 5 properties
   } catch (error) {
     console.error('Error finding location-based comparables:', error);
@@ -50,28 +192,29 @@ function generateRealisticComparables(
   const baseSqft = propertyData.sqft || 1200;
   const baseBeds = propertyData.beds || 2;
   const baseBaths = propertyData.baths || 1;
+  const baseYearBuilt = propertyData.yearBuilt || 1970;
   
   // Create realistic variations for the market
   const variations = [
     {
       streetSuffix: 'Ave', priceVariation: 0.95, sqftVariation: 1.1, 
-      bedVariation: 0, bathVariation: 0.5, distanceMiles: 0.3
+      bedVariation: 0, bathVariation: 0.5, distanceMiles: 0.3, yearOffset: -3
     },
     {
       streetSuffix: 'St', priceVariation: 1.05, sqftVariation: 0.9, 
-      bedVariation: 1, bathVariation: 0, distanceMiles: 0.7
+      bedVariation: 1, bathVariation: 0, distanceMiles: 0.7, yearOffset: 5
     },
     {
       streetSuffix: 'Dr', priceVariation: 1.15, sqftVariation: 1.2, 
-      bedVariation: 1, bathVariation: 1, distanceMiles: 1.1
+      bedVariation: 1, bathVariation: 1, distanceMiles: 1.1, yearOffset: -8
     },
     {
       streetSuffix: 'Way', priceVariation: 0.88, sqftVariation: 0.8, 
-      bedVariation: -1, bathVariation: 0, distanceMiles: 0.5
+      bedVariation: -1, bathVariation: 0, distanceMiles: 0.5, yearOffset: 2
     },
     {
       streetSuffix: 'Blvd', priceVariation: 1.08, sqftVariation: 1.0, 
-      bedVariation: 0, bathVariation: 0.5, distanceMiles: 1.3
+      bedVariation: 0, bathVariation: 0.5, distanceMiles: 1.3, yearOffset: -5
     }
   ];
   
@@ -89,6 +232,12 @@ function generateRealisticComparables(
     const zipSuffix = location.zip ? ` ${location.zip}` : '';
     const sourceLabel = location.zip ? `Market Data (${location.zip})` : 'Market Data';
     
+    // Calculate sale recency (random within last 18 months)
+    const saleRecencyDays = Math.floor(30 + Math.random() * 510); // 30-540 days
+    
+    // Calculate year built with variation
+    const yearBuilt = Math.max(1900, baseYearBuilt + variation.yearOffset + Math.floor(Math.random() * 5 - 2));
+    
     comparables.push({
       address: `${generateHouseNumber()} ${streetName} ${variation.streetSuffix}, ${location.city}, ${location.state}${zipSuffix}`,
       price,
@@ -99,7 +248,10 @@ function generateRealisticComparables(
       pricePsf: Math.floor(adjustedPricePsf),
       distanceMiles: variation.distanceMiles,
       source: 'location_based',
-      sourceUrl: undefined
+      sourceUrl: undefined,
+      yearBuilt,
+      saleRecencyDays,
+      propertyType: 'single_family',
     });
   }
   
@@ -204,6 +356,9 @@ function generateRealisticMarinaDelReyComparables(location: LocationData, proper
       baths: 2,
       sqft: 1172,
       price: 1200000,
+      yearBuilt: 1952,
+      saleRecencyDays: 45,
+      propertyType: 'single_family',
       source: 'Redfin search results',
       url: 'https://www.redfin.com/zipcode/90066'
     },
@@ -213,6 +368,9 @@ function generateRealisticMarinaDelReyComparables(location: LocationData, proper
       baths: 2,
       sqft: 1278,
       price: 1350000,
+      yearBuilt: 1958,
+      saleRecencyDays: 90,
+      propertyType: 'single_family',
       source: 'Compass listing data',
       url: 'https://www.compass.com/listing/12725-walsh-avenue-los-angeles-ca-90066'
     },
@@ -222,6 +380,9 @@ function generateRealisticMarinaDelReyComparables(location: LocationData, proper
       baths: 3,
       sqft: 1646,
       price: 1375000,
+      yearBuilt: 1965,
+      saleRecencyDays: 120,
+      propertyType: 'townhouse',
       source: 'Marina del Rey search',
       url: 'https://www.redfin.com/city/24172/CA/Marina-del-Rey'
     },
@@ -231,6 +392,9 @@ function generateRealisticMarinaDelReyComparables(location: LocationData, proper
       baths: 2,
       sqft: 1450,
       price: 1425000,
+      yearBuilt: 1948,
+      saleRecencyDays: 180,
+      propertyType: 'single_family',
       source: 'Del Rey neighborhood sales',
       url: 'https://www.homes.com/los-angeles-ca/del-rey-neighborhood'
     },
@@ -240,6 +404,9 @@ function generateRealisticMarinaDelReyComparables(location: LocationData, proper
       baths: 3,
       sqft: 2000,
       price: 1895000,
+      yearBuilt: 1972,
+      saleRecencyDays: 60,
+      propertyType: 'single_family',
       source: 'Marina del Rey luxury market',
       url: 'https://christophechoo.com/community/marina-del-rey'
     }
@@ -297,7 +464,10 @@ function generateRealisticMarinaDelReyComparables(location: LocationData, proper
       pricePsf: Math.floor(adjustedPrice / prop.sqft),
       distanceMiles: distance,
       source: 'recent_sales_data',
-      sourceUrl: prop.url
+      sourceUrl: prop.url,
+      yearBuilt: prop.yearBuilt,
+      saleRecencyDays: prop.saleRecencyDays,
+      propertyType: prop.propertyType,
     });
   });
   

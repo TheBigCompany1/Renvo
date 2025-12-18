@@ -105,6 +105,10 @@ export const renovationProjectSchema = z.object({
   computedValue: z.number().optional(), // Computed value for display  
   pricePsfUsed: z.number().optional(), // Price per sqft used in calculations
   
+  // ROI-based ranking and star ratings
+  starRating: z.number().min(1).max(5).optional(), // 1-5 star rating based on ROI
+  rank: z.number().optional(), // Rank among all renovation projects (1 = best ROI)
+  
   // Pricing sources and validation
   pricingSources: z.object({
     constructionCost: z.string(), // Source of construction cost data
@@ -139,6 +143,12 @@ export const comparablePropertySchema = z.object({
   distanceMiles: z.number().optional(),
   source: z.string().optional(), // 'web_search', 'api', 'fallback'
   sourceUrl: z.string().optional(),
+  // Enhanced comparable matching fields
+  yearBuilt: z.number().optional(),
+  propertyType: z.string().optional(), // 'single_family', 'condo', 'townhouse', 'multi_family'
+  condition: z.string().optional(), // 'excellent', 'good', 'fair', 'needs_work'
+  comparabilityScore: z.number().min(0).max(100).optional(), // Weighted match score 0-100
+  saleRecencyDays: z.number().optional(), // Days since sale for weighting
 });
 
 export const financialSummarySchema = z.object({

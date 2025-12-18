@@ -7,7 +7,30 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getAnalysisReport } from "@/lib/api";
 import { PropertyData, RenovationProject, ComparableProperty, Contractor, FinancialSummary as FinancialSummaryType } from "@shared/schema";
-import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle } from "lucide-react";
+import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle, Star } from "lucide-react";
+
+// Helper function to render star rating
+const StarRating = ({ rating }: { rating: number }) => {
+  const stars = [];
+  for (let i = 1; i <= 5; i++) {
+    stars.push(
+      <Star
+        key={i}
+        className={`w-4 h-4 ${i <= rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
+      />
+    );
+  }
+  return <div className="flex items-center gap-0.5">{stars}</div>;
+};
+
+// Helper function to get star rating from ROI
+const getRoiStarRating = (roi: number): number => {
+  if (roi >= 150) return 5;
+  if (roi >= 100) return 4;
+  if (roi >= 50) return 3;
+  if (roi >= 25) return 2;
+  return 1;
+};
 
 export default function Report() {
   const { id } = useParams<{ id: string }>();
@@ -244,6 +267,50 @@ export default function Report() {
           </CardContent>
         </Card>
 
+        {/* Estimated Current Value - Prominent Display */}
+        <Card className="border-2 border-teal-500 bg-gradient-to-r from-teal-50 to-white">
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold flex items-center gap-2" data-testid="title-current-value">
+              <Home className="w-5 h-5 text-teal-600" />
+              Estimated Current Value
+            </CardTitle>
+            <p className="text-sm text-gray-600">Based on comparable properties analysis</p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center p-6 bg-white rounded-lg shadow-sm">
+                <div className="text-3xl font-bold text-teal-600" data-testid="text-current-value">
+                  {financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue) : 'N/A'}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">Current Estimated Value</div>
+                <div className="text-xs text-gray-500 mt-2">
+                  Based on {propertyData.sqft?.toLocaleString() || 'N/A'} sqft × ${financialSummary?.avgPricePsf?.toLocaleString() || 'N/A'}/sqft
+                </div>
+              </div>
+              <div className="text-center p-6 bg-white rounded-lg shadow-sm">
+                <div className="text-3xl font-bold text-green-600" data-testid="text-after-repair-value">
+                  {financialSummary?.afterRepairValue ? formatCurrency(financialSummary.afterRepairValue) : 'N/A'}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">After Renovation Value</div>
+                <div className="text-xs text-gray-500 mt-2">
+                  With all improvements completed
+                </div>
+              </div>
+              <div className="text-center p-6 bg-white rounded-lg shadow-sm">
+                <div className="text-3xl font-bold text-purple-600" data-testid="text-value-uplift">
+                  {financialSummary?.currentValue && financialSummary?.afterRepairValue ? 
+                    formatCurrency(financialSummary.afterRepairValue - financialSummary.currentValue) : 'N/A'}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">Potential Value Uplift</div>
+                <div className="text-xs text-gray-500 mt-2">
+                  {financialSummary?.currentValue && financialSummary?.afterRepairValue ? 
+                    `+${Math.round(((financialSummary.afterRepairValue - financialSummary.currentValue) / financialSummary.currentValue) * 100)}% increase` : 'N/A'}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Property Description */}
         <Card>
           <CardHeader>
@@ -356,12 +423,24 @@ export default function Report() {
                 {/* Project Header */}
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-teal-600 text-white rounded-full flex items-center justify-center font-bold">
-                      {index + 1}
+                    <div className="w-8 h-8 bg-teal-600 text-white rounded-full flex items-center justify-center font-bold" data-testid={`text-project-rank-${index}`}>
+                      #{project.rank ?? index + 1}
                     </div>
-                    <h3 className="text-lg font-semibold" data-testid={`text-project-name-${index}`}>
-                      {project.name}
-                    </h3>
+                    <div>
+                      <h3 className="text-lg font-semibold" data-testid={`text-project-name-${index}`}>
+                        {project.name}
+                      </h3>
+                      {/* Star Rating - uses backend value, falls back for older reports */}
+                      <div className="flex items-center gap-2 mt-1" data-testid={`star-rating-${index}`}>
+                        <StarRating rating={project.starRating ?? getRoiStarRating(project.roi ?? 0)} />
+                        <span className="text-sm text-gray-500">
+                          {(() => {
+                            const stars = project.starRating ?? getRoiStarRating(project.roi ?? 0);
+                            return `(${stars >= 4 ? 'Excellent' : stars >= 3 ? 'Good' : 'Fair'} ROI)`;
+                          })()}
+                        </span>
+                      </div>
+                    </div>
                     {/* Validation Badge */}
                     {(project as any).corrected && (
                       <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200" data-testid={`badge-corrected-${index}`}>
@@ -371,7 +450,7 @@ export default function Report() {
                     )}
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-bold">
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-bold text-lg px-3 py-1">
                       {Math.round(project.roi)}% ROI
                     </Badge>
                   </div>
