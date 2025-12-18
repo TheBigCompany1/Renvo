@@ -392,7 +392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  // Address autocomplete endpoint using Google Places API (New)
+  // Address autocomplete endpoint using Google Places API
   app.get("/api/address-autocomplete", async (req, res) => {
     try {
       const { input } = req.query;
@@ -408,6 +408,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Try the new Places API first
+      console.log('Trying Places API (New) for:', input);
       const newApiUrl = 'https://places.googleapis.com/v1/places:autocomplete';
       const requestBody = {
         input: input,
@@ -428,7 +429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newApiData = await newApiResponse.json();
 
       if (newApiData.suggestions && newApiData.suggestions.length > 0) {
-        // Transform new API format to match old format for frontend compatibility
+        console.log('Places API (New) returned', newApiData.suggestions.length, 'suggestions');
         const predictions = newApiData.suggestions.map((suggestion: any) => ({
           description: suggestion.placePrediction?.text?.text || '',
           place_id: suggestion.placePrediction?.placeId || '',
@@ -440,10 +441,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ predictions });
       }
 
-      // If new API returns empty or error, return empty predictions
+      // If new API returns error, try legacy API
       if (newApiData.error) {
-        console.error('Places API (New) error:', newApiData.error.message);
-        return res.json({ predictions: [], error: newApiData.error.message });
+        console.log('Places API (New) error:', newApiData.error.message, '- trying legacy API');
+        
+        // Try legacy Places API
+        const legacyUrl = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
+        legacyUrl.searchParams.append('input', input);
+        legacyUrl.searchParams.append('types', 'address');
+        legacyUrl.searchParams.append('components', 'country:us');
+        legacyUrl.searchParams.append('key', apiKey);
+
+        const legacyResponse = await fetch(legacyUrl.toString());
+        const legacyData = await legacyResponse.json();
+
+        if (legacyData.status === 'OK' && legacyData.predictions?.length > 0) {
+          console.log('Legacy Places API returned', legacyData.predictions.length, 'predictions');
+          return res.json({ predictions: legacyData.predictions });
+        }
+
+        if (legacyData.status === 'REQUEST_DENIED') {
+          console.error('Places API request denied:', legacyData.error_message);
+          return res.json({ predictions: [], error: 'API access denied - Places API may need to be enabled' });
+        }
       }
 
       res.json({ predictions: [] });
