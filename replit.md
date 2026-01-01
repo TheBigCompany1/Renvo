@@ -6,6 +6,22 @@ The platform now includes comprehensive marketing pages and lead generation capa
 
 # Recent Changes
 
+## Gemini Deep Research Agent Integration (January 2026)
+
+Switched from regular Gemini API to the actual Deep Research agent (Interactions API):
+
+**Changes Made:**
+- **Package Upgrade**: Updated `@google/genai` from 1.19.0 to 1.34.0 to enable Interactions API
+- **Deep Research Agent**: Now uses `deep-research-pro-preview-12-2025` agent for autonomous web research
+- **Response Parsing**: Fixed `pollResearchStatus` to correctly extract text from `outputs[].text` structure
+- **Data Validation**: Added guards to prevent fabricated data - fails explicitly if no meaningful content extracted
+
+**How It Works:**
+- Address inputs trigger Deep Research agent which autonomously browses the web
+- Agent researches property details, comparables, neighborhood data, and market trends
+- Results are synthesized into a comprehensive report with citations
+- Takes 1-3 minutes for thorough research vs seconds for basic AI queries
+
 ## Data Integrity Fix - No Fake Fallback Data (January 2026)
 
 Fixed critical data integrity issue where the Redfin scraper would silently return fake property data when scraping failed:
