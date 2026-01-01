@@ -163,9 +163,55 @@ export async function pollResearchStatus(interactionId: string): Promise<Researc
   try {
     const result = await (client as any).interactions.get(interactionId);
     
+    console.log(`Deep Research status for ${interactionId}: ${result.status}`);
+    
     if (result.status === 'completed') {
-      const rawReport = result.outputs[result.outputs.length - 1]?.text || '';
+      // Extract text from all text-type outputs in the outputs array
+      let rawReport = '';
+      
+      if (result.outputs && Array.isArray(result.outputs)) {
+        // Concatenate all text content from outputs
+        const textOutputs = result.outputs
+          .filter((output: any) => output.type === 'text' && output.text)
+          .map((output: any) => output.text);
+        
+        rawReport = textOutputs.join('\n\n');
+        console.log(`Extracted ${textOutputs.length} text outputs, total length: ${rawReport.length}`);
+      }
+      
+      // If no text found, check for alternative response structures
+      if (!rawReport) {
+        // Some responses may have output directly
+        if (result.output?.text) {
+          rawReport = result.output.text;
+        } else if (result.text) {
+          rawReport = result.text;
+        }
+        console.log(`Fallback extraction, length: ${rawReport.length}`);
+      }
+      
+      // If still no text, this is a problem - don't return fake data
+      if (!rawReport || rawReport.length < 100) {
+        console.error('Deep Research completed but no meaningful text output found');
+        console.log('Full response structure:', JSON.stringify(result, null, 2).substring(0, 1000));
+        return {
+          status: 'failed',
+          interactionId,
+          error: 'Research completed but no results were returned'
+        };
+      }
+      
       const parsedResult = parseResearchOutput(rawReport);
+      
+      // Validate that we got real data, not defaults
+      if (!parsedResult.propertyDetails.address || parsedResult.propertyDetails.address === '') {
+        console.error('Parsed result has no address - likely parsing failed');
+        return {
+          status: 'failed',
+          interactionId,
+          error: 'Failed to parse research results'
+        };
+      }
       
       return {
         status: 'completed',
