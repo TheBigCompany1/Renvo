@@ -6,6 +6,19 @@ The platform now includes comprehensive marketing pages and lead generation capa
 
 # Recent Changes
 
+## Data Integrity Fix - No Fake Fallback Data (January 2026)
+
+Fixed critical data integrity issue where the Redfin scraper would silently return fake property data when scraping failed:
+
+**Changes Made:**
+- **Scraper**: Removed silent fallback that returned mock data ($850k, 3 bed, 2 bath, stock image) on failure - now throws explicit SCRAPE_FAILED error
+- **Schema**: Added `failureReason` and `dataSource` fields to track data provenance and error details
+- **Storage**: Fixed persistence using `if ('failureReason' in data)` guard instead of truthy check to allow null/empty values
+- **Routes**: Proper error handling captures failure reasons and sets dataSource on success ('redfin_scraper' or 'deep_research')
+- **Frontend**: Processing page shows dedicated error state with user-friendly message and retry options when status is 'failed'
+
+This ensures users never see fabricated data - they either get real property data or a clear error message explaining what went wrong.
+
 ## Hybrid Input System - Gemini + Google Maps + Redfin (November 2025)
 
 Evolved from Redfin-only to a hybrid system that accepts BOTH Redfin URLs and plain addresses, using Gemini AI with Google Maps grounding for comprehensive property analysis without dependency on paid property data APIs.
