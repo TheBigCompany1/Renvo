@@ -489,8 +489,47 @@ function computeFinancialSummary(
   }, 0);
   
   // USER ROI FORMULA: (valueAdd / cost) * 100
-  const totalROI = totalRenovationCost > 0 ? 
+  const originalROI = totalRenovationCost > 0 ? 
     (totalValueAdd / totalRenovationCost) * 100 : 0;
+  let totalROI = originalROI;
+  
+  // SANITY CHECKS - Cap unrealistic estimates
+  // Max value-add should not exceed 150% of current property value
+  const MAX_VALUE_ADD_RATIO = 1.5;
+  // Max ROI should not exceed 300% (already very optimistic)
+  const MAX_ROI = 300;
+  // After repair value should not exceed 2.5x current value
+  const MAX_ARV_RATIO = 2.5;
+  
+  let cappedValueAdd = totalValueAdd;
+  let cappedAfterRepairValue = afterRepairValue;
+  let sanityCheckApplied = false;
+  
+  // Check if value-add is unrealistic
+  if (totalValueAdd > currentValue * MAX_VALUE_ADD_RATIO) {
+    cappedValueAdd = Math.round(currentValue * MAX_VALUE_ADD_RATIO);
+    console.log(`⚠️ SANITY CHECK: Value-add $${totalValueAdd.toLocaleString()} exceeds ${MAX_VALUE_ADD_RATIO * 100}% of property value, capping to $${cappedValueAdd.toLocaleString()}`);
+    sanityCheckApplied = true;
+  }
+  
+  // Check if after repair value is unrealistic
+  if (afterRepairValue > currentValue * MAX_ARV_RATIO) {
+    cappedAfterRepairValue = Math.round(currentValue * MAX_ARV_RATIO);
+    console.log(`⚠️ SANITY CHECK: ARV $${afterRepairValue.toLocaleString()} exceeds ${MAX_ARV_RATIO}x current value, capping to $${cappedAfterRepairValue.toLocaleString()}`);
+    sanityCheckApplied = true;
+  }
+  
+  // Recalculate ROI with capped values
+  if (sanityCheckApplied) {
+    totalROI = totalRenovationCost > 0 ? (cappedValueAdd / totalRenovationCost) * 100 : 0;
+  }
+  
+  // Cap ROI if still too high
+  if (totalROI > MAX_ROI) {
+    console.log(`⚠️ SANITY CHECK: ROI ${totalROI.toFixed(1)}% exceeds max ${MAX_ROI}%, capping`);
+    totalROI = MAX_ROI;
+    sanityCheckApplied = true;
+  }
   
   console.log(`📊 Financial Summary using exact user formulas:
     - Existing sqft: ${propertyData.sqft}
@@ -498,28 +537,47 @@ function computeFinancialSummary(
     - Post-renovation sqft: ${postRenovationSqft}
     - Market PPSF: $${avgPricePsf}
     - Current value: $${currentValue.toLocaleString()}
-    - Total value add: $${avgPricePsf} × ${totalAddedSqft} = $${totalValueAdd.toLocaleString()}
-    - After repair value: $${avgPricePsf} × ${postRenovationSqft} = $${afterRepairValue.toLocaleString()}
+    - Total value add: $${cappedValueAdd.toLocaleString()}${sanityCheckApplied ? ' (capped from $' + totalValueAdd.toLocaleString() + ')' : ''}
+    - After repair value: $${cappedAfterRepairValue.toLocaleString()}${sanityCheckApplied ? ' (capped from $' + afterRepairValue.toLocaleString() + ')' : ''}
     - Total renovation cost: $${totalRenovationCost.toLocaleString()}
-    - Total ROI: ${totalROI.toFixed(1)}%`);
+    - Total ROI: ${totalROI.toFixed(1)}%${sanityCheckApplied ? ' (capped from ' + originalROI.toFixed(1) + '%)' : ''}`);
 
   return {
     currentValue,
     totalRenovationCost,
-    totalValueAdd,
-    afterRepairValue,
+    totalValueAdd: cappedValueAdd,
+    afterRepairValue: cappedAfterRepairValue,
     totalROI,
     avgPricePsf,
-    postRenovationSqft
+    postRenovationSqft,
+    // Preserve original values for transparency
+    originalTotalValueAdd: sanityCheckApplied ? totalValueAdd : undefined,
+    originalAfterRepairValue: sanityCheckApplied ? afterRepairValue : undefined,
+    originalTotalROI: sanityCheckApplied ? originalROI : undefined,
+    sanityCheckApplied
   };
 }
 
 /**
  * Sort projects by ROI (highest first) and add star ratings and ranking
+ * Also applies per-project ROI caps
  */
 export function sortProjectsByROI(projects: RenovationProject[]): RenovationProject[] {
+  // Max ROI per project (300% is already very optimistic for any single renovation)
+  const MAX_PROJECT_ROI = 300;
+  
+  // Apply ROI caps to each project
+  const cappedProjects = projects.map(project => {
+    let roi = project.roi || 0;
+    if (roi > MAX_PROJECT_ROI) {
+      console.log(`⚠️ SANITY CHECK: Project "${project.name}" ROI ${roi.toFixed(1)}% capped to ${MAX_PROJECT_ROI}%`);
+      roi = MAX_PROJECT_ROI;
+    }
+    return { ...project, roi };
+  });
+  
   // Sort by ROI (highest first)
-  const sorted = [...projects].sort((a, b) => (b.roi || 0) - (a.roi || 0));
+  const sorted = [...cappedProjects].sort((a, b) => (b.roi || 0) - (a.roi || 0));
   
   // Add star ratings and rank to each project
   return sorted.map((project, index) => ({

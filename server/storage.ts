@@ -36,6 +36,7 @@ export interface IStorage {
     id: string, 
     data: {
       propertyData?: PropertyData;
+      propertyUrl?: string;
       geoData?: GeoData;
       imagery?: Imagery;
       visionAnalysis?: VisionAnalysis;
@@ -132,6 +133,7 @@ export class MemStorage implements IStorage {
     id: string, 
     data: {
       propertyData?: PropertyData;
+      propertyUrl?: string;
       geoData?: GeoData;
       imagery?: Imagery;
       visionAnalysis?: VisionAnalysis;
@@ -150,6 +152,7 @@ export class MemStorage implements IStorage {
     const report = this.analysisReports.get(id);
     if (report) {
       if (data.propertyData) report.propertyData = data.propertyData;
+      if (data.propertyUrl) report.propertyUrl = data.propertyUrl;
       if (data.geoData) report.geoData = data.geoData;
       if (data.imagery) report.imagery = data.imagery;
       if (data.visionAnalysis) report.visionAnalysis = data.visionAnalysis;
@@ -241,6 +244,7 @@ export class PostgresStorage implements IStorage {
     id: string, 
     data: {
       propertyData?: PropertyData;
+      propertyUrl?: string;
       geoData?: GeoData;
       imagery?: Imagery;
       visionAnalysis?: VisionAnalysis;

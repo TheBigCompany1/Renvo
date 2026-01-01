@@ -161,6 +161,11 @@ export const financialSummarySchema = z.object({
   totalROI: z.number(),
   avgPricePsf: z.number().nonnegative(),
   postRenovationSqft: z.number().nonnegative().optional(), // Total sqft after all renovations
+  // Sanity check metadata - original values before capping
+  originalTotalValueAdd: z.number().optional(), // Original value before cap applied
+  originalAfterRepairValue: z.number().optional(), // Original ARV before cap applied
+  originalTotalROI: z.number().optional(), // Original ROI before cap applied
+  sanityCheckApplied: z.boolean().optional(), // Whether any caps were applied
 });
 
 export const geoDataSchema = z.object({

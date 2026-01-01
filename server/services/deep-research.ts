@@ -347,6 +347,166 @@ export async function conductPropertyResearch(address: string): Promise<Property
   }
 }
 
+// New function: Find Redfin URL for a property address using Deep Research
+export interface RedfinUrlResult {
+  found: boolean;
+  redfinUrl?: string;
+  confidence: 'high' | 'medium' | 'low';
+  alternativeUrls?: string[];
+  error?: string;
+}
+
+export async function findRedfinUrl(address: string): Promise<RedfinUrlResult> {
+  console.log(`🔍 Finding Redfin URL for: ${address}`);
+  
+  const searchPrompt = `Find the Redfin listing URL for this property address: ${address}
+
+Your ONLY task is to find the Redfin.com URL for this exact property. 
+
+Search for "${address} site:redfin.com" and find the property listing page.
+
+IMPORTANT:
+- Only return a URL from redfin.com domain
+- The URL should be a property listing page (format: redfin.com/STATE/City/address/home/id)
+- If you cannot find an exact match, say so clearly
+- Do NOT make up or guess URLs
+
+Respond with ONLY this JSON format:
+\`\`\`json
+{
+  "found": true or false,
+  "redfinUrl": "https://www.redfin.com/...",
+  "confidence": "high" or "medium" or "low",
+  "alternativeUrls": ["other relevant URLs if found"],
+  "notes": "any relevant notes about the search"
+}
+\`\`\``;
+
+  try {
+    console.log('🌐 Searching for Redfin URL with Google Search grounding...');
+    const startTime = Date.now();
+    
+    const response = await client.models.generateContent({
+      model: 'gemini-2.5-pro',
+      contents: [{ role: 'user', parts: [{ text: searchPrompt }] }],
+      config: {
+        tools: [{ googleSearch: {} }]
+      }
+    });
+    
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`⏱️ Search completed in ${elapsed}s`);
+    
+    // Extract text from response - try multiple access patterns for SDK compatibility
+    let responseText = '';
+    if (typeof response.text === 'string') {
+      responseText = response.text;
+    } else if ((response as any).response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      responseText = (response as any).response.candidates[0].content.parts[0].text;
+    } else if ((response as any).candidates?.[0]?.content?.parts?.[0]?.text) {
+      responseText = (response as any).candidates[0].content.parts[0].text;
+    }
+    
+    console.log(`📝 Response text length: ${responseText.length}`);
+    
+    // Log grounding sources for debugging
+    const groundingMetadata = (response as any).candidates?.[0]?.groundingMetadata;
+    if (groundingMetadata?.groundingChunks) {
+      console.log('🔗 Sources found:');
+      groundingMetadata.groundingChunks.forEach((chunk: any, i: number) => {
+        if (chunk.web?.uri) {
+          console.log(`  ${i + 1}. ${chunk.web.uri}`);
+        }
+      });
+    }
+    
+    // Helper to validate Redfin domain (supports both redfin.com and redf.in)
+    const isValidRedfinUrl = (url: string): boolean => {
+      return url.includes('redfin.com') || url.includes('redf.in');
+    };
+    
+    // Parse the JSON response - try fenced first, then unfenced
+    let parsed: any = null;
+    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[1]);
+      } catch (e) {
+        console.log('Failed to parse fenced JSON');
+      }
+    }
+    
+    // Try parsing as raw JSON if fenced parsing failed
+    if (!parsed) {
+      try {
+        // Look for JSON object pattern
+        const jsonObjMatch = responseText.match(/\{[\s\S]*"found"[\s\S]*\}/);
+        if (jsonObjMatch) {
+          parsed = JSON.parse(jsonObjMatch[0]);
+        }
+      } catch (e) {
+        console.log('Failed to parse unfenced JSON');
+      }
+    }
+    
+    if (parsed) {
+      // Validate the URL is actually from Redfin (supports redfin.com and redf.in)
+      if (parsed.redfinUrl && !isValidRedfinUrl(parsed.redfinUrl)) {
+        console.log('⚠️ URL is not from redfin.com or redf.in, rejecting');
+        return {
+          found: false,
+          confidence: 'low',
+          error: 'Found URL but not from Redfin'
+        };
+      }
+      
+      if (parsed.found && parsed.redfinUrl) {
+        console.log(`✅ Found Redfin URL: ${parsed.redfinUrl}`);
+        return {
+          found: true,
+          redfinUrl: parsed.redfinUrl,
+          confidence: parsed.confidence || 'medium',
+          alternativeUrls: parsed.alternativeUrls
+        };
+      } else {
+        console.log('❌ No Redfin URL found in JSON response');
+        return {
+          found: false,
+          confidence: 'low',
+          error: parsed.notes || 'Property not found on Redfin'
+        };
+      }
+    }
+    
+    // Fallback: try to extract Redfin URL directly from response (supports both domains)
+    const redfinUrlMatch = responseText.match(/https?:\/\/(?:www\.)?(?:redfin\.com|redf\.in)\/[^\s"'<>\)]+/i);
+    if (redfinUrlMatch) {
+      // Clean up trailing punctuation
+      let cleanUrl = redfinUrlMatch[0].replace(/[.,;:!?]+$/, '');
+      console.log(`✅ Extracted Redfin URL from response: ${cleanUrl}`);
+      return {
+        found: true,
+        redfinUrl: cleanUrl,
+        confidence: 'medium'
+      };
+    }
+    
+    return {
+      found: false,
+      confidence: 'low',
+      error: 'Could not find Redfin listing for this address'
+    };
+    
+  } catch (error) {
+    console.error('❌ Error finding Redfin URL:', error);
+    return {
+      found: false,
+      confidence: 'low',
+      error: `Search failed: ${(error as Error).message}`
+    };
+  }
+}
+
 async function fallbackPropertyResearch(address: string): Promise<PropertyResearchResult> {
   console.log('\n========================================');
   console.log('🔬 DEEP RESEARCH - Starting property analysis');
