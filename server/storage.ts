@@ -46,6 +46,8 @@ export interface IStorage {
       financialSummary?: FinancialSummary;
       validationSummary?: any;
       status?: string;
+      failureReason?: string;
+      dataSource?: string;
       completedAt?: Date;
     }
   ): Promise<void>;
@@ -91,6 +93,8 @@ export class MemStorage implements IStorage {
       propertyAddress: insertReport.propertyAddress || null,
       inputType: insertReport.inputType,
       status: "pending",
+      failureReason: null,
+      dataSource: null,
       propertyData: null,
       geoData: null,
       imagery: null,
@@ -138,6 +142,8 @@ export class MemStorage implements IStorage {
       financialSummary?: FinancialSummary;
       validationSummary?: any;
       status?: string;
+      failureReason?: string;
+      dataSource?: string;
       completedAt?: Date;
     }
   ): Promise<void> {
@@ -154,6 +160,8 @@ export class MemStorage implements IStorage {
       if (data.financialSummary) report.financialSummary = data.financialSummary;
       if (data.validationSummary) report.validationSummary = data.validationSummary;
       if (data.status) report.status = data.status;
+      if ('failureReason' in data) (report as any).failureReason = data.failureReason;
+      if ('dataSource' in data) (report as any).dataSource = data.dataSource;
       if (data.completedAt) report.completedAt = data.completedAt;
       this.analysisReports.set(id, report);
     }
@@ -243,6 +251,8 @@ export class PostgresStorage implements IStorage {
       financialSummary?: FinancialSummary;
       validationSummary?: any;
       status?: string;
+      failureReason?: string;
+      dataSource?: string;
       completedAt?: Date;
     }
   ): Promise<void> {

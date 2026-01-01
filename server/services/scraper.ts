@@ -566,44 +566,10 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
   } catch (error) {
     console.error("Error scraping Redfin property:", error);
     
-    // Provide fallback mock data when scraping fails
-    console.log("Using fallback property data due to scraping failure");
-    
-    // Extract basic address from URL if possible
-    const urlBasedAddress = (() => {
-      try {
-        const parsedUrl = new URL(url);
-        const parts = parsedUrl.pathname.split('/').filter(part => part.length > 0);
-        if (parts.length >= 3) {
-          const state = parts[0];
-          const city = parts[1].replace(/-/g, ' ');
-          const addressPart = parts[2].replace(/-/g, ' ');
-          return `${addressPart}, ${city}, ${state}`;
-        }
-      } catch {
-        // Fallback
-      }
-      return "1234 Sample St, Los Angeles, CA 90066";
-    })();
-    
-    return {
-      address: urlBasedAddress,
-      price: 850000,
-      beds: 3,
-      baths: 2,
-      sqft: 1200,
-      yearBuilt: 1942,
-      description: "This property analysis uses estimated data due to scraping limitations. Results are for demonstration purposes.",
-      images: ["https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=400"],
-      location: {
-        address: urlBasedAddress,
-        city: "Los Angeles",
-        state: "CA",
-        zip: "90066",
-        lat: 33.9836,
-        lng: -118.4017
-      }
-    };
+    // NEVER silently return fake data - this destroys customer trust
+    // Instead, throw a clear error that can be handled by the calling code
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`SCRAPE_FAILED: Unable to extract property data from Redfin. ${errorMessage}. Please try again or enter the property address manually.`);
   }
 }
 

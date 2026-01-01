@@ -16,6 +16,8 @@ export const analysisReports = pgTable("analysis_reports", {
   propertyAddress: text("property_address"), // Optional - used when input is plain address
   inputType: text("input_type").notNull().default("url"), // "url" or "address"
   status: text("status").notNull().default("pending"), // pending, processing, completed, failed
+  failureReason: text("failure_reason"), // Human-readable error message when status is 'failed'
+  dataSource: text("data_source"), // 'redfin_scraper', 'deep_research', 'manual' - indicates where data came from
   propertyData: jsonb("property_data"),
   geoData: jsonb("geo_data"), // Geocoded location data (lat, lng, formatted address)
   imagery: jsonb("imagery"), // Street View + Satellite image URLs

@@ -380,15 +380,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contractors: [] // Keep empty for backward compatibility
       });
 
-      // Mark as completed
+      // Mark as completed with data source
       await storage.updateAnalysisReportData(reportId, { 
         status: 'completed',
+        dataSource: report.inputType === 'url' ? 'redfin_scraper' : 'deep_research',
+        failureReason: null as any, // Clear any previous failure reason
         completedAt: new Date()
       });
 
     } catch (error) {
       console.error("Error processing analysis report:", error);
-      await storage.updateAnalysisReportStatus(reportId, 'failed');
+      
+      // Extract user-friendly error message
+      let failureReason = "An unexpected error occurred while processing your request.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('SCRAPE_FAILED')) {
+          // Extract the user-friendly part of the scraping error
+          failureReason = "We couldn't retrieve property data from Redfin. This may be due to Redfin blocking automated requests. Please try entering the property address manually instead.";
+        } else if (error.message.includes('fetch')) {
+          failureReason = "Unable to connect to the property data source. Please check your internet connection and try again.";
+        } else if (error.message.includes('timeout')) {
+          failureReason = "The request took too long to complete. Please try again.";
+        } else {
+          // Use a sanitized version of the error message
+          failureReason = error.message.replace(/SCRAPE_FAILED:|Error:/gi, '').trim() || failureReason;
+        }
+      }
+      
+      // Update with failure status and reason
+      await storage.updateAnalysisReportData(reportId, { 
+        status: 'failed',
+        failureReason: failureReason
+      });
     }
   }
 
