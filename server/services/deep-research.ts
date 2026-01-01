@@ -388,7 +388,7 @@ Provide your findings in JSON format at the end of your response:
     const startTime = Date.now();
     
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }]

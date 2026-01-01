@@ -40,7 +40,7 @@ export async function analyzePropertyForRenovations(
   try {
     console.log("DEBUG: Starting Gemini analysis...");
     console.log("DEBUG: GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
-    console.log("DEBUG: Using Gemini 2.5 Flash model");
+    console.log("DEBUG: Using Gemini 2.5 Pro model");
 
     const prompt = `You are an expert real estate renovation analyst with 20+ years of experience specializing in transformative, high-ROI projects. 
         
@@ -97,7 +97,7 @@ export async function analyzePropertyForRenovations(
     console.log("DEBUG: About to call Gemini API...");
     
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-pro",
       contents: prompt,
     });
     
@@ -172,12 +172,14 @@ export async function generateContractorRecommendations(
   website: string;
 }>> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-    const systemPrompt = `You are a local contractor directory expert. Generate realistic contractor recommendations 
+    const prompt = `You are a local contractor directory expert. Generate realistic contractor recommendations 
           for a specific area and renovation type. Base recommendations on typical contractor profiles in the area.
           
-          Respond with JSON in this exact format:
+          Find 3 top-rated contractors in the area of ${propertyAddress} specializing in ${topRenovationProject}.
+          Focus on contractors with strong ratings and relevant experience. Make sure contractor names, specialties, 
+          or descriptions reference the location (${propertyAddress}) to show they are local to the area.
+          
+          Respond ONLY with JSON in this exact format (no markdown, no extra text):
           {
             "contractors": [
               {
@@ -192,31 +194,29 @@ export async function generateContractorRecommendations(
             ]
           }`;
 
-    const userPrompt = `Find 3 top-rated contractors in the area of ${propertyAddress} specializing in ${topRenovationProject}.
-          Focus on contractors with strong ratings and relevant experience. Make sure contractor names, specialties, 
-          or descriptions reference the location (${propertyAddress}) to show they are local to the area.`;
-
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: systemPrompt + "\n\n" + userPrompt }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 800,
-        responseMimeType: "application/json"
-      }
+    const result = await ai.models.generateContent({
+      model: "gemini-2.5-pro",
+      contents: prompt,
     });
 
-    const rawContent = result.response.text();
-    const response = JSON.parse(rawContent || '{}');
-    return response.contractors || [];
+    const rawContent = result.text || '';
+    
+    // Clean and parse the response
+    let cleanContent = rawContent.trim();
+    if (cleanContent.startsWith('```json')) {
+      cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanContent.startsWith('```')) {
+      cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    
+    const jsonStart = cleanContent.indexOf('{');
+    const jsonEnd = cleanContent.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      cleanContent = cleanContent.substring(jsonStart, jsonEnd + 1);
+    }
+    
+    const parsed = JSON.parse(cleanContent);
+    return parsed.contractors || [];
   } catch (error) {
     console.error("Error generating contractor recommendations:", error);
     throw new Error("Failed to generate contractor recommendations: " + (error as Error).message);
