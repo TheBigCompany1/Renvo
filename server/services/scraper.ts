@@ -222,10 +222,11 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     // Use puppeteer-extra with stealth plugin to bypass anti-bot protection
     let browser = null;
     let html = '';
+    let apiData: any = null;
     
     try {
       browser = await puppeteer.launch({
-        headless: true, // Use headless mode with stealth plugin
+        headless: true,
         executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium-browser',
         args: [
           '--no-sandbox',
@@ -236,7 +237,6 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
           '--window-size=1920,1080',
           '--disable-blink-features=AutomationControlled',
           '--disable-features=IsolateOrigins,site-per-process',
-          '--disable-web-security',
           '--user-data-dir=/tmp/puppeteer-profile',
         ],
         ignoreDefaultArgs: ['--enable-automation'],
@@ -247,46 +247,79 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
       // Set realistic viewport
       await page.setViewport({ width: 1920, height: 1080 });
       
-      // Use a more recent Chrome user agent
+      // Use a recent Chrome user agent
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
       
-      // Set extra headers to appear more like a real browser
+      // Set extra headers
       await page.setExtraHTTPHeaders({
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
         'sec-ch-ua-mobile': '?0',
         'sec-ch-ua-platform': '"Windows"',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1',
+      });
+      
+      // Intercept responses to capture Redfin's internal API data
+      page.on('response', async (response) => {
+        const responseUrl = response.url();
+        // Look for API responses that contain property data
+        if (responseUrl.includes('api/home/details') || 
+            responseUrl.includes('stingray/api/home') ||
+            responseUrl.includes('/api/gis-csv') ||
+            responseUrl.includes('abp-api') ||
+            (responseUrl.includes('redfin.com') && responseUrl.includes('/api/'))) {
+          try {
+            const contentType = response.headers()['content-type'] || '';
+            if (contentType.includes('application/json')) {
+              const data = await response.json();
+              console.log(`Debug: Captured API response from: ${responseUrl}`);
+              if (data && (data.payload || data.data || data.property)) {
+                apiData = data;
+              }
+            }
+          } catch (e) {
+            // Ignore parse errors for non-JSON responses
+          }
+        }
       });
       
       console.log('Puppeteer Stealth: Navigating to Redfin page...');
       
-      // Navigate to the page with timeout
+      // Navigate to the page
       await page.goto(url, { 
         waitUntil: 'networkidle2',
         timeout: 45000 
       });
       
-      // Add random delay to mimic human behavior
-      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000));
+      // Wait for content to load
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // Scroll down slightly to trigger any lazy-loaded content
-      await page.evaluate(() => window.scrollBy(0, 300));
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Scroll to trigger lazy loading
+      await page.evaluate(() => window.scrollBy(0, 500));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Get the HTML content
       html = await page.content();
+      
+      // Also try to extract data from the page's window object
+      const windowData = await page.evaluate(() => {
+        // @ts-ignore
+        return window.__NEXT_DATA__ || window.__reactData__ || window.reactServerState || null;
+      });
+      
+      if (windowData && !apiData) {
+        apiData = windowData;
+        console.log('Debug: Found React/Next.js data in window object');
+      }
       
       // Close browser
       await browser.close();
       browser = null;
       
       console.log('Successfully loaded Redfin HTML via Puppeteer Stealth');
+      if (apiData) {
+        console.log('Debug: Captured API data for parsing');
+      }
     } catch (browserError) {
       if (browser) {
         try { await browser.close(); } catch (e) {}

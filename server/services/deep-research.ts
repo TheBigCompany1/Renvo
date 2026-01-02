@@ -387,7 +387,7 @@ Respond with ONLY this JSON format:
     const startTime = Date.now();
     
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-3.0-flash',
       contents: [{ role: 'user', parts: [{ text: searchPrompt }] }],
       config: {
         tools: [{ googleSearch: {} }]
@@ -512,7 +512,7 @@ async function fallbackPropertyResearch(address: string): Promise<PropertyResear
   console.log('🔬 DEEP RESEARCH - Starting property analysis');
   console.log('========================================');
   console.log(`📍 Property: ${address}`);
-  console.log('🔧 Method: Gemini 2.5 Flash with Google Search grounding');
+  console.log('🔧 Method: Gemini 3.0 Flash with Google Search grounding');
   console.log('----------------------------------------\n');
   
   const prompt = `Research this property address and provide real estate data: ${address}
@@ -548,7 +548,7 @@ Provide your findings in JSON format at the end of your response:
     const startTime = Date.now();
     
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-3.0-flash',
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }]
