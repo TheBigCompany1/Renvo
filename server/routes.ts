@@ -224,142 +224,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Branch based on input type
       if (report.inputType === 'url' && report.propertyUrl) {
-        // Step 1a: Try Redfin scraper first, fall back to Deep Research on failure
+        // URL provided: Use ONLY the Redfin scraper - NO Deep Research fallback
+        // This ensures accurate data from the actual listing
         console.log('Using Redfin scraper for property data from URL');
         try {
           propertyData = await scrapeRedfinProperty(report.propertyUrl);
           console.log('✅ Redfin scraper succeeded');
+          
+          // Mark data source as redfin_scraper
+          await storage.updateAnalysisReportData(reportId, { 
+            dataSource: 'redfin_scraper'
+          });
+          
+          // Store geocoded data
+          try {
+            const { geocodeAddress } = await import('./services/gemini-enhanced');
+            const geoData = await geocodeAddress(propertyData.address);
+            await storage.updateAnalysisReportData(reportId, { geoData });
+          } catch (geoError) {
+            console.log('Geocoding failed, continuing without coordinates');
+          }
+          
         } catch (scraperError) {
-          console.log('⚠️ Redfin scraper failed, falling back to Deep Research');
+          // Scraper failed - fail gracefully with clear guidance
+          console.error('Redfin scraper failed:', scraperError);
           const scraperErrorMessage = (scraperError as Error).message;
-          console.log('Scraper error:', scraperErrorMessage);
           
-          // Resolve the URL (follow redirects for redf.in short links)
-          let resolvedUrl = report.propertyUrl;
-          const isShortLink = report.propertyUrl.includes('redf.in');
-          
-          if (isShortLink) {
-            try {
-              console.log('Resolving short link redirect...');
-              const response = await fetch(report.propertyUrl, { method: 'HEAD', redirect: 'follow' });
-              resolvedUrl = response.url;
-              console.log(`Short link resolved to: ${resolvedUrl}`);
-            } catch (redirectError) {
-              console.log('Could not resolve short link:', redirectError);
-            }
-          }
-          
-          // Extract address from URL for Deep Research using robust parsing
-          let extractedAddress = '';
-          try {
-            const urlPath = new URL(resolvedUrl).pathname;
-            const pathParts = urlPath.split('/').filter(part => part.length > 0);
-            // Redfin URLs: /STATE/City/address-street-zipcode/home/id or variations
-            if (pathParts.length >= 3) {
-              const state = pathParts[0].toUpperCase();
-              const city = pathParts[1].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-              // The address part often has format: 123-Street-Name-Unit-Zipcode
-              let streetPart = pathParts[2].replace(/-/g, ' ');
-              // Try to extract zip code from the end
-              const zipMatch = streetPart.match(/\s(\d{5})$/);
-              if (zipMatch) {
-                extractedAddress = `${streetPart.replace(/\s\d{5}$/, '').trim()}, ${city}, ${state} ${zipMatch[1]}`;
-              } else {
-                extractedAddress = `${streetPart}, ${city}, ${state}`;
-              }
-            }
-          } catch (urlError) {
-            console.log('Could not parse URL for address extraction:', urlError);
-          }
-          
-          if (!extractedAddress) {
-            // Store the failure reason with helpful guidance
-            await storage.updateAnalysisReportData(reportId, { 
-              status: 'failed',
-              failureReason: 'Could not extract property address from URL. Please try entering the property address directly instead.',
-              dataSource: undefined
-            });
-            throw scraperError;
-          }
-          
-          console.log(`🔬 Starting Deep Research fallback for: ${extractedAddress}`);
-          const { conductPropertyResearch } = await import('./services/deep-research');
-          
-          try {
-            const researchResult = await conductPropertyResearch(extractedAddress);
-            console.log(`✅ Deep Research fallback completed`);
-            
-            propertyData = {
-              address: researchResult.propertyDetails.address || extractedAddress,
-              beds: researchResult.propertyDetails.beds,
-              baths: researchResult.propertyDetails.baths,
-              sqft: researchResult.propertyDetails.sqft,
-              description: researchResult.propertyDetails.description,
-              images: [],
-              yearBuilt: researchResult.propertyDetails.yearBuilt,
-              price: researchResult.propertyDetails.currentEstimate || researchResult.propertyDetails.lastSoldPrice,
-            };
-            
-            // Store mapsContext from Deep Research (same as address flow)
-            await storage.updateAnalysisReportData(reportId, { 
-              mapsContext: {
-                neighborhoodInsights: researchResult.neighborhoodContext?.description || '',
-                nearbyPOIs: (researchResult.neighborhoodContext?.nearbyAmenities || []).map(amenity => ({
-                  name: amenity,
-                  type: 'amenity'
-                })),
-                areaRating: researchResult.neighborhoodContext?.schoolRating
-              }
-            });
-            
-            // Store geoData from Deep Research - geocode for real coordinates
-            try {
-              const { geocodeAddress } = await import('./services/gemini-enhanced');
-              const geoData = await geocodeAddress(researchResult.propertyDetails.address || extractedAddress);
-              await storage.updateAnalysisReportData(reportId, { geoData });
-            } catch (geoError) {
-              console.log('Could not geocode address, using placeholder:', geoError);
-              await storage.updateAnalysisReportData(reportId, { 
-                geoData: {
-                  formattedAddress: researchResult.propertyDetails.address || extractedAddress,
-                  lat: 0,
-                  lng: 0
-                }
-              });
-            }
-            
-            // Store comparables from Deep Research
-            if (researchResult.comparables.length > 0) {
-              const researchComps = researchResult.comparables.map(comp => ({
-                address: comp.address,
-                beds: comp.beds,
-                baths: comp.baths,
-                sqft: comp.sqft,
-                price: comp.price,
-                pricePsf: comp.pricePsf,
-                dateSold: comp.dateSold,
-                distanceMiles: comp.distanceMiles,
-                source: 'deep_research' as const
-              }));
-              await storage.updateAnalysisReportData(reportId, { comparableProperties: researchComps });
-            }
-            
-            // Mark dataSource as deep_research for fallback case
-            await storage.updateAnalysisReportData(reportId, { 
-              dataSource: 'deep_research',
-              failureReason: undefined // Clear any previous failure
-            });
-            
-          } catch (researchError) {
-            // Deep Research also failed - store the full failure chain
-            console.error('Deep Research fallback also failed:', researchError);
-            await storage.updateAnalysisReportData(reportId, { 
-              status: 'failed',
-              failureReason: `Scraper failed: ${scraperErrorMessage}. Deep Research fallback also failed: ${(researchError as Error).message}`,
-              dataSource: undefined
-            });
-            throw researchError;
-          }
+          await storage.updateAnalysisReportData(reportId, { 
+            status: 'failed',
+            failureReason: `We couldn't access this Redfin listing. ${scraperErrorMessage.includes('403') || scraperErrorMessage.includes('blocked') ? 'The page may be temporarily unavailable.' : 'Please check the URL and try again, or enter the property address directly.'}`,
+            dataSource: undefined
+          });
+          throw scraperError;
         }
       } else if (report.inputType === 'address' && report.propertyAddress) {
         // Step 1b: NEW ARCHITECTURE - Find Redfin URL → Scrape → Analyze
