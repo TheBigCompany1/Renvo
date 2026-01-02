@@ -1,6 +1,10 @@
 import { PropertyData, ComparableProperty } from "@shared/schema";
 import * as cheerio from "cheerio";
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
+
+// Apply stealth plugin to avoid bot detection
+puppeteer.use(StealthPlugin());
 
 interface PropertyLocation {
   city: string;
@@ -213,15 +217,15 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     }
 
     console.log(`Starting to scrape Redfin property: ${url}`);
-    console.log('Debug: Launching headless browser for Redfin...');
+    console.log('Debug: Launching stealth browser for Redfin...');
     
-    // Use puppeteer to bypass anti-bot protection
+    // Use puppeteer-extra with stealth plugin to bypass anti-bot protection
     let browser = null;
     let html = '';
     
     try {
       browser = await puppeteer.launch({
-        headless: true,
+        headless: true, // Use headless mode with stealth plugin
         executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium-browser',
         args: [
           '--no-sandbox',
@@ -229,33 +233,51 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
           '--disable-dev-shm-usage',
           '--disable-accelerated-2d-canvas',
           '--disable-gpu',
-          '--window-size=1920x1080',
-          '--disable-blink-features=AutomationControlled'
-        ]
+          '--window-size=1920,1080',
+          '--disable-blink-features=AutomationControlled',
+          '--disable-features=IsolateOrigins,site-per-process',
+          '--disable-web-security',
+          '--user-data-dir=/tmp/puppeteer-profile',
+        ],
+        ignoreDefaultArgs: ['--enable-automation'],
       });
       
       const page = await browser.newPage();
       
-      // Set realistic viewport and user agent
+      // Set realistic viewport
       await page.setViewport({ width: 1920, height: 1080 });
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      
+      // Use a more recent Chrome user agent
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
       
       // Set extra headers to appear more like a real browser
       await page.setExtraHTTPHeaders({
         'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
       });
       
-      console.log('Puppeteer: Navigating to Redfin page...');
+      console.log('Puppeteer Stealth: Navigating to Redfin page...');
       
       // Navigate to the page with timeout
       await page.goto(url, { 
         waitUntil: 'networkidle2',
-        timeout: 30000 
+        timeout: 45000 
       });
       
-      // Wait a bit for dynamic content to load
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Add random delay to mimic human behavior
+      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000));
+      
+      // Scroll down slightly to trigger any lazy-loaded content
+      await page.evaluate(() => window.scrollBy(0, 300));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Get the HTML content
       html = await page.content();
@@ -264,7 +286,7 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
       await browser.close();
       browser = null;
       
-      console.log('Successfully loaded Redfin HTML via Puppeteer');
+      console.log('Successfully loaded Redfin HTML via Puppeteer Stealth');
     } catch (browserError) {
       if (browser) {
         try { await browser.close(); } catch (e) {}
