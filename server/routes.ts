@@ -309,82 +309,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error("We couldn't find this property when searching the web. Please paste the Redfin listing URL directly or try a different address.");
           }
         } else {
-          // Could not find a Redfin URL - fall back to Deep Research for property data
-          console.log('⚠️ Could not find Redfin URL, falling back to Deep Research');
-          
-          const { conductPropertyResearch } = await import('./services/deep-research');
-          
-          try {
-            console.log('🔬 Starting Deep Research fallback for address:', report.propertyAddress);
-            const researchResult = await conductPropertyResearch(report.propertyAddress);
-            console.log(`✅ Deep Research completed - found ${researchResult.comparables.length} comparables`);
-            
-            // Create property data from Deep Research results
-            propertyData = {
-              address: researchResult.propertyDetails.address || report.propertyAddress,
-              beds: researchResult.propertyDetails.beds,
-              baths: researchResult.propertyDetails.baths,
-              sqft: researchResult.propertyDetails.sqft,
-              description: researchResult.propertyDetails.description,
-              images: [],
-              yearBuilt: researchResult.propertyDetails.yearBuilt,
-              price: researchResult.propertyDetails.currentEstimate || researchResult.propertyDetails.lastSoldPrice,
-            };
-            
-            console.log(`📊 Property: ${propertyData.beds}bd/${propertyData.baths}ba, ${propertyData.sqft} sqft`);
-            console.log(`💰 Estimated value: $${propertyData.price?.toLocaleString() || 'Unknown'}`);
-            
-            // Store mapsContext and comparables from research
-            await storage.updateAnalysisReportData(reportId, { 
-              mapsContext: {
-                neighborhoodInsights: researchResult.neighborhoodContext?.description || '',
-                nearbyPOIs: (researchResult.neighborhoodContext?.nearbyAmenities || []).map(amenity => ({
-                  name: amenity,
-                  type: 'amenity'
-                })),
-                areaRating: researchResult.neighborhoodContext?.schoolRating
-              },
-              dataSource: 'deep_research'
-            });
-            
-            // Store geocoded data
-            try {
-              const { geocodeAddress } = await import('./services/gemini-enhanced');
-              const geoData = await geocodeAddress(propertyData.address);
-              await storage.updateAnalysisReportData(reportId, { geoData });
-            } catch (geoError) {
-              console.log('Geocoding failed, using placeholder coordinates');
-            }
-            
-            // Store comparables from Deep Research
-            if (researchResult.comparables.length > 0) {
-              const researchComps = researchResult.comparables.map(comp => ({
-                address: comp.address,
-                beds: comp.beds,
-                baths: comp.baths,
-                sqft: comp.sqft,
-                price: comp.price,
-                pricePsf: comp.pricePsf,
-                dateSold: comp.dateSold,
-                distanceMiles: comp.distanceMiles,
-                source: 'deep_research' as const
-              }));
-              await storage.updateAnalysisReportData(reportId, { comparableProperties: researchComps });
-              console.log(`📈 Stored ${researchComps.length} comparable properties from research`);
-            }
-            
-            console.log('✅ Deep Research fallback completed successfully');
-            
-          } catch (researchError) {
-            // Both URL discovery and Deep Research failed
-            console.error('Deep Research fallback also failed:', researchError);
-            await storage.updateAnalysisReportData(reportId, { 
-              status: 'failed',
-              failureReason: "We couldn't find this property when searching the web. Please paste the Redfin listing URL directly or try a different address.",
-              dataSource: undefined
-            });
-            throw new Error("We couldn't find this property when searching the web. Please paste the Redfin listing URL directly or try a different address.");
-          }
+          // Could not find a Redfin URL - fail gracefully with clear guidance
+          console.log('❌ Could not find Redfin URL for address');
+          await storage.updateAnalysisReportData(reportId, { 
+            status: 'failed',
+            failureReason: "We couldn't find this property when searching the web. Please paste the Redfin listing URL directly or try a different address.",
+            dataSource: undefined
+          });
+          throw new Error("We couldn't find this property when searching the web. Please paste the Redfin listing URL directly or try a different address.");
         }
         
         console.log('✅ Address-to-URL workflow completed successfully');
