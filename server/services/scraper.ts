@@ -217,7 +217,7 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     }
 
     console.log(`Starting to scrape Redfin property: ${url}`);
-    console.log('Debug: Launching stealth browser for Redfin...');
+    console.log('Debug: Launching stealth browser for Redfin (Production v22)...');
     
     // Use puppeteer-extra with stealth plugin to bypass anti-bot protection
     let browser = null;
@@ -242,6 +242,9 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
       });
       
       const page = await browser.newPage();
+      
+      // Log browser console messages for debugging
+      page.on('console', msg => console.log('[Browser Console]', msg.text()));
       
       // Set realistic viewport
       await page.setViewport({ width: 1920, height: 1080 });
@@ -273,187 +276,213 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
       await page.evaluate(() => window.scrollBy(0, 500));
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Use production scraper approach: inject extraction script into page
-      console.log('Injecting extraction script (production v22 approach)...');
+      // PRODUCTION SCRAPER v22 - Inject exact production code
+      console.log('Injecting PRODUCTION extraction script (v22 - verbatim)...');
       
       extractedData = await page.evaluate(() => {
-        // Helper functions
-        const safeParseInt = (value: any): number | null => {
+        // ============================================================
+        // PRODUCTION SCRAPER v22 - VERBATIM FROM OCTOBER 6TH BUILD
+        // ============================================================
+        console.log("[Scrape.js] Starting extractRedfinData (v22 - Resilient)...");
+        
+        // Helper to safely parse a string into an integer.
+        function safeParseInt(value) {
           if (value === null || value === undefined) return null;
           const cleaned = String(value).replace(/[^0-9]/g, '');
           return cleaned ? parseInt(cleaned, 10) : null;
-        };
+        }
         
-        const safeParseFloat = (value: any): number | null => {
+        // Helper to safely parse a string into a float.
+        function safeParseFloat(value) {
           if (value === null || value === undefined) return null;
           const cleaned = String(value).replace(/[^0-9.]/g, '');
           return cleaned ? parseFloat(cleaned) : null;
+        }
+        
+        let data = {
+          address: null, price: null, beds: null, baths: null, sqft: null,
+          yearBuilt: null, lotSize: null, homeType: null, description: null, images: [],
+          source: 'redfin', url: window.location.href, timestamp: new Date().toISOString(),
+          error: null
         };
         
-        const findValueByLabel = (labelText: string): string | null => {
+        // --- DEFINITIVE FIX for Year Built & Lot Size ---
+        const findValueByLabel = (labelText) => {
           const allElements = Array.from(document.querySelectorAll('.key-detail-row, .table-row, .entryItem, .fact-group, .HomeInfo-property-facts > div'));
           for (const el of allElements) {
             const labelEl = el.querySelector('.label, .table-label, .title, .entryItem--title, .fact-label');
-            if (labelEl && labelEl.textContent?.toLowerCase().includes(labelText)) {
+            if (labelEl && labelEl.textContent.toLowerCase().includes(labelText)) {
               const valueEl = el.querySelector('.content, .table-value, .value, .entryItem--value, .fact-value');
-              if (valueEl) return valueEl.textContent?.trim() || null;
+              if (valueEl) return valueEl.textContent.trim();
             }
           }
           return null;
         };
         
-        let data: any = {
-          address: null, price: null, beds: null, baths: null, sqft: null,
-          yearBuilt: null, lotSize: null, homeType: null, description: null, images: [],
-          source: 'redfin', url: window.location.href, timestamp: new Date().toISOString(),
-          error: null, extractionMethod: 'unknown'
-        };
-        
-        // --- STAGE 1: ATTEMPT TO EXTRACT FROM EMBEDDED JSON (Primary Method) ---
-        console.log("Attempting JSON parse from __INITIAL_STATE__ or __reactServerState...");
         try {
-          let jsonData = null;
-          const scripts = Array.from(document.querySelectorAll('script'));
-          const jsonScript = scripts.find(script => 
-            script.textContent?.includes('__INITIAL_STATE__') || 
-            script.textContent?.includes('root.__reactServerState')
-          );
+          // --- STAGE 1: ATTEMPT TO EXTRACT FROM EMBEDDED JSON (Primary Method) ---
+          console.log("Attempting JSON parse from __INITIAL_STATE__ or __reactServerState...");
+          try {
+            let jsonData = null;
+            const scripts = Array.from(document.querySelectorAll('script'));
+            const jsonScript = scripts.find(script => script.textContent.includes('__INITIAL_STATE__') || script.textContent.includes('root.__reactServerState'));
+            
+            if (jsonScript) {
+              const scriptContent = jsonScript.textContent;
+              const match = scriptContent.match(/(?:window\.__INITIAL_STATE__|root\.__reactServerState)\s*=\s*(\{.*?\});?/s);
+              if (match && match[1]) {
+                jsonData = JSON.parse(match[1]);
+                console.log("JSON parse successful.");
+                
+                const aboveTheFoldPayload = jsonData?.InitialContext?.ReactServerAgent?.cache?.dataCache?.['/stingray/api/home/details/aboveTheFold']?.res?.payload;
+                
+                if (aboveTheFoldPayload) {
+                  const propertyData = aboveTheFoldPayload.addressSectionInfo || {};
+                  const mainInfo = aboveTheFoldPayload.mainHouseInfo || {};
+                  
+                  data.address = propertyData.streetAddress?.assembledAddress || data.address;
+                  data.price = safeParseInt(propertyData.priceInfo?.amount) || data.price;
+                  data.beds = safeParseFloat(propertyData.beds) || data.beds;
+                  data.baths = safeParseFloat(propertyData.baths) || data.baths;
+                  data.sqft = safeParseInt(propertyData.sqFt?.value) || data.sqft;
+                  
+                  const amenities = mainInfo.amenitiesInfo?.amenities;
+                  if (amenities && Array.isArray(amenities)) {
+                    const yearBuiltEntry = amenities.find(a => a.header === 'Year Built');
+                    if (yearBuiltEntry) data.yearBuilt = safeParseInt(yearBuiltEntry.content);
+                    
+                    const lotSizeEntry = amenities.find(a => a.header === 'Lot Size');
+                    if (lotSizeEntry) data.lotSize = lotSizeEntry.content;
+                    
+                    const homeTypeEntry = amenities.find(a => a.header === 'Property Type');
+                    if (homeTypeEntry) data.homeType = homeTypeEntry.content;
+                  }
+                  
+                  const photos = aboveTheFoldPayload?.mediaBrowserInfo?.photos;
+                  if (photos && Array.isArray(photos) && photos.length > 0) {
+                    data.images = photos.map(p => p?.photoUrls?.fullScreenPhotoUrl?.replace(/p_[a-z]/, 'p_l')).filter(Boolean);
+                  }
+                  console.log("Extracted from JSON:", { address: data.address, price: data.price, beds: data.beds, baths: data.baths, sqft: data.sqft, yearBuilt: data.yearBuilt, lotSize: data.lotSize, images: `${data.images.length} found` });
+                }
+              } else {
+                console.log("Could not find a valid JSON object within the script tag.");
+              }
+            } else {
+              console.log("Embedded JSON script tag not found.");
+            }
+          } catch (e) {
+            console.error("Error during JSON parse:", e.message);
+          }
           
-          if (jsonScript && jsonScript.textContent) {
-            const scriptContent = jsonScript.textContent;
-            const match = scriptContent.match(/(?:window\.__INITIAL_STATE__|root\.__reactServerState)\s*=\s*(\{[\s\S]*?\});?/);
-            if (match && match[1]) {
-              jsonData = JSON.parse(match[1]);
-              console.log("JSON parse successful.");
-              data.extractionMethod = 'embedded_json';
-              
-              const aboveTheFoldPayload = jsonData?.InitialContext?.ReactServerAgent?.cache?.dataCache?.['/stingray/api/home/details/aboveTheFold']?.res?.payload;
-              
-              if (aboveTheFoldPayload) {
-                const propertyData = aboveTheFoldPayload.addressSectionInfo || {};
-                const mainInfo = aboveTheFoldPayload.mainHouseInfo || {};
-                
-                data.address = propertyData.streetAddress?.assembledAddress || data.address;
-                data.price = safeParseInt(propertyData.priceInfo?.amount) || data.price;
-                data.beds = safeParseFloat(propertyData.beds) || data.beds;
-                data.baths = safeParseFloat(propertyData.baths) || data.baths;
-                data.sqft = safeParseInt(propertyData.sqFt?.value) || data.sqft;
-                
-                const amenities = mainInfo.amenitiesInfo?.amenities;
-                if (amenities && Array.isArray(amenities)) {
-                  const yearBuiltEntry = amenities.find((a: any) => a.header === 'Year Built');
-                  if (yearBuiltEntry) data.yearBuilt = safeParseInt(yearBuiltEntry.content);
-                  
-                  const lotSizeEntry = amenities.find((a: any) => a.header === 'Lot Size');
-                  if (lotSizeEntry) data.lotSize = lotSizeEntry.content;
-                  
-                  const homeTypeEntry = amenities.find((a: any) => a.header === 'Property Type');
-                  if (homeTypeEntry) data.homeType = homeTypeEntry.content;
-                }
-                
-                const photos = aboveTheFoldPayload?.mediaBrowserInfo?.photos;
-                if (photos && Array.isArray(photos) && photos.length > 0) {
-                  data.images = photos.map((p: any) => p?.photoUrls?.fullScreenPhotoUrl?.replace(/p_[a-z]/, 'p_l')).filter(Boolean);
-                }
-                
-                console.log("Extracted from JSON:", { address: data.address, price: data.price, beds: data.beds, baths: data.baths, sqft: data.sqft });
+          // --- STAGE 2: Resilient HTML Waterfall (Fallback Method) ---
+          console.log("Running HTML waterfall for any missing data...");
+          
+          // Address Waterfall
+          if (!data.address) {
+            console.log("Attempting to find Address in HTML...");
+            const addressSelectors = [ 'h1[data-rf-test-id="abp-address"]', 'h1.font-bold', '.homeAddress span.street-address', 'meta[name="twitter:text:street_address"]' ];
+            for (const selector of addressSelectors) {
+              const el = document.querySelector(selector);
+              if (el) {
+                data.address = (el.tagName === 'META' ? el.content : el.textContent.trim()).replace(/\s+/g, ' ');
+                console.log(`Address found via selector '${selector}': ${data.address}`);
+                break;
               }
             }
           }
-        } catch (e) {
-          console.error("Error during JSON parse:", e);
-        }
-        
-        // --- STAGE 2: Resilient HTML Waterfall (Fallback Method) ---
-        console.log("Running HTML waterfall for any missing data...");
-        
-        // Address Waterfall
-        if (!data.address) {
-          const addressSelectors = ['h1[data-rf-test-id="abp-address"]', 'h1.font-bold', '.homeAddress span.street-address', 'meta[name="twitter:text:street_address"]'];
-          for (const selector of addressSelectors) {
-            const el = document.querySelector(selector);
-            if (el) {
-              data.address = ((el as HTMLMetaElement).content || el.textContent)?.trim().replace(/\s+/g, ' ');
-              data.extractionMethod = data.extractionMethod === 'unknown' ? 'html_fallback' : data.extractionMethod;
-              console.log(`Address found via selector '${selector}': ${data.address}`);
-              break;
-            }
-          }
-        }
-        
-        // Price Waterfall
-        if (!data.price) {
-          const priceSelectors = ['div[data-testid="price"]', '.price .statsValue'];
-          for (const selector of priceSelectors) {
-            const el = document.querySelector(selector);
-            if (el) {
-              data.price = safeParseInt(el.textContent);
-              console.log(`Price found via selector '${selector}': ${data.price}`);
-              break;
-            }
-          }
+          
+          // Price Waterfall
           if (!data.price) {
-            const soldBanner = document.querySelector('.ListingStatusBannerSection');
-            if (soldBanner && soldBanner.textContent?.includes('SOLD')) {
-              const priceMatch = soldBanner.textContent.match(/FOR \$([0-9,]+)/);
-              if (priceMatch && priceMatch[1]) {
-                data.price = safeParseInt(priceMatch[1]);
+            console.log("Attempting to find Price in HTML...");
+            const priceSelectors = [ 'div[data-testid="price"]', '.price .statsValue' ];
+            for (const selector of priceSelectors) {
+              const el = document.querySelector(selector);
+              if (el) { data.price = safeParseInt(el.textContent); console.log(`Price found via selector '${selector}': ${data.price}`); break; }
+            }
+            if (!data.price) {
+              const soldBanner = document.querySelector('.ListingStatusBannerSection');
+              if (soldBanner && soldBanner.textContent.includes('SOLD')) {
+                const priceMatch = soldBanner.textContent.match(/FOR \$([0-9,]+)/);
+                if (priceMatch && priceMatch[1]) { data.price = safeParseInt(priceMatch[1]); console.log(`Price found via selector '.ListingStatusBannerSection': ${data.price}`); }
               }
             }
-          }
-          if (!data.price) {
-            const metaPrice = document.querySelector('meta[name="twitter:text:price"]') as HTMLMetaElement;
-            if (metaPrice) data.price = safeParseInt(metaPrice.content);
-          }
-        }
-        
-        // Beds, Baths, SqFt Waterfall
-        if (!data.beds) {
-          const bedsEl = document.querySelector('[data-testid="beds-value"], [data-rf-test-id="abp-beds"] .statsValue, .beds-section .statsValue');
-          if (bedsEl) data.beds = safeParseFloat(bedsEl.textContent);
-        }
-        if (!data.baths) {
-          const bathsEl = document.querySelector('[data-testid="baths-value"], [data-rf-test-id="abp-baths"] .statsValue, .baths-section .statsValue');
-          if (bathsEl) data.baths = safeParseFloat(bathsEl.textContent);
-        }
-        if (!data.sqft) {
-          const sqftEl = document.querySelector('[data-testid="sqft-value"] span, .sqft-section .statsValue, [data-rf-test-id="abp-sqFt"] .statsValue');
-          if (sqftEl) data.sqft = safeParseInt(sqftEl.textContent);
-        }
-        
-        // Year Built, Lot Size, Home Type Waterfall
-        if (!data.yearBuilt) data.yearBuilt = safeParseInt(findValueByLabel('year built'));
-        if (!data.lotSize) data.lotSize = findValueByLabel('lot size');
-        if (!data.homeType) data.homeType = findValueByLabel('property type');
-        
-        // Description Fallback
-        if (!data.description) {
-          const descEl = document.querySelector('.remarksContainer .remarks span, meta[name="description"]') as HTMLMetaElement | null;
-          if (descEl) data.description = descEl.content || descEl.textContent;
-        }
-        
-        // Images Fallback
-        if (data.images.length === 0) {
-          const collectedImages = new Set<string>();
-          document.querySelectorAll('.ImageCarousel img, .InlinePhotoPreviewRedesign--large img, .photo-carousel-container img').forEach((img: Element) => {
-            const imgEl = img as HTMLImageElement;
-            if (imgEl.src && !imgEl.src.includes('maps.google.com')) {
-              collectedImages.add(imgEl.src.replace(/p_[a-z]\.jpg/, 'p_f.jpg'));
+            if (!data.price) {
+              const metaPrice = document.querySelector('meta[name="twitter:text:price"]');
+              if (metaPrice) { data.price = safeParseInt(metaPrice.content); console.log(`Price found via selector 'meta[name="twitter:text:price"]': ${data.price}`); }
             }
-          });
-          data.images = Array.from(collectedImages).slice(0, 15);
+          }
+          
+          // Beds, Baths, SqFt Waterfall
+          if (!data.beds) {
+            const bedsEl = document.querySelector('[data-testid="beds-value"], [data-rf-test-id="abp-beds"] .statsValue, .beds-section .statsValue');
+            if (bedsEl) { data.beds = safeParseFloat(bedsEl.textContent); console.log(`Beds found via HTML: ${data.beds}`); }
+          }
+          if (!data.baths) {
+            const bathsEl = document.querySelector('[data-testid="baths-value"], [data-rf-test-id="abp-baths"] .statsValue, .baths-section .statsValue');
+            if (bathsEl) { data.baths = safeParseFloat(bathsEl.textContent); console.log(`Baths found via HTML: ${data.baths}`); }
+          }
+          if (!data.sqft) {
+            const sqftEl = document.querySelector('[data-testid="sqft-value"] span, .sqft-section .statsValue, [data-rf-test-id="abp-sqFt"] .statsValue');
+            if (sqftEl) { data.sqft = safeParseInt(sqftEl.textContent); console.log(`SqFt found via HTML: ${data.sqft}`); }
+          }
+          
+          // Year Built Waterfall
+          if (!data.yearBuilt) {
+            console.log("Attempting to find Year Built in HTML...");
+            data.yearBuilt = safeParseInt(findValueByLabel('year built'));
+            if(data.yearBuilt) console.log(`Year Built found via HTML helper: ${data.yearBuilt}`);
+          }
+          
+          // Lot Size Waterfall
+          if (!data.lotSize) {
+            console.log("Attempting to find Lot Size in HTML...");
+            data.lotSize = findValueByLabel('lot size');
+            if(data.lotSize) console.log(`Lot Size found via HTML helper: ${data.lotSize}`);
+          }
+          
+          // Home Type Fallback
+          if (!data.homeType) {
+            data.homeType = findValueByLabel('property type');
+            if(data.homeType) console.log(`Home Type found via HTML helper: ${data.homeType}`);
+          }
+          
+          // Description Fallback
+          if (!data.description) {
+            const descEl = document.querySelector('.remarksContainer .remarks span, meta[name="description"]');
+            if (descEl) { data.description = descEl.tagName === 'META' ? descEl.content : descEl.textContent; console.log(`Description found via HTML.`); }
+          }
+          
+          // Images Fallback
+          if (data.images.length === 0) {
+            const collectedImages = new Set();
+            document.querySelectorAll('.ImageCarousel img, .InlinePhotoPreviewRedesign--large img, .photo-carousel-container img').forEach(img => {
+              if (img.src && !img.src.includes('maps.google.com')) { collectedImages.add(img.src.replace(/p_[a-z]\.jpg/, 'p_f.jpg')); }
+            });
+            data.images = Array.from(collectedImages).slice(0, 15);
+            console.log(`Found ${data.images.length} images via HTML fallback.`);
+          }
+          
+        } catch (error) {
+          console.error('[Scrape.js] CRITICAL Error during extractRedfinData:', error.message, error.stack);
+          data.error = `Scraping failed critically: ${error.message}`;
         }
         
-        // Final address fallback from title
-        if (!data.address) {
-          data.address = document.title.split('|')[0].trim();
-        }
-        
-        // Final verification
+        // --- STAGE 3: Final Verification ---
+        console.log("Final verification of extracted data...");
         if (!data.price || data.price <= 0) {
           data.error = "The scraper could not find a valid price for this property.";
+          console.error(`Final verification FAILED: Price is invalid (${data.price}).`);
+        } else {
+          console.log("Final verification PASSED.");
         }
         
+        // Final address fallback
+        if (!data.address) {
+          data.address = document.title.split('|')[0].trim();
+          console.log(`Address found via document title fallback: ${data.address}`);
+        }
+        
+        console.log("[Scrape.js] FINAL Redfin Data Object:", data);
         return data;
       });
       
@@ -461,9 +490,12 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
       await browser.close();
       browser = null;
       
-      console.log('Successfully extracted data via Puppeteer');
-      console.log(`Extraction method: ${extractedData?.extractionMethod}`);
+      console.log('Successfully extracted data via Puppeteer (Production v22)');
       console.log(`Extracted: address=${extractedData?.address}, price=${extractedData?.price}, beds=${extractedData?.beds}, baths=${extractedData?.baths}, sqft=${extractedData?.sqft}`);
+      
+      if (extractedData?.error) {
+        console.error('Extraction error:', extractedData.error);
+      }
       
     } catch (browserError) {
       if (browser) {
@@ -472,9 +504,9 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
       throw new Error(`Failed to load Redfin page: ${(browserError as Error).message}`);
     }
 
-    // Check if we got valid data from the embedded JSON extraction
+    // Check if we got valid data from the production extraction
     if (extractedData && extractedData.price && extractedData.price > 0) {
-      console.log('Using data extracted from embedded JSON/HTML');
+      console.log('Using data extracted from Production v22 scraper');
       
       // Convert extractedData to PropertyData format
       const propertyData: PropertyData = {
@@ -493,364 +525,15 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
       return propertyData;
     }
     
-    // If embedded extraction failed, fall back to HTML parsing
-    console.log('Embedded extraction did not get price, falling back to HTML parsing...');
-    
-    // Get HTML for cheerio parsing
-    let html = '';
-    try {
-      browser = await puppeteer.launch({
-        headless: true,
-        executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium-browser',
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
-      const page = await browser.newPage();
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-      html = await page.content();
-      await browser.close();
-    } catch (e) {
-      if (browser) try { await browser.close(); } catch (ex) {}
-    }
-    
-    const $ = cheerio.load(html);
-    
-    console.log('Extracting property data via Cheerio fallback...');
-    console.log(`Debug: HTML length: ${html.length} characters`);
-
-    // Helper function to clean text
-    const cleanText = (text: string | null) => text?.trim().replace(/\s+/g, ' ') || '';
-    
-
-    // Extract address
-    let address = extractedData?.address || '';
-    if (!address) {
-      const addressSelectors = [
-        '.street-address',
-        '.address-line', 
-        'h1',
-        '[data-rf-test-name="abp-streetLine"]',
-        '.address'
-      ];
-      
-      for (const selector of addressSelectors) {
-        const element = $(selector).first();
-        if (element.length && element.text()) {
-          address = cleanText(element.text());
-          if (address) break;
-        }
-      }
-    }
-
-    // Extract from page title if address still not found
-    if (!address) {
-      const pageTitle = $('title').text();
-      const match = pageTitle.match(/^([^|]+)/);
-      if (match) {
-        address = cleanText(match[1]);
-      }
-    }
-    
-    // Get page text for pattern matching
-    const pageText = $('body').text();
-    
-    // Enhanced price extraction - find all price mentions and select the best one
-    let price: number | undefined = extractedData?.price || undefined;
-    let priceSource = '';
-    const allPrices: Array<{price: number, source: string, confidence: number}> = [];
-    
-    if (!price) {
-      console.log('Debug: Enhanced price searching...');
-      
-      // 1. Search for all "sold for" patterns with dates to find recent sales
-      const soldPricePatterns = [
-        /sold\s+(?:on\s+)?(\w+\s+\d+,?\s+\d{4})\s+for\s+\$([\d,]+)/gi,
-        /sold\s+for\s+\$([\d,]+)\s+(?:on\s+)?(\w+\s+\d+,?\s+\d{4})/gi,
-        /sold\s+for\s+\$([\d,]+)/gi,
-        /sale\s+price:?\s*\$([\d,]+)/gi,
-        /last\s+sold:?\s*\$([\d,]+)/gi,
-      ];
-      
-      soldPricePatterns.forEach((pattern, index) => {
-        let match;
-        const patternCopy = new RegExp(pattern.source, pattern.flags);
-        while ((match = patternCopy.exec(pageText)) !== null) {
-          let priceValue: number;
-          let dateStr = '';
-          
-          if (match.length > 2) {
-            priceValue = parseNumber(match[2]) || parseNumber(match[1]) || 0;
-            dateStr = match[1] || match[2];
-          } else {
-            priceValue = parseNumber(match[1]) || 0;
-          }
-          
-          if (priceValue && priceValue > 10000) {
-            const confidence = index === 0 ? 95 : (index === 1 ? 90 : 80);
-            allPrices.push({
-              price: priceValue,
-              source: `sold_${index}_${dateStr}`.replace(/\s+/g, '_'),
-              confidence
-            });
-            console.log(`Debug: Found sale price: $${priceValue.toLocaleString()} (confidence: ${confidence}%) from: ${match[0]}`);
-          }
-        }
-      });
-    }
-    
-    // 2. Search for current/list prices as fallback
-    const currentPriceSelectors = [
-      '.price-section .price',
-      '.home-main-stats-price .price', 
-      '[data-rf-test-name="abp-price"]',
-      '.price',
-      '.list-price',
-      '.asking-price'
-    ];
-    
-    currentPriceSelectors.forEach((selector, index) => {
-      const element = $(selector).first();
-      if (element.length && element.text()) {
-        const priceValue = parseNumber(element.text());
-        if (priceValue && priceValue > 10000) {
-          allPrices.push({
-            price: priceValue,
-            source: `current_${selector}`,
-            confidence: 60 - index * 5 // Lower confidence for current prices
-          });
-          console.log(`Debug: Found current price: $${priceValue.toLocaleString()} from selector: ${selector}`);
-        }
-      }
-    });
-    
-    // 3. Search for price patterns in page text
-    const textPricePatterns = [
-      /list\s+price:?\s*\$([\d,]+)/gi,
-      /asking:?\s*\$([\d,]+)/gi,
-      /priced?\s+at:?\s*\$([\d,]+)/gi,
-      /\$(\d{3},\d{3}(?:,\d{3})?)/g // Match formatted prices like $1,350,000
-    ];
-    
-    textPricePatterns.forEach((pattern, index) => {
-      let match;
-      const patternCopy = new RegExp(pattern.source, pattern.flags);
-      while ((match = patternCopy.exec(pageText)) !== null) {
-        const priceValue = parseNumber(match[1]);
-        if (priceValue && priceValue > 10000) {
-          allPrices.push({
-            price: priceValue,
-            source: `text_pattern_${index}`,
-            confidence: 40 - index * 5
-          });
-          console.log(`Debug: Found text price: $${priceValue.toLocaleString()} from pattern: ${match[0]}`);
-        }
-      }
-    });
-    
-    // 4. Select the best price based on confidence and value
-    if (allPrices.length > 0) {
-      // Sort by confidence first, then by price (higher is often more recent/accurate)
-      allPrices.sort((a, b) => {
-        if (a.confidence !== b.confidence) return b.confidence - a.confidence;
-        return b.price - a.price;
-      });
-      
-      price = allPrices[0].price;
-      priceSource = allPrices[0].source;
-      
-      console.log(`Debug: Selected price: $${price.toLocaleString()} from ${priceSource} (confidence: ${allPrices[0].confidence}%)`);
-      
-      // Log all found prices for debugging
-      console.log('Debug: All found prices:', allPrices.map(p => `$${p.price.toLocaleString()} (${p.confidence}%, ${p.source})`).join(', '));
-    } else {
-      console.log('Debug: No valid prices found');
-    }
-    
-    // Extract beds, baths, sqft from the page text
-    let beds: number | undefined;
-    let baths: number | undefined;
-    let sqft: number | undefined;
-    
-    // Extract beds
-    const bedMatch = pageText.match(/(\d+)\s*bed/i);
-    if (bedMatch) beds = parseInt(bedMatch[1]);
-    
-    // Extract baths
-    const bathMatch = pageText.match(/(\d+(?:\.\d+)?)\s*bath/i);
-    if (bathMatch) baths = parseFloat(bathMatch[1]);
-    
-    // Extract sqft
-    const sqftMatch = pageText.match(/([\d,]+)\s*sq\s*ft/i);
-    if (sqftMatch) sqft = parseNumber(sqftMatch[1]);
-    
-    // Extract year built with more specific patterns - prioritize exact "Year Built" matches
-    let yearBuilt: number | undefined;
-    
-    // First try exact "Year Built" patterns (highest priority)
-    const exactYearBuiltPatterns = [
-      /year\s+built:?\s*(19\d{2}|20\d{2})/i,
-      /built:?\s*(19\d{2}|20\d{2})/i,
-    ];
-    
-    for (const pattern of exactYearBuiltPatterns) {
-      const match = pageText.match(pattern);
-      if (match) {
-        const year = parseInt(match[1]);
-        // Validate reasonable year range (exclude very recent years that might be renovations)
-        if (year >= 1800 && year <= new Date().getFullYear() - 5) {
-          yearBuilt = year;
-          break;
-        }
-      }
-    }
-    
-    // Fallback patterns if exact match not found
-    if (!yearBuilt) {
-      const fallbackPatterns = [
-        /built\s+in\s+(19\d{2}|20\d{2})/i,
-        /constructed\s+in\s+(19\d{2}|20\d{2})/i,
-        /(19\d{2}|20\d{2})\s+construction/i
-      ];
-      
-      for (const pattern of fallbackPatterns) {
-        const match = pageText.match(pattern);
-        if (match) {
-          const year = parseInt(match[1]);
-          // More restrictive validation for fallback patterns
-          if (year >= 1800 && year <= new Date().getFullYear() - 10) {
-            yearBuilt = year;
-            break;
-          }
-        }
-      }
-    }
-    
-    // Extract lot size
-    let lotSize: string | undefined;
-    const lotMatch = pageText.match(/lot.*?([\d.,]+\s*(?:acres?|sq\s*ft))/i);
-    if (lotMatch) {
-      lotSize = lotMatch[1];
-    }
-    
-    // Extract description
-    let description = '';
-    const descriptionSelectors = [
-      '.remarks',
-      '.listing-description',
-      '.public-remarks',
-      '[data-rf-test-name="abp-remarks"]'
-    ];
-    
-    for (const selector of descriptionSelectors) {
-      const element = $(selector).first();
-      if (element.length && element.text()) {
-        description = cleanText(element.text());
-        if (description.length > 50) break;
-      }
-    }
-    
-    // Extract images
-    const images: string[] = [];
-    const imageElements = $('img[src*="ssl.cdn-redfin.com"]');
-    
-    imageElements.each((_, img) => {
-      const src = $(img).attr('src');
-      if (src && !images.includes(src)) {
-        images.push(src);
-        if (images.length >= 6) return false; // Break the loop
-      }
-    });
-    
-    const propertyData = {
-      address,
-      price,
-      beds,
-      baths,
-      sqft,
-      yearBuilt,
-      lotSize,
-      description,
-      images
-    };
-    
-    // Extract location information
-    const location = extractPropertyLocation(url, propertyData.address, $);
-    
-    console.log('Extracted property data:', propertyData);
-    console.log(`Location - City: ${location.city}, State: ${location.state}, Zip: ${location.zipCode}`);
-    
-    // 5. Validate price against market expectations
-    if (propertyData.price && propertyData.sqft) {
-      const actualPricePsf = propertyData.price / propertyData.sqft;
-      
-      // Get market context for location-based pricing expectations
-      const marketExpectedPsf = (() => {
-        const locationKey = `${location.city || 'Los Angeles'}, ${location.state || 'CA'}`;
-        // Market pricing based on location
-        const marketContext: { [key: string]: number } = {
-          'Los Angeles, CA': 1000,
-          'San Francisco, CA': 1400,
-          'New York, NY': 1200,
-          'Miami, FL': 800,
-          'Austin, TX': 600,
-          'Seattle, WA': 900,
-          'Denver, CO': 700,
-          'Atlanta, GA': 500,
-          'Phoenix, AZ': 450,
-          'Dallas, TX': 550
-        };
-        return marketContext[locationKey] || 600; // National average fallback
-      })();
-      const expectedPrice = propertyData.sqft * marketExpectedPsf;
-      const priceRatio = propertyData.price / expectedPrice;
-      
-      console.log(`Debug: Price validation - Actual: $${propertyData.price.toLocaleString()} ($${Math.round(actualPricePsf)}/sqft)`);
-      console.log(`Debug: Market expected: $${Math.round(expectedPrice).toLocaleString()} ($${Math.round(marketExpectedPsf)}/sqft)`);
-      console.log(`Debug: Price ratio: ${(priceRatio * 100).toFixed(1)}% of market expectation`);
-      
-      // Flag potential issues
-      if (priceRatio < 0.4) { // Less than 40% of market value
-        console.warn(`⚠️  WARNING: Property price ($${propertyData.price.toLocaleString()}) seems unusually LOW compared to market expectations ($${Math.round(expectedPrice).toLocaleString()})`);
-        console.warn(`⚠️  This may indicate: old sale data, distressed sale, or data extraction error`);
-        console.warn(`⚠️  Consider manual verification of this price data`);
-        
-        // Add warning to description if needed
-        if (!propertyData.description.includes('price data may not reflect current market value')) {
-          propertyData.description += ' NOTE: Extracted price data may not reflect current market value and should be verified.';
-        }
-      } else if (priceRatio > 2.0) { // More than 200% of market value  
-        console.warn(`⚠️  NOTICE: Property price ($${propertyData.price.toLocaleString()}) is significantly ABOVE market expectations ($${Math.round(expectedPrice).toLocaleString()})`);
-        console.warn(`⚠️  This may indicate: luxury property, recent renovation, or premium location`);
-      } else {
-        console.log(`✅ Price validation: Property price appears reasonable for the market`);
-      }
-    }
-    
-    // Validate that we got meaningful data
-    if (!propertyData.address) {
-      throw new Error('Could not extract property address from Redfin page. The page structure may have changed.');
-    }
-    
-    // Return the extracted data with proper typing
-    const result: PropertyData = {
-      address: propertyData.address,
-      price: propertyData.price,
-      beds: propertyData.beds || 0,
-      baths: propertyData.baths || 0,
-      sqft: propertyData.sqft || 0,
-      yearBuilt: propertyData.yearBuilt,
-      lotSize: propertyData.lotSize,
-      description: propertyData.description || 'No description available.',
-      images: propertyData.images.length > 0 ? propertyData.images : undefined
-    };
-    
-    console.log('Final property data:', result);
-    return result;
+    // If production extraction failed, throw error (don't return fake data)
+    const errorMsg = extractedData?.error || 'Scraper could not extract property data';
+    console.error('Production v22 scraper failed:', errorMsg);
+    throw new Error(`SCRAPE_FAILED: ${errorMsg}`);
     
   } catch (error) {
     console.error("Error scraping Redfin property:", error);
     
     // NEVER silently return fake data - this destroys customer trust
-    // Instead, throw a clear error that can be handled by the calling code
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`SCRAPE_FAILED: Unable to extract property data from Redfin. ${errorMessage}. Please try again or enter the property address manually.`);
   }
