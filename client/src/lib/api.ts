@@ -5,15 +5,8 @@ export interface CreateReportResponse {
   status: string;
 }
 
-export async function createAnalysisReport(propertyInput: string): Promise<CreateReportResponse> {
-  // Detect if input is a URL or an address
-  const isUrl = propertyInput.includes('redfin.com') || propertyInput.includes('redf.in') || propertyInput.startsWith('http');
-  
-  const payload = isUrl 
-    ? { inputType: 'url' as const, propertyUrl: propertyInput }
-    : { inputType: 'address' as const, propertyAddress: propertyInput };
-  
-  const response = await apiRequest("POST", "/api/reports", payload);
+export async function createAnalysisReport(propertyUrl: string): Promise<CreateReportResponse> {
+  const response = await apiRequest("POST", "/api/reports", { propertyUrl });
   return response.json();
 }
 
