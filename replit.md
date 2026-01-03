@@ -2,6 +2,115 @@
 
 Renvo is an AI-powered real estate renovation analysis platform that helps investors make data-driven decisions. The application scrapes property data from Redfin URLs, analyzes renovation opportunities using AI, finds comparable properties, and provides comprehensive reports with financial projections and contractor recommendations.
 
+The platform now includes comprehensive marketing pages and lead generation capabilities to convert visitors into users and capture valuable contact information for nurturing potential customers.
+
+# Recent Changes
+
+## Simplified Architecture - Redfin First (January 2026)
+
+Removed the slow/inaccurate Deep Research agent in favor of a faster, more accurate pipeline:
+
+**New Architecture:**
+1. **Address Input** → Gemini 2.5 Pro with Google Search grounding finds Redfin URL (fast, ~3-5 seconds) → Redfin scraper gets accurate data → Gemini 2.5 Pro analyzes renovations
+2. **URL Input** → Redfin scraper only (no AI research) → Gemini 2.5 Pro analyzes renovations
+3. **No Redfin Listing** → Graceful failure with clear message asking user to provide direct URL
+
+**Why This Change:**
+- Deep Research was slow (1-3 minutes vs 5-10 seconds now)
+- Deep Research returned inaccurate data (wrong prices, stock photos, unrealistic $10M estimates)
+- Redfin scraper provides accurate, verified property data with real listing photos
+
+**Technical Details:**
+- `findRedfinUrl()` uses Gemini 2.5 Pro with `googleSearch` tool for fast URL discovery
+- Supports both redfin.com and redf.in (mobile short links)
+- Parses JSON responses with fenced/unfenced format handling and regex fallback
+
+## Data Integrity Fix - No Fake Fallback Data (January 2026)
+
+Fixed critical data integrity issue where the Redfin scraper would silently return fake property data when scraping failed:
+
+**Changes Made:**
+- **Scraper**: Removed silent fallback that returned mock data ($850k, 3 bed, 2 bath, stock image) on failure - now throws explicit SCRAPE_FAILED error
+- **Schema**: Added `failureReason` and `dataSource` fields to track data provenance and error details
+- **Storage**: Fixed persistence using `if ('failureReason' in data)` guard instead of truthy check to allow null/empty values
+- **Routes**: Proper error handling captures failure reasons and sets dataSource on success ('redfin_scraper' or 'deep_research')
+- **Frontend**: Processing page shows dedicated error state with user-friendly message and retry options when status is 'failed'
+
+This ensures users never see fabricated data - they either get real property data or a clear error message explaining what went wrong.
+
+## Hybrid Input System - Gemini + Google Maps + Redfin (November 2025)
+
+Evolved from Redfin-only to a hybrid system that accepts BOTH Redfin URLs and plain addresses, using Gemini AI with Google Maps grounding for comprehensive property analysis without dependency on paid property data APIs.
+
+**Foundation Infrastructure (Completed):**
+
+- **Schema Updates**: Added support for dual input types with new fields:
+  - `propertyAddress`: Direct address input field (alternative to URL)
+  - `inputType`: Enum tracking whether input was 'url' or 'address'
+  - `geoData`: Geocoded location data (lat/lng, formatted address, place ID)
+  - `imagery`: References to Street View and Satellite imagery
+  - `visionAnalysis`: AI-generated analysis from visual property inspection
+  - `mapsContext`: Neighborhood context from Google Maps grounding
+  
+- **Storage Layer**: Updated both MemStorage and PostgresStorage to persist all new fields
+  - Fixed critical bug where PostgresStorage would silently drop new fields in production
+  - Both backends now properly round-trip expanded report data
+  
+- **Backend Routes**: Implemented input detection and branching logic
+  - POST /api/reports validates both URL and address inputs with Zod
+  - processAnalysisReport branches on inputType (url → Redfin scraper, address → Maps/Gemini)
+  - Fixed all null handling issues to prevent crashes during address-only workflows
+  - extractLocationFromProperty updated to accept optional URL parameter
+
+**Architecture Benefits:**
+- 80-95% cost savings vs paid property data APIs ($0.02-0.03 vs $0.12-0.50 per analysis)
+- 100% property coverage (vs 2-3% for MLS-only APIs)
+- Visual analysis capability for ANY property using Street View + Satellite imagery
+- Gemini's Google Maps grounding provides rich neighborhood context
+
+**Completed Implementation (December 2025):**
+- Gemini-based geocoding and address validation
+- Neighborhood context with POIs and market insights
+- Location parsing for various address formats (including USA suffix)
+- Vision analysis infrastructure (requires Google Maps API key with Static APIs enabled)
+- End-to-end tested with both Redfin URLs and plain addresses
+
+**Configuration Note - Vision Analysis:**
+To enable visual property analysis from Street View and Satellite imagery, a Google Cloud API key with the following services enabled is required:
+- Maps Static API
+- Street View Static API
+The GEMINI_API_KEY is for AI models only and doesn't provide access to Maps imagery. Without a properly configured Maps API key, the system gracefully falls back to text-only analysis.
+
+## Redfin Deep Link Support (October 2025)
+
+Added support for Redfin mobile app deep link URLs (redf.in):
+
+- **URL Validation**: Updated routes to accept redf.in URLs alongside redfin.com
+- **Scraper Integration**: Modified scraper to validate and process redf.in short links
+- **Automatic Redirect Following**: Leverages Node's built-in fetch to automatically follow redirects from short links to full property pages
+- **Security**: Maintains strict SSRF protections with explicit host whitelist validation
+- **User Experience**: Users can now paste URLs directly from the Redfin mobile app share function
+
+## Marketing Pages and Lead Generation (September 2025)
+
+Added comprehensive marketing infrastructure to enhance user acquisition and lead generation:
+
+- **How It Works Page**: Step-by-step explanation of the property analysis process with clear value propositions
+- **Pricing Page**: Tiered pricing structure (Free/Pro/Enterprise) with integrated email signup functionality
+- **About Page**: Company mission, technology features, team expertise, and vision with trust-building metrics
+- **Header Navigation**: Updated to include links to all marketing pages for improved discoverability
+- **Email Capture System**: Complete lead generation infrastructure integrated throughout the user journey
+
+## Email Capture and Lead Generation
+
+Implemented comprehensive email capture system for lead generation:
+
+- **Database Schema**: Added emailSignups table with fields for email, signupSource, and timestamps
+- **API Endpoints**: RESTful endpoints for email signup creation and retrieval
+- **Reusable Component**: Flexible EmailSignup component with customizable styling and messaging
+- **Analysis Flow Integration**: Email capture gate added before users can access property analysis results
+- **Source Tracking**: Tracks signup sources (pricing-page, property-analysis, etc.) for analytics
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -19,10 +128,13 @@ The client is built with React and TypeScript, using a modern component-based ar
 - **State Management**: TanStack Query for server state management and caching
 - **Build Tool**: Vite for fast development and optimized builds
 
-The frontend follows a page-based routing structure with three main views:
-- Home page for URL input
-- Processing page showing real-time analysis progress
-- Report page displaying comprehensive results
+The frontend follows a page-based routing structure with comprehensive views:
+- Home page for URL input and property analysis initiation
+- Processing page showing real-time analysis progress with email capture gate
+- Report page displaying comprehensive analysis results
+- How It Works page explaining the 3-step analysis process
+- Pricing page with tiered plans and integrated email signup
+- About page showcasing company mission and technology
 
 ## Backend Architecture
 
@@ -44,7 +156,7 @@ The application uses a hybrid storage approach:
 - **Development Storage**: In-memory storage implementation for rapid development
 - **Connection**: Neon Database serverless PostgreSQL for production
 
-The schema includes tables for users and analysis reports, with JSONB columns for flexible storage of complex data structures like renovation projects and comparable properties.
+The schema includes tables for users, analysis reports, and email signups, with JSONB columns for flexible storage of complex data structures like renovation projects and comparable properties. The email signups table tracks lead generation with signup source attribution for marketing analytics.
 
 ## Authentication and Authorization
 
@@ -68,7 +180,7 @@ The AI system considers current market trends, property characteristics, and fin
 
 - **Database**: Neon Database (PostgreSQL serverless)
 - **AI Services**: OpenAI API for property analysis and renovation recommendations
-- **Web Scraping**: Property data extraction from Redfin (currently mocked for development)
+- **Web Scraping**: Property data extraction from Redfin (redfin.com and redf.in mobile deep links)
 - **UI Components**: Radix UI primitives for accessible component foundation
 - **Styling**: Tailwind CSS for utility-first styling
 - **State Management**: TanStack Query for server state and caching

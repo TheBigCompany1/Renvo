@@ -14,15 +14,15 @@ export default function Header() {
             </div>
           </Link>
           <nav className="hidden md:flex space-x-8">
-            <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/how-it-works" className="text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-how-it-works">
               How it Works
-            </a>
-            <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
+            </Link>
+            <Link href="/pricing" className="text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-pricing">
               Pricing
-            </a>
-            <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
+            </Link>
+            <Link href="/about" className="text-muted-foreground hover:text-foreground transition-colors" data-testid="nav-about">
               About
-            </a>
+            </Link>
           </nav>
           <button className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
             Get Started
