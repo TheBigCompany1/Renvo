@@ -282,27 +282,38 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
       extractedData = await page.evaluate(() => {
         // ============================================================
         // PRODUCTION SCRAPER v22 - VERBATIM FROM OCTOBER 6TH BUILD
+        // Using arrow functions to avoid esbuild __name transformation
         // ============================================================
         console.log("[Scrape.js] Starting extractRedfinData (v22 - Resilient)...");
         
         // Helper to safely parse a string into an integer.
-        function safeParseInt(value) {
+        const safeParseInt = (value) => {
           if (value === null || value === undefined) return null;
           const cleaned = String(value).replace(/[^0-9]/g, '');
           return cleaned ? parseInt(cleaned, 10) : null;
-        }
+        };
         
         // Helper to safely parse a string into a float.
-        function safeParseFloat(value) {
+        const safeParseFloat = (value) => {
           if (value === null || value === undefined) return null;
           const cleaned = String(value).replace(/[^0-9.]/g, '');
           return cleaned ? parseFloat(cleaned) : null;
-        }
+        };
         
-        let data = {
-          address: null, price: null, beds: null, baths: null, sqft: null,
-          yearBuilt: null, lotSize: null, homeType: null, description: null, images: [],
-          source: 'redfin', url: window.location.href, timestamp: new Date().toISOString(),
+        const data = {
+          address: null,
+          price: null,
+          beds: null,
+          baths: null,
+          sqft: null,
+          yearBuilt: null,
+          lotSize: null,
+          homeType: null,
+          description: null,
+          images: [],
+          source: 'redfin',
+          url: window.location.href,
+          timestamp: new Date().toISOString(),
           error: null
         };
         
@@ -311,9 +322,9 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
           const allElements = Array.from(document.querySelectorAll('.key-detail-row, .table-row, .entryItem, .fact-group, .HomeInfo-property-facts > div'));
           for (const el of allElements) {
             const labelEl = el.querySelector('.label, .table-label, .title, .entryItem--title, .fact-label');
-            if (labelEl && labelEl.textContent.toLowerCase().includes(labelText)) {
+            if (labelEl && labelEl.textContent && labelEl.textContent.toLowerCase().includes(labelText)) {
               const valueEl = el.querySelector('.content, .table-value, .value, .entryItem--value, .fact-value');
-              if (valueEl) return valueEl.textContent.trim();
+              if (valueEl && valueEl.textContent) return valueEl.textContent.trim();
             }
           }
           return null;
