@@ -4,6 +4,11 @@ import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
+
+// ESM compatibility - __dirname is not available in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Apply stealth plugin to avoid bot detection
 puppeteer.use(StealthPlugin());
