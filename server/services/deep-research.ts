@@ -629,3 +629,211 @@ Provide your findings in JSON format at the end of your response:
     throw new Error(`All research methods failed: ${(error as Error).message}`);
   }
 }
+
+// New comprehensive property data function that replaces scraping
+export interface AIPropertyData {
+  address: string;
+  price: number;
+  beds: number;
+  baths: number;
+  sqft: number;
+  yearBuilt?: number;
+  lotSize?: string;
+  propertyType?: string;
+  description?: string;
+  images: string[];
+  dataSource: 'ai_research';
+  confidence: 'high' | 'medium' | 'low';
+  sources: string[];
+}
+
+export async function getPropertyDataFromAddress(address: string): Promise<AIPropertyData> {
+  console.log('\n========================================');
+  console.log('🔍 AI PROPERTY RESEARCH - Getting comprehensive data');
+  console.log('========================================');
+  console.log(`📍 Property: ${address}`);
+  console.log('----------------------------------------\n');
+
+  const searchPrompt = `You are a real estate data researcher. I need ACCURATE, REAL property data for this address:
+
+${address}
+
+Search real estate websites (Redfin, Zillow, Realtor.com, public records) and provide:
+
+1. PROPERTY DETAILS (REQUIRED - search carefully for each):
+   - Current listing price OR most recent sale price (REQUIRED - find the actual price)
+   - Number of bedrooms (REQUIRED)
+   - Number of bathrooms (REQUIRED)
+   - Square footage (REQUIRED)
+   - Year built
+   - Lot size
+   - Property type (Single Family, Condo, Townhouse, etc.)
+   - Property description
+
+2. PROPERTY IMAGES (IMPORTANT):
+   - Find 3-5 actual property listing image URLs from Redfin, Zillow, or Realtor
+   - These should be direct image URLs (ending in .jpg, .png, or containing image parameters)
+   - Look for URLs like: ssl.cdn-redfin.com, photos.zillowstatic.com, etc.
+   - If you cannot find listing images, note that
+
+IMPORTANT:
+- Only provide REAL data you find from your search
+- Do NOT make up or estimate values
+- If you cannot find a piece of data, say "not found"
+- The price is CRITICAL - search multiple sources if needed
+
+Respond with this EXACT JSON format:
+\`\`\`json
+{
+  "found": true,
+  "address": "Full formatted address",
+  "price": 850000,
+  "priceSource": "Redfin listing" or "Last sold price" or "Zillow estimate",
+  "beds": 3,
+  "baths": 2,
+  "sqft": 1500,
+  "yearBuilt": 1960,
+  "lotSize": "6,500 sqft",
+  "propertyType": "Single Family",
+  "description": "Property description from listing...",
+  "images": [
+    "https://ssl.cdn-redfin.com/photo/...",
+    "https://photos.zillowstatic.com/..."
+  ],
+  "sources": ["redfin.com", "zillow.com"],
+  "confidence": "high" or "medium" or "low",
+  "notes": "Any relevant notes about data accuracy"
+}
+\`\`\`
+
+If you cannot find the property at all, respond with:
+\`\`\`json
+{
+  "found": false,
+  "error": "Reason why property was not found"
+}
+\`\`\``;
+
+  try {
+    console.log('🌐 Searching with Gemini + Google Search grounding...');
+    const startTime = Date.now();
+    
+    const response = await client.models.generateContent({
+      model: 'gemini-3.0-flash',
+      contents: [{ role: 'user', parts: [{ text: searchPrompt }] }],
+      config: {
+        tools: [{ googleSearch: {} }]
+      }
+    });
+    
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`⏱️ Search completed in ${elapsed}s`);
+    
+    // Extract text from response
+    let responseText = '';
+    if (typeof response.text === 'string') {
+      responseText = response.text;
+    } else if ((response as any).response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      responseText = (response as any).response.candidates[0].content.parts[0].text;
+    } else if ((response as any).candidates?.[0]?.content?.parts?.[0]?.text) {
+      responseText = (response as any).candidates[0].content.parts[0].text;
+    }
+    
+    console.log(`📝 Response length: ${responseText.length} chars`);
+    
+    // Log grounding sources
+    const groundingMetadata = (response as any).candidates?.[0]?.groundingMetadata;
+    if (groundingMetadata?.groundingChunks) {
+      console.log('🔗 Sources found:');
+      const imageUrls: string[] = [];
+      groundingMetadata.groundingChunks.forEach((chunk: any, i: number) => {
+        if (chunk.web?.uri) {
+          console.log(`  ${i + 1}. ${chunk.web.uri}`);
+          // Try to extract images from grounding metadata
+          if (chunk.web.uri.match(/\.(jpg|jpeg|png|webp)/i) || 
+              chunk.web.uri.includes('photo') || 
+              chunk.web.uri.includes('image')) {
+            imageUrls.push(chunk.web.uri);
+          }
+        }
+      });
+      if (imageUrls.length > 0) {
+        console.log(`📸 Found ${imageUrls.length} potential image URLs from grounding`);
+      }
+    }
+    
+    // Parse JSON response
+    let parsed: any = null;
+    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[1]);
+      } catch (e) {
+        console.log('Failed to parse fenced JSON, trying unfenced...');
+      }
+    }
+    
+    if (!parsed) {
+      const jsonObjMatch = responseText.match(/\{[\s\S]*"found"[\s\S]*\}/);
+      if (jsonObjMatch) {
+        try {
+          parsed = JSON.parse(jsonObjMatch[0]);
+        } catch (e) {
+          console.log('Failed to parse unfenced JSON');
+        }
+      }
+    }
+    
+    if (!parsed || !parsed.found) {
+      throw new Error(parsed?.error || 'Could not find property data');
+    }
+    
+    // Validate required fields
+    if (!parsed.price || parsed.price <= 0) {
+      throw new Error('Could not determine property price from search results');
+    }
+    
+    // Extract and validate images
+    let images: string[] = [];
+    if (parsed.images && Array.isArray(parsed.images)) {
+      images = parsed.images.filter((url: string) => {
+        return url && typeof url === 'string' && 
+               (url.startsWith('http://') || url.startsWith('https://'));
+      });
+    }
+    
+    console.log('\n✅ PROPERTY DATA EXTRACTED:');
+    console.log('========================================');
+    console.log(`🏠 Address: ${parsed.address}`);
+    console.log(`💰 Price: $${parsed.price?.toLocaleString()} (${parsed.priceSource || 'source unknown'})`);
+    console.log(`🛏️ Beds: ${parsed.beds}`);
+    console.log(`🛁 Baths: ${parsed.baths}`);
+    console.log(`📐 Sqft: ${parsed.sqft?.toLocaleString()}`);
+    console.log(`📅 Year Built: ${parsed.yearBuilt || 'N/A'}`);
+    console.log(`🏷️ Type: ${parsed.propertyType || 'N/A'}`);
+    console.log(`📸 Images: ${images.length} found`);
+    console.log(`📊 Confidence: ${parsed.confidence || 'medium'}`);
+    console.log(`🔗 Sources: ${parsed.sources?.join(', ') || 'N/A'}`);
+    console.log('========================================\n');
+    
+    return {
+      address: parsed.address || address,
+      price: parsed.price,
+      beds: parsed.beds || 0,
+      baths: parsed.baths || 0,
+      sqft: parsed.sqft || 0,
+      yearBuilt: parsed.yearBuilt,
+      lotSize: parsed.lotSize,
+      propertyType: parsed.propertyType,
+      description: parsed.description,
+      images: images,
+      dataSource: 'ai_research',
+      confidence: parsed.confidence || 'medium',
+      sources: parsed.sources || []
+    };
+    
+  } catch (error) {
+    console.error('❌ AI property research failed:', error);
+    throw new Error(`AI_RESEARCH_FAILED: ${(error as Error).message}`);
+  }
+}

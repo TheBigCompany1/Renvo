@@ -246,16 +246,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
         } catch (scraperError) {
-          // Scraper failed - fail gracefully with clear guidance
-          console.error('Redfin scraper failed:', scraperError);
-          const scraperErrorMessage = (scraperError as Error).message;
+          // Scraper failed - try AI research as fallback
+          console.error('Redfin scraper failed, trying AI research fallback:', scraperError);
           
-          await storage.updateAnalysisReportData(reportId, { 
-            status: 'failed',
-            failureReason: `We couldn't access this Redfin listing. ${scraperErrorMessage.includes('403') || scraperErrorMessage.includes('blocked') ? 'The page may be temporarily unavailable.' : 'Please check the URL and try again, or enter the property address directly.'}`,
-            dataSource: undefined
-          });
-          throw scraperError;
+          // Try to extract address from the Redfin URL for AI research
+          try {
+            const { getPropertyDataFromAddress } = await import('./services/deep-research');
+            
+            // Extract address from Redfin URL path (format: /STATE/City/123-Street-Name-12345/home/id)
+            const urlPath = new URL(report.propertyUrl).pathname;
+            const pathParts = urlPath.split('/').filter(Boolean);
+            
+            if (pathParts.length >= 3) {
+              const state = pathParts[0];
+              const city = pathParts[1].replace(/-/g, ' ');
+              const streetPart = pathParts[2].replace(/-/g, ' ');
+              const addressFromUrl = `${streetPart}, ${city}, ${state}`;
+              
+              console.log(`🔄 Attempting AI research for: ${addressFromUrl}`);
+              const aiData = await getPropertyDataFromAddress(addressFromUrl);
+              
+              propertyData = {
+                address: aiData.address,
+                price: aiData.price,
+                beds: aiData.beds,
+                baths: aiData.baths,
+                sqft: aiData.sqft,
+                yearBuilt: aiData.yearBuilt,
+                lotSize: aiData.lotSize,
+                description: aiData.description || aiData.propertyType,
+                images: aiData.images
+              };
+              
+              console.log('✅ AI research succeeded as fallback');
+              await storage.updateAnalysisReportData(reportId, { 
+                dataSource: 'ai_research'
+              });
+            } else {
+              throw new Error('Could not parse address from URL');
+            }
+          } catch (aiError) {
+            // Both scraper and AI research failed
+            console.error('AI research fallback also failed:', aiError);
+            const scraperErrorMessage = (scraperError as Error).message;
+            
+            await storage.updateAnalysisReportData(reportId, { 
+              status: 'failed',
+              failureReason: `We couldn't access this property data. ${scraperErrorMessage.includes('blocked') || scraperErrorMessage.includes('Human Verification') ? 'The site is blocking automated access. Please try entering the property address directly.' : 'Please check the URL and try again.'}`,
+              dataSource: undefined
+            });
+            throw scraperError;
+          }
         }
       } else if (report.inputType === 'address' && report.propertyAddress) {
         // Step 1b: NEW ARCHITECTURE - Find Redfin URL → Scrape → Analyze
@@ -299,24 +340,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             
           } catch (scraperError) {
-            // Scraper failed even with the discovered URL
-            console.error('Redfin scraper failed for discovered URL:', scraperError);
+            // Scraper failed - fall back to AI research
+            console.log('❌ Scraper failed for discovered URL, falling back to AI research');
+            console.error('Scraper error:', scraperError);
+            
+            // Use AI research as fallback
+            const { getPropertyDataFromAddress } = await import('./services/deep-research');
+            console.log(`🔄 Using AI research for: ${report.propertyAddress}`);
+            
+            const aiData = await getPropertyDataFromAddress(report.propertyAddress!);
+            
+            propertyData = {
+              address: aiData.address,
+              price: aiData.price,
+              beds: aiData.beds,
+              baths: aiData.baths,
+              sqft: aiData.sqft,
+              yearBuilt: aiData.yearBuilt,
+              lotSize: aiData.lotSize,
+              description: aiData.description || aiData.propertyType,
+              images: aiData.images
+            };
+            
+            console.log('✅ AI research succeeded as fallback');
             await storage.updateAnalysisReportData(reportId, { 
-              status: 'failed',
-              failureReason: "We couldn't find this property when searching the web. Please paste the Redfin listing URL directly or try a different address.",
-              dataSource: undefined
+              propertyUrl: urlResult.redfinUrl,
+              dataSource: 'ai_research'
             });
-            throw new Error("We couldn't find this property when searching the web. Please paste the Redfin listing URL directly or try a different address.");
           }
         } else {
-          // Could not find a Redfin URL - fail gracefully with clear guidance
-          console.log('❌ Could not find Redfin URL for address');
+          // Could not find a Redfin URL - use AI research directly
+          console.log('❌ Could not find Redfin URL, using AI research directly');
+          
+          const { getPropertyDataFromAddress } = await import('./services/deep-research');
+          console.log(`🔄 Using AI research for: ${report.propertyAddress}`);
+          
+          const aiData = await getPropertyDataFromAddress(report.propertyAddress!);
+          
+          propertyData = {
+            address: aiData.address,
+            price: aiData.price,
+            beds: aiData.beds,
+            baths: aiData.baths,
+            sqft: aiData.sqft,
+            yearBuilt: aiData.yearBuilt,
+            lotSize: aiData.lotSize,
+            description: aiData.description || aiData.propertyType,
+            images: aiData.images
+          };
+          
+          console.log('✅ AI research succeeded');
           await storage.updateAnalysisReportData(reportId, { 
-            status: 'failed',
-            failureReason: "We couldn't find this property when searching the web. Please paste the Redfin listing URL directly or try a different address.",
-            dataSource: undefined
+            dataSource: 'ai_research'
           });
-          throw new Error("We couldn't find this property when searching the web. Please paste the Redfin listing URL directly or try a different address.");
         }
         
         console.log('✅ Address-to-URL workflow completed successfully');
