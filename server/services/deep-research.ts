@@ -388,7 +388,7 @@ Respond with ONLY this JSON format:
     
     const response = await client.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{ role: 'user', parts: [{ text: searchPrompt }] }],
+      contents: searchPrompt,
       config: {
         tools: [{ googleSearch: {} }]
       }
@@ -719,8 +719,8 @@ If you cannot find the property at all, respond with:
     const startTime = Date.now();
     
     const response = await client.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: [{ role: 'user', parts: [{ text: searchPrompt }] }],
+      model: 'gemini-3-flash-preview',
+      contents: searchPrompt,
       config: {
         tools: [{ googleSearch: {} }]
       }
