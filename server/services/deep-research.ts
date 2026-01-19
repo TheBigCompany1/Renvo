@@ -719,7 +719,7 @@ If you cannot find the property at all, respond with:
     const startTime = Date.now();
     
     const response = await client.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.0-flash',
       contents: [{ role: 'user', parts: [{ text: searchPrompt }] }],
       config: {
         tools: [{ googleSearch: {} }]
@@ -729,17 +729,42 @@ If you cannot find the property at all, respond with:
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`⏱️ Search completed in ${elapsed}s`);
     
-    // Extract text from response
+    // Debug: Log full response structure
+    console.log('📋 Response keys:', Object.keys(response || {}));
+    
+    // Extract text from response - try multiple access patterns
     let responseText = '';
-    if (typeof response.text === 'string') {
+    
+    // Try direct text property first
+    if (typeof response.text === 'string' && response.text.length > 0) {
       responseText = response.text;
-    } else if ((response as any).response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      console.log('✓ Got text from response.text');
+    } 
+    // Try response.response.candidates path
+    else if ((response as any).response?.candidates?.[0]?.content?.parts?.[0]?.text) {
       responseText = (response as any).response.candidates[0].content.parts[0].text;
-    } else if ((response as any).candidates?.[0]?.content?.parts?.[0]?.text) {
+      console.log('✓ Got text from response.response.candidates');
+    } 
+    // Try direct candidates path
+    else if ((response as any).candidates?.[0]?.content?.parts?.[0]?.text) {
       responseText = (response as any).candidates[0].content.parts[0].text;
+      console.log('✓ Got text from response.candidates');
+    }
+    // Try text() method if it exists
+    else if (typeof (response as any).text === 'function') {
+      responseText = await (response as any).text();
+      console.log('✓ Got text from response.text()');
     }
     
     console.log(`📝 Response length: ${responseText.length} chars`);
+    
+    // Log first 500 chars if we have content
+    if (responseText.length > 0) {
+      console.log('📄 Response preview:', responseText.substring(0, 500));
+    } else {
+      console.log('⚠️ Response is empty, logging raw response:');
+      console.log(JSON.stringify(response, null, 2).substring(0, 1000));
+    }
     
     // Log grounding sources
     const groundingMetadata = (response as any).candidates?.[0]?.groundingMetadata;
