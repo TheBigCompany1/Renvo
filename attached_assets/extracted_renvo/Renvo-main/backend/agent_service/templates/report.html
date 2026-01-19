@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Renovation ROI Report - {{ report.property.address if report.property else 'Analyzing...' }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .report-header { background-color: #2a9d8f; }
+        .new-report-button { background-color: #f4a261; }
+        .renovation-card { border-left: 5px solid #e9c46a; }
+        .roi-badge { background-color: #f4a261; }
+        .stat-box .value { color: #2a9d8f; }
+        .investment-thesis { border-left: 5px solid #2a9d8f; }
+        .pro-link {
+            display: block;
+            background-color: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            color: #343a40;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            border: 1px solid #dee2e6;
+        }
+        .pro-link:hover {
+            background-color: #e9ecef;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .progress-bar-container {
+            width: 80%;
+            max-width: 600px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            margin: 2rem auto;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .progress-bar {
+            height: 16px;
+            background-color: #f4a261;
+            width: 0%;
+            border-radius: 10px;
+            animation: progress-animation 45s linear infinite;
+            transition: width 0.5s ease-out;
+        }
+        @keyframes progress-animation {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app-container" class="container mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
+
+        <!-- Main Report Content (hidden by default, shown by JS) -->
+        <div id="report-content" style="display: none;">
+            <!-- Header -->
+            <header class="report-header text-white p-6 rounded-lg shadow-lg mb-8 relative">
+                <h1 class="text-3xl font-bold mb-2">Renovation ROI Report</h1>
+                <p><strong>Property:</strong> {{ report.property.address }}</p>
+                <p class="text-sm opacity-90"><strong>Report ID:</strong> {{ report.report_id }} | <strong>Generated:</strong> {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                <a href="https://renvo.ai" class="new-report-button absolute top-6 right-6 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-opacity-90 transition-transform duration-200 hover:scale-105">Generate New Report</a>
+            </header>
+
+            <!-- Property Overview -->
+            <section class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-6">Property Overview</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">${{ "{:,.0f}".format(report.property.price) if report.property.price is number else 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">List Price</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.beds or 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Beds</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.baths or 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Baths</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ "{:,.0f}".format(report.property.sqft) if report.property.sqft is number else 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Sq. Ft.</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.yearBuilt or 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Year Built</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ report.property.lotSize or 'N/A' }}</div><div class="label text-xs uppercase text-gray-500">Lot Size</div></div>
+                    </div>
+                    <div class="relative w-full overflow-hidden rounded-lg shadow-md">
+                        <div id="image-carousel" class="flex transition-transform duration-500 ease-in-out">
+                            {% if report.property.images %}
+                                {% for image_url in report.property.images %}
+                                <div class="flex-none w-full">
+                                    <img src="{{ image_url }}" alt="Property Image {{ loop.index }}" class="w-full h-64 object-cover">
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="flex-none w-full">
+                                    <img src="https://placehold.co/600x400/e2e8f0/e2e8f0?text=No+Image" alt="No Image Available" class="w-full h-64 object-cover">
+                                </div>
+                            {% endif %}
+                        </div>
+                        <button id="prevBtn" class="absolute top-1/2 left-2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full">‹</button>
+                        <button id="nextBtn" class="absolute top-1/2 right-2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full">›</button>
+                    </div>
+                </div>
+                {% if report.property.description %}
+                <div class="mt-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">Property Description</h3>
+                    <p class="text-gray-600 text-sm">{{ report.property.description }}</p>
+                </div>
+                {% endif %}
+            </section>
+
+            <!-- Investment Thesis -->
+            {% if report.detailed_report and report.detailed_report.renovation_ideas and report.detailed_report.renovation_ideas | length > 0 %}
+            <section class="bg-white p-6 rounded-lg shadow-lg mb-8 investment-thesis">
+                <h2 class="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-4">Investment Thesis</h2>
+                <div class="flex flex-col md:flex-row gap-6 items-center">
+                    <div class="md:w-2/3">
+                        <!-- FIX: Content is now generated by JS to avoid linter errors -->
+                        <p id="investment-thesis-text" class="text-gray-700"></p>
+                    </div>
+                    <div class="md:w-1/3 text-center">
+                        <div class="text-lg font-bold text-gray-800">Opportunity Score</div>
+                        <div class="relative w-32 h-16 mx-auto">
+                            <!-- FIX: SVG is now populated by JS -->
+                            <svg viewBox="0 0 100 50" class="w-full h-full">
+                                <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#e9ecef" stroke-width="12" />
+                                <path id="gauge-path" d="" fill="none" stroke="" stroke-width="12" />
+                            </svg>
+                            <div id="gauge-text" class="absolute bottom-0 w-full text-xl font-bold"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Renovation Analysis & ROI Charts -->
+            <section class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-6">Renovation Analysis & ROI</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="chart-container"><canvas id="roiChart"></canvas></div>
+                    <div class="chart-container"><canvas id="costValueChart"></canvas></div>
+                </div>
+            </section>
+
+            <!-- Renovation Opportunities -->
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Top Renovation Opportunities</h2>
+            
+            {% if report.detailed_report and report.detailed_report.renovation_ideas %}
+                {% for idea in report.detailed_report.renovation_ideas %}
+                <section class="bg-white p-6 rounded-lg shadow-lg mb-8 renovation-card">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-xl font-bold text-gray-800">{{ loop.index }}. {{ idea.name }}</h3>
+                        <div class="roi-badge text-white font-bold py-2 px-5 rounded-full text-lg">{{ idea.adjusted_roi | round(1) }}% ROI</div>
+                    </div>
+                    <p class="text-gray-600 mb-6">{{ idea.description }}</p>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">${{ "{:,.0f}".format(idea.estimated_cost.medium) }}</div><div class="label text-xs uppercase text-gray-500">Est. Cost</div></div>
+                        
+                        {% set added_sqft = idea.new_total_sqft - report.property.sqft if idea.new_total_sqft and report.property.sqft else 0 %}
+                        {% if added_sqft > 0 and idea.new_price_per_sqft %}
+                            {% set true_value_add = added_sqft * idea.new_price_per_sqft %}
+                        {% else %}
+                            {% set true_value_add = idea.estimated_value_add.medium %}
+                        {% endif %}
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">${{ "{:,.0f}".format(true_value_add) }}</div><div class="label text-xs uppercase text-gray-500">Value Add</div></div>
+                        
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center">
+                            <div class="value text-xl font-semibold">${{ "{:,.0f}".format(idea.after_repair_value) }}</div>
+                            <div class="label text-xs uppercase text-gray-500">Est. Sale Price</div>
+                            <div class="text-xs text-gray-400 mt-1">{{ "{:,.0f}".format(idea.new_total_sqft) }} sqft &times; ${{ "{:,.0f}".format(idea.new_price_per_sqft) }}/sqft</div>
+                        </div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ idea.timeline }}</div><div class="label text-xs uppercase text-gray-500">Timeline</div></div>
+                        <div class="stat-box bg-gray-100 p-4 rounded-lg text-center"><div class="value text-xl font-semibold">{{ idea.feasibility }}</div><div class="label text-xs uppercase text-gray-500">Feasibility</div></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-8">
+                        <div>
+                            <h4 class="font-semibold text-gray-700 border-b pb-2 mb-3">Project Roadmap</h4>
+                            <ol class="list-decimal list-inside text-gray-600 space-y-2 text-sm">
+                                {% for step in idea.roadmap_steps %}
+                                <li>{{ step }}</li>
+                                {% else %}
+                                <li>No roadmap steps provided.</li>
+                                {% endfor %}
+                            </ol>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 border-b pb-2 mb-3">Potential Risks</h4>
+                            <ul class="list-disc list-inside text-gray-600 space-y-2 text-sm">
+                                {% for risk in idea.potential_risks %}
+                                <li>{{ risk }}</li>
+                                {% else %}
+                                <li>No risks identified.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 border-b pb-2 mb-3">Recommended Pros</h4>
+                            <div class="space-y-2">
+                                {% if report.detailed_report.recommended_contractors %}
+                                    {% for pro in report.detailed_report.recommended_contractors %}
+                                    <a href="{{ pro.url if pro.url else '#' }}" target="_blank" rel="noopener noreferrer" class="pro-link">{{ pro.name }} ({{pro.specialty}})</a>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-sm text-gray-500">No contractors found.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                {% endfor %}
+            {% else %}
+                <div class="bg-white p-6 rounded-lg shadow-lg mb-8 renovation-card">
+                    <p>No renovation opportunities were generated for this property.</p>
+                </div>
+            {% endif %}
+            
+            <!-- Comparables Table -->
+            {% if report.detailed_report and report.detailed_report.comparable_properties %}
+            <section class="bg-white p-6 rounded-lg shadow-lg">
+                <h3 class="text-xl font-bold text-gray-800 border-b-2 border-gray-200 pb-3 mb-4">Local Market Comparables</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th scope="col" class="py-3 px-6">Address</th>
+                                <th scope="col" class="py-3 px-6">Sale Price</th>
+                                <th scope="col" class="py-3 px-6">Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for comp in report.detailed_report.comparable_properties %}
+                            <tr class="bg-white border-b">
+                                <td class="py-4 px-6 font-medium text-gray-900"><a href="{{ comp.url }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">{{ comp.address }}</a></td>
+                                <td class="py-4 px-6">${{ "{:,.0f}".format(comp.sale_price) }}</td>
+                                <td class="py-4 px-6">{{ comp.brief_summary }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Disclaimer -->
+            <footer class="text-center mt-10 py-6 border-t text-xs text-gray-500">
+                Disclaimer: This report is generated based on available public data and AI analysis. Estimates are for informational purposes only. Verify all information with qualified professionals before making financial decisions.
+            </footer>
+        </div>
+
+        <!-- Processing / Loading State -->
+        <div id="processing-state" class="text-center py-20" style="display: none;">
+            <div class="bg-white p-8 rounded-lg shadow-xl max-w-2xl mx-auto">
+                <h2 class="text-3xl font-bold text-gray-800 mb-4">Analyzing Property</h2>
+                <p class="text-gray-600 mb-8">Our AI agents are hard at work creating your detailed report. This may take up to a minute.</p>
+                <div class="progress-bar-container">
+                    <div class="progress-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="text-center py-20" style="display: none;">
+             <div class="bg-white p-8 rounded-lg shadow-xl max-w-2xl mx-auto">
+                <h2 class="text-3xl font-bold text-red-600 mb-4">Analysis Failed</h2>
+                <p class="text-gray-600 mb-6">We encountered an error while generating the report.</p>
+                <p id="error-message" class="text-sm text-gray-500 mt-4 p-3 bg-red-50 rounded-md border border-red-200"></p>
+            </div>
+        </div>
+    </div>
+
+    <script id="report-data" type="application/json">
+        {{ report | tojson | safe }}
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const POLLING_INTERVAL_MS = 3000;
+            let pollingInterval;
+
+            const reportDataElement = document.getElementById('report-data');
+            const processingContainer = document.getElementById('processing-state');
+            const reportContainer = document.getElementById('report-content');
+            const errorContainer = document.getElementById('error-state');
+            const errorMessageElement = document.getElementById('error-message');
+
+            let report;
+            try {
+                if (!reportDataElement || !reportDataElement.textContent.trim()) {
+                    throw new Error("Report data script tag is missing or empty.");
+                }
+                report = JSON.parse(reportDataElement.textContent);
+                if (!report) {
+                    throw new Error("Parsed report data is null or invalid.");
+                }
+            } catch (e) {
+                console.error("Failed to load report data:", e);
+                processingContainer.style.display = 'none';
+                reportContainer.style.display = 'none';
+                errorMessageElement.textContent = "A critical error occurred while loading the report page. The data may be corrupted.";
+                errorContainer.style.display = 'block';
+                return;
+            }
+
+            const reportId = report.report_id;
+            let currentStatus = report.status;
+            const errorMessage = report.error || '';
+
+            function checkStatus() {
+                fetch(`/api/report/status?reportId=${reportId}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'completed') {
+                            clearInterval(pollingInterval);
+                            window.location.reload();
+                        } else if (data.status === 'failed') {
+                            clearInterval(pollingInterval);
+                            currentStatus = 'failed';
+                            errorMessageElement.textContent = data.error || 'An unknown error occurred.';
+                            updateUI();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Polling error:', error);
+                        clearInterval(pollingInterval);
+                        currentStatus = 'failed';
+                        errorMessageElement.textContent = 'Could not retrieve report status.';
+                        updateUI();
+                    });
+            }
+
+            function updateUI() {
+                if (currentStatus === 'processing') {
+                    processingContainer.style.display = 'block';
+                    reportContainer.style.display = 'none';
+                    errorContainer.style.display = 'none';
+                    pollingInterval = setInterval(checkStatus, POLLING_INTERVAL_MS);
+                } else if (currentStatus === 'failed') {
+                    processingContainer.style.display = 'none';
+                    reportContainer.style.display = 'none';
+                    errorContainer.style.display = 'block';
+                    if(errorMessage) errorMessageElement.textContent = errorMessage;
+                } else { // 'completed'
+                    processingContainer.style.display = 'none';
+                    reportContainer.style.display = 'block';
+                    errorContainer.style.display = 'none';
+                    renderGaugeAndThesis();
+                    renderCharts();
+                }
+            }
+            
+            function renderGaugeAndThesis() {
+                const ideas = report?.detailed_report?.renovation_ideas;
+                if (!ideas || ideas.length === 0) return;
+
+                const topIdea = ideas[0];
+                const topRoi = topIdea.adjusted_roi;
+
+                let gauge_path, gauge_color, gauge_text;
+
+                if (topRoi >= 75) {
+                    gauge_path = "M 10 50 A 40 40 0 0 1 80 14";
+                    gauge_color = "#2a9d8f";
+                    gauge_text = "Excellent";
+                } else if (topRoi >= 50) {
+                    gauge_path = "M 10 50 A 40 40 0 0 1 50 10";
+                    gauge_color = "#e9c46a";
+                    gauge_text = "Good";
+                } else {
+                    gauge_path = "M 10 50 A 40 40 0 0 1 25 22";
+                    gauge_color = "#f4a261";
+                    gauge_text = "Average";
+                }
+
+                const gaugePathElement = document.getElementById('gauge-path');
+                const gaugeTextElement = document.getElementById('gauge-text');
+                const thesisTextElement = document.getElementById('investment-thesis-text');
+
+                if (gaugePathElement) {
+                    gaugePathElement.setAttribute('d', gauge_path);
+                    gaugePathElement.setAttribute('stroke', gauge_color);
+                }
+                if (gaugeTextElement) {
+                    gaugeTextElement.textContent = gauge_text;
+                    gaugeTextElement.style.color = gauge_color;
+                }
+                if (thesisTextElement) {
+                    thesisTextElement.innerHTML = `The top recommendation is to <strong>${topIdea.name}</strong>. This project scores as an <strong>${gauge_text}&nbsp;Opportunity</strong> due to its high potential ROI of ${topIdea.adjusted_roi.toFixed(1)}% and strong market demand. Our analysis of comparable properties confirms a significant value add, making this the most strategic investment for this property.`;
+                }
+            }
+
+            function formatLabel(str, max_width) {
+                if (!str || str.length <= max_width) return str;
+                let parts = [];
+                let current_line = '';
+                let words = str.split(' ');
+                for (let word of words) {
+                    if ((current_line + word).length > max_width && current_line.length > 0) {
+                        parts.push(current_line.trim());
+                        current_line = '';
+                    }
+                    current_line += word + ' ';
+                }
+                parts.push(current_line.trim());
+                return parts;
+            }
+
+            function renderCharts() {
+                const renovationIdeas = report?.detailed_report?.renovation_ideas || [];
+                if (renovationIdeas.length === 0) return;
+        
+                const roiCtx = document.getElementById('roiChart')?.getContext('2d');
+                if (roiCtx) {
+                    new Chart(roiCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: renovationIdeas.map(idea => formatLabel(idea.name, 20)),
+                            datasets: [{ label: 'Estimated ROI (%)', data: renovationIdeas.map(idea => idea.adjusted_roi || idea.roi), backgroundColor: '#f4a261' }]
+                        },
+                        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: 'ROI Comparison' } } }
+                    });
+                }
+        
+                const costValueCtx = document.getElementById('costValueChart')?.getContext('2d');
+                if (costValueCtx) {
+                    new Chart(costValueCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: renovationIdeas.map(idea => formatLabel(idea.name, 20)),
+                            datasets: [
+                                { label: 'Est. Cost ($)', data: renovationIdeas.map(idea => idea.estimated_cost.medium), backgroundColor: '#e9c46a' },
+                                { label: 'Value Add ($)', data: renovationIdeas.map(idea => {
+                                    const added_sqft = (idea.new_total_sqft || 0) - (report.property.sqft || 0);
+                                    if (added_sqft > 0 && idea.new_price_per_sqft) {
+                                        return added_sqft * idea.new_price_per_sqft;
+                                    }
+                                    return idea.estimated_value_add.medium;
+                                }), backgroundColor: '#2a9d8f' }
+                            ]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, title: { display: true, text: 'Cost vs. Value Added' } } }
+                    });
+                }
+            }
+
+            updateUI();
+        });
+    </script>
+    <script>
+        // --- THIS SCRIPT CONTROLS THE NEW IMAGE CAROUSEL ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // This is the existing main script, we are adding the carousel logic inside it.
+            const reportDataElement = document.getElementById('report-data');
+            if (reportDataElement) { // Ensures this only runs on the main report page
+                
+                // This function should already exist in your script. We're adding a call inside it.
+                function updateUI() {
+                    let report;
+                    try {
+                        report = JSON.parse(reportDataElement.textContent);
+                    } catch (e) {
+                        // This part of your script handles errors, no changes needed here.
+                        return;
+                    }
+    
+                    const currentStatus = report.status;
+    
+                    if (currentStatus === 'completed') {
+                        // ... (your existing code for showing the report)
+                        initializeCarousel(); // <-- ADD THIS LINE to your existing function
+                    } else {
+                        // ... (your existing code for processing/failed states)
+                    }
+                }
+    
+                // This is the new function to add for the carousel logic.
+                function initializeCarousel() {
+                    const carousel = document.getElementById('image-carousel');
+                    if (!carousel) return;
+    
+                    const prevBtn = document.getElementById('prevBtn');
+                    const nextBtn = document.getElementById('nextBtn');
+                    const images = carousel.children;
+                    let currentIndex = 0;
+    
+                    function showImage(index) {
+                        if (images.length > 0) {
+                            const offset = -index * 100;
+                            carousel.style.transform = `translateX(${offset}%)`;
+                        }
+                    }
+    
+                    if (prevBtn) {
+                        prevBtn.addEventListener('click', () => {
+                            currentIndex = (currentIndex > 0) ? currentIndex - 1 : images.length - 1;
+                            showImage(currentIndex);
+                        });
+                    }
+                    
+                    if (nextBtn) {
+                        nextBtn.addEventListener('click', () => {
+                            currentIndex = (currentIndex < images.length - 1) ? currentIndex + 1 : 0;
+                            showImage(currentIndex);
+                        });
+                    }
+                    
+                    if (images.length <= 1) {
+                        if (prevBtn) prevBtn.style.display = 'none';
+                        if (nextBtn) nextBtn.style.display = 'none';
+                    }
+                }
+                
+                // Find the existing call to updateUI() at the bottom of your script and keep it.
+                // For example: updateUI();
+            }
+        });
+    </script>
+</body>
+</html>

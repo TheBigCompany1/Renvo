@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Renvo - Sign In</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="site-logo">
+        <!-- Inline SVG logo with Renvo -->
+        <svg version="1.1" width="120" height="40" viewBox="0 0 600 200" aria-label="Renvo Logo">
+          <title>Renvo Logo</title>
+          <style>
+            .logo-building { fill: var(--brand-color-1); }
+            .logo-text { fill: var(--brand-color-2); }
+          </style>
+          <polygon class="logo-building" points="50,60 90,100 10,100" />
+          <rect class="logo-building" x="32" y="100" width="36" height="40" />
+          <text class="logo-text" x="120" y="130" font-family="Roboto" font-size="60" font-weight="700">
+            Renvo
+          </text>
+        </svg>
+      </div>
+
+      <!-- Header Nav -->
+      <nav class="header-nav">
+        <ul>
+          <li><a href="learn-more.html">Learn More</a></li>
+          <li><a href="help.html">Help</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="auth-section">
+      <h2>Sign In</h2>
+      <form id="signin-form">
+        <label for="email">Email</label>
+        <input 
+          type="email" 
+          id="email" 
+          name="email" 
+          placeholder="Enter your email" 
+          required
+        />
+
+        <label for="password">Password</label>
+        <input 
+          type="password" 
+          id="password" 
+          name="password" 
+          placeholder="Enter your password" 
+          required
+        />
+
+        <button type="submit">Sign In</button>
+      </form>
+      <p>
+        Don’t have an account? 
+        <a href="#">Sign up here</a>
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>© 2025 Renvo. All rights reserved.</p>
+  </footer>
+
+  <!-- Optionally load a JS file to handle sign-in form submission -->
+  <script src="js/main.js"></script>
+</body>
+</html>

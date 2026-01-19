@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Renvo - Find the Highest and Best Use of Your Property</title>
+  <!-- Link to external CSS -->
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Import Poppins font from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link 
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;700&display=swap" 
+    rel="stylesheet"
+  />
+</head>
+<body>
+
+<!-- Hero Section with Vertical Scrolling Video Background -->
+<section class="hero">
+  <!-- Video container: Contains both videos, stacked vertically -->
+  <div class="video-container">
+    <video class="hero-video" autoplay muted loop playsinline>
+      <source src="assets/homepage/Videos/background1.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+    <video class="hero-video" autoplay muted loop playsinline>
+      <source src="assets/homepage/Videos/background2.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+  </div>
+  <!-- Fixed overlay to darken the background -->
+  <div class="hero-overlay"></div>
+  
+  <!-- Main content area -->
+  <main id="main-content" class="hero-content">
+    <h1 class="hero-title">RENVO</h1>
+    <p class="hero-tagline">Maximize the Value of Your Property with Highest and Best Use Analysis</p>
+    
+    <!-- 
+      FIX: The onsubmit attribute tells the form to run our JavaScript function
+      and `return false;` prevents the page from reloading. The form ID is also corrected.
+    -->
+    <form class="hero-search-form" id="property-form" onsubmit="handleFormSubmit(event); return false;">
+      <input 
+        type="url" 
+        id="url-input"
+        placeholder="Enter Redfin or Zillow URL (e.g., https://www.redfin.com/...)"
+        aria-label="Enter property URL"
+        required
+      />
+      <button type="submit">Search</button>
+    </form>
+    <div id="results" class="mt-4 text-white"></div>
+  </main>
+</section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <p>© 2025 Renvo. All rights reserved.</p>
+    <p>Data sourced from multiple real estate data providers.</p>
+  </footer>
+
+  <!-- Progress overlay for loading state -->
+  <div id="progress-overlay" class="progress-overlay">
+    <div class="progress-container">
+        <h1>Analyzing Property</h1>
+        <p id="progress-text" class="progress-status">Initializing...</p>
+        <div class="progress-bar-container">
+            <div class="progress-bar"></div>
+        </div>
+        <p class="progress-note">This may take up to 2 minutes. Please wait.</p>
+    </div>
+</div>
+
+<script src="main.js"></script>
+
+</body>
+</html>

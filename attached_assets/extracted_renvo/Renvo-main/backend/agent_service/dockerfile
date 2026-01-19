@@ -1,0 +1,16 @@
+FROM public.ecr.aws/lambda/python:3.9
+
+# Copy requirements.txt
+COPY requirements.txt ${LAMBDA_TASK_ROOT}
+
+# Install dependencies
+RUN pip install -r requirements.txt
+
+# Copy function code - ensure we get all files including __init__.py
+COPY . ${LAMBDA_TASK_ROOT}
+
+# Help Python find your app modules
+ENV PYTHONPATH="${LAMBDA_TASK_ROOT}:${PYTHONPATH}"
+
+# Set the CMD to your handler
+CMD [ "main.handler" ]

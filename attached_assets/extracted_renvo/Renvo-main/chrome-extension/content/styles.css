@@ -1,0 +1,264 @@
+/* Extension UI Styling */
+
+/* Button Container */
+.roi-extension-button-container {
+    margin: 10px 0;
+    padding: 10px;
+    text-align: center;
+}
+
+/* Main Button */
+.roi-extension-button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 12px 18px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.roi-extension-button:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.roi-extension-button.loading {
+    background-color: #808080;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.button-icon {
+    margin-right: 8px;
+    font-size: 18px;
+}
+
+/* Primary Button for Modals */
+.roi-extension-primary-button {
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.roi-extension-primary-button:hover {
+    background-color: #0b7dda;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Loading Spinner */
+.spinner {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top: 2px solid white;
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Modal Overlay */
+.roi-extension-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+/* Modal Container */
+.roi-extension-modal {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 600px;
+    max-height: 85vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Modal Header */
+.roi-extension-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #f9f9f9;
+    border-radius: 8px 8px 0 0;
+}
+
+.roi-extension-modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #333;
+}
+
+.roi-extension-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #888;
+}
+
+.roi-extension-modal-close:hover {
+    color: #333;
+}
+
+/* Results Preview */
+.roi-results-preview {
+    padding: 20px;
+}
+
+.roi-insights-summary {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 25px;
+    padding: 15px;
+    background-color: #f5f9ff;
+    border-radius: 8px;
+}
+
+.roi-summary-item {
+    text-align: center;
+    padding: 0 10px;
+}
+
+.summary-label {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.summary-value {
+    font-size: 22px;
+    font-weight: bold;
+    color: #2196F3;
+}
+
+.roi-opportunities-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 25px 0;
+}
+
+.roi-opportunities-list li {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    transition: all 0.2s;
+}
+
+.roi-opportunities-list li:hover {
+    background-color: #f9f9f9;
+    border-color: #ccc;
+}
+
+.opportunity-roi {
+    color: #4CAF50;
+    font-weight: 500;
+    margin-top: 5px;
+}
+
+.roi-cta {
+    text-align: center;
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 6px;
+}
+
+.roi-cta p {
+    margin-bottom: 15px;
+    font-size: 14px;
+    color: #555;
+}
+
+/* Processing Message */
+.roi-processing-message {
+    padding: 25px;
+    text-align: center;
+}
+
+.processing-icon {
+    font-size: 48px;
+    margin-bottom: 15px;
+}
+
+.processing-details {
+    margin: 15px 0 25px;
+    color: #666;
+    font-size: 14px;
+}
+
+/* Notification */
+.roi-extension-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 15px 20px;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 300px;
+    z-index: 10000;
+    opacity: 1;
+    transition: opacity 0.5s, transform 0.3s;
+    transform: translateY(0);
+}
+
+.roi-extension-notification-info {
+    background-color: #e7f3fe;
+    border-left: 5px solid #2196F3;
+    color: #0c5460;
+}
+
+.roi-extension-notification-success {
+    background-color: #d4edda;
+    border-left: 5px solid #28a745;
+    color: #155724;
+}
+
+.roi-extension-notification-error {
+    background-color: #f8d7da;
+    border-left: 5px solid #dc3545;
+    color: #721c24;
+}
+
+.roi-extension-notification-hide {
+    opacity: 0;
+    transform: translateY(10px);
+}
