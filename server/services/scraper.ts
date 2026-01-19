@@ -231,57 +231,37 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     let extractedData: any = null;
     
     try {
+      // Match EXACT production Puppeteer configuration
       browser = await puppeteer.launch({
         headless: true,
-        executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium-browser',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--disable-gpu',
-          '--window-size=1920,1080',
-          '--disable-blink-features=AutomationControlled',
-          '--disable-features=IsolateOrigins,site-per-process',
-          '--user-data-dir=/tmp/puppeteer-profile',
-        ],
-        ignoreDefaultArgs: ['--enable-automation'],
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
       });
       
       const page = await browser.newPage();
       
-      // Log browser console messages for debugging
-      page.on('console', msg => console.log('[Browser Console]', msg.text()));
-      
-      // Set realistic viewport
-      await page.setViewport({ width: 1920, height: 1080 });
-      
-      // Use a recent Chrome user agent
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-      
-      // Set extra headers
-      await page.setExtraHTTPHeaders({
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
+      // Log browser console messages for debugging (from production)
+      page.on('console', msg => {
+        const text = msg.text();
+        if (!text.includes('Failed to load resource')) {
+          console.log('[Browser Console]', text);
+        }
       });
       
-      console.log('Puppeteer Stealth: Navigating to Redfin page...');
+      console.log('Puppeteer: Navigating to Redfin page...');
       
-      // Navigate to the page
+      // Navigate to the page (match production settings)
       await page.goto(url, { 
-        waitUntil: 'networkidle2',
-        timeout: 45000 
+        waitUntil: 'domcontentloaded',
+        timeout: 60000 
       });
       
-      // Wait for content to load
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Scroll to trigger lazy loading
-      await page.evaluate(() => window.scrollBy(0, 500));
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Wait for content marker (from production)
+      console.log('Waiting for dynamic content to render...');
+      await page.waitForFunction(
+        "document.querySelector('.KeyDetailsTable, .KeyDetails-Table, .HomeInfo-property-facts')",
+        { timeout: 30000 }
+      );
+      console.log('Content marker found. Page is ready for scraping.');
       
       // PRODUCTION SCRAPER v22 - Load from external file to bypass esbuild transformation
       console.log('Loading PRODUCTION extraction script (v22 - from file)...');
