@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 // DON'T DELETE THIS COMMENT
 // Follow these instructions when using this blueprint:
-// - Using gemini-3.0-flash model as requested by user
+// - Using gemini-3-flash-preview model per official docs
 //   - do not change this unless explicitly requested by the user
 
 // This API key is from Gemini Developer API Key, not vertex AI API Key
@@ -40,7 +40,7 @@ export async function analyzePropertyForRenovations(
   try {
     console.log("DEBUG: Starting Gemini analysis...");
     console.log("DEBUG: GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
-    console.log("DEBUG: Using Gemini 3.0 Flash model");
+    console.log("DEBUG: Using Gemini 3 Flash Preview model");
 
     const prompt = `You are an expert real estate renovation analyst with 20+ years of experience specializing in transformative, high-ROI projects. 
         
@@ -97,7 +97,7 @@ export async function analyzePropertyForRenovations(
     console.log("DEBUG: About to call Gemini API...");
     
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash",
+      model: "gemini-3-flash-preview",
       contents: prompt,
     });
     
@@ -195,7 +195,7 @@ export async function generateContractorRecommendations(
           }`;
 
     const result = await ai.models.generateContent({
-      model: "gemini-3.0-flash",
+      model: "gemini-3-flash-preview",
       contents: prompt,
     });
 

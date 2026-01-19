@@ -36,7 +36,7 @@ export async function geocodeAddress(address: string): Promise<GeoData> {
     console.log(`Geocoding address with Gemini: ${address}`);
     
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash",
+      model: "gemini-3-flash-preview",
       contents: `You are a geocoding expert. Provide the exact coordinates (lat, lng) and formatted address for: ${address}
       
       Use your knowledge of real addresses and locations to provide accurate coordinates.
@@ -76,7 +76,7 @@ export async function getNeighborhoodContext(
     console.log(`Getting neighborhood context for: ${address}`);
     
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash",
+      model: "gemini-3-flash-preview",
       contents: `You are a real estate neighborhood expert. Analyze the neighborhood around ${address} for real estate investment analysis.
 
       Use your knowledge of this area to provide:
@@ -178,7 +178,7 @@ export async function analyzePropertyFromImages(
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash",
+      model: "gemini-3-flash-preview",
       contents: contentParts,
     });
 
