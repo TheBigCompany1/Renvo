@@ -231,9 +231,10 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     let extractedData: any = null;
     
     try {
-      // Match EXACT production Puppeteer configuration
+      // Match production Puppeteer configuration with Replit's Chromium path
       browser = await puppeteer.launch({
         headless: true,
+        executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium-browser',
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
       });
       
