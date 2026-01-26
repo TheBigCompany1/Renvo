@@ -78,19 +78,62 @@ export function calculateComparabilityScore(
 }
 
 /**
- * Calculate estimated current value using weighted average from comparables
+ * Calculate estimated current value using best available data source:
+ * Priority: 1) Redfin Estimate 2) Recent sale price (within 24 months) 3) Weighted comparables
  */
 export function calculateWeightedCurrentValue(
   comparables: ComparableProperty[],
   subjectProperty: PropertyData
-): { estimatedValue: number; avgPricePsf: number; confidence: number } {
+): { estimatedValue: number; avgPricePsf: number; confidence: number; source: string } {
+  const sqft = subjectProperty.sqft || 1200;
+  
+  // Priority 1: Use Redfin Estimate if available (most accurate for current market)
+  if (subjectProperty.redfinEstimate && subjectProperty.redfinEstimate > 0) {
+    const estimatedValue = subjectProperty.redfinEstimate;
+    const avgPricePsf = Math.round(estimatedValue / sqft);
+    console.log(`📊 Using Redfin Estimate: $${estimatedValue.toLocaleString()} ($${avgPricePsf}/sqft, 95% confidence)`);
+    return { 
+      estimatedValue, 
+      avgPricePsf, 
+      confidence: 95,
+      source: 'redfin_estimate'
+    };
+  }
+  
+  // Priority 2: Use recent sale price (within 24 months) - adjust for appreciation
+  if (subjectProperty.lastSoldPrice && subjectProperty.lastSoldPrice > 0 && subjectProperty.lastSoldDate) {
+    const saleDate = new Date(subjectProperty.lastSoldDate);
+    const now = new Date();
+    const monthsSinceSale = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+    
+    // Only use if sale was within 24 months
+    if (monthsSinceSale <= 24) {
+      // Apply modest appreciation (3-5% annually depending on market conditions)
+      const annualAppreciation = 0.04; // 4% annual appreciation assumption
+      const appreciationFactor = 1 + (annualAppreciation * (monthsSinceSale / 12));
+      const estimatedValue = Math.round(subjectProperty.lastSoldPrice * appreciationFactor);
+      const avgPricePsf = Math.round(estimatedValue / sqft);
+      const confidence = monthsSinceSale <= 6 ? 90 : monthsSinceSale <= 12 ? 85 : 75;
+      
+      console.log(`💰 Using last sale price ($${subjectProperty.lastSoldPrice.toLocaleString()} on ${subjectProperty.lastSoldDate}) + ${((appreciationFactor - 1) * 100).toFixed(1)}% appreciation`);
+      console.log(`💰 Adjusted current value: $${estimatedValue.toLocaleString()} ($${avgPricePsf}/sqft, ${confidence}% confidence)`);
+      return { 
+        estimatedValue, 
+        avgPricePsf, 
+        confidence,
+        source: 'recent_sale_adjusted'
+      };
+    }
+  }
+  
+  // Priority 3: Fall back to weighted comparables
   if (!comparables || comparables.length === 0) {
     const fallbackPpsf = 500; // Conservative fallback
-    const sqft = subjectProperty.sqft || 1200;
     return {
       estimatedValue: sqft * fallbackPpsf,
       avgPricePsf: fallbackPpsf,
       confidence: 20,
+      source: 'fallback_estimate'
     };
   }
 
@@ -105,16 +148,15 @@ export function calculateWeightedCurrentValue(
   });
 
   const avgPricePsf = totalWeight > 0 ? weightedPricePsf / totalWeight : 500;
-  const subjectSqft = subjectProperty.sqft || 1200;
-  const estimatedValue = Math.round(subjectSqft * avgPricePsf);
+  const estimatedValue = Math.round(sqft * avgPricePsf);
 
   // Calculate confidence based on comparable quality
   const avgScore = comparables.reduce((sum, c) => sum + (c.comparabilityScore || 50), 0) / comparables.length;
   const confidence = Math.min(95, Math.round(avgScore * 0.9 + comparables.length * 5));
 
-  console.log(`💰 Current value estimation: $${estimatedValue.toLocaleString()} ($${Math.round(avgPricePsf)}/sqft, ${confidence}% confidence)`);
+  console.log(`💰 Current value estimation (comparables): $${estimatedValue.toLocaleString()} ($${Math.round(avgPricePsf)}/sqft, ${confidence}% confidence)`);
 
-  return { estimatedValue, avgPricePsf: Math.round(avgPricePsf), confidence };
+  return { estimatedValue, avgPricePsf: Math.round(avgPricePsf), confidence, source: 'weighted_comparables' };
 }
 
 /**

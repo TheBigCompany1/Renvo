@@ -296,7 +296,45 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
     if (extractedData && extractedData.price && extractedData.price > 0) {
       console.log('Using data extracted from Production v22 scraper');
       
-      // Convert extractedData to PropertyData format
+      // Extract last sold price from price history (most recent "Sold" event)
+      let lastSoldPrice: number | undefined;
+      let lastSoldDate: string | undefined;
+      if (extractedData.priceHistory && Array.isArray(extractedData.priceHistory)) {
+        // Filter to only sold events with valid prices
+        const soldEvents = extractedData.priceHistory.filter(
+          (e: any) => e.event && (e.event.toLowerCase().includes('sold') || e.event.toLowerCase() === 'sale') && e.price && typeof e.price === 'number' && e.price > 0
+        );
+        
+        // Sort by date descending to get most recent first
+        soldEvents.sort((a: any, b: any) => {
+          const dateA = new Date(a.date || 0).getTime();
+          const dateB = new Date(b.date || 0).getTime();
+          return dateB - dateA; // Most recent first
+        });
+        
+        if (soldEvents.length > 0) {
+          const mostRecentSale = soldEvents[0];
+          lastSoldPrice = typeof mostRecentSale.price === 'number' ? mostRecentSale.price : undefined;
+          lastSoldDate = mostRecentSale.date ? String(mostRecentSale.date) : undefined;
+          
+          // Validate the date is parseable
+          if (lastSoldDate && isNaN(new Date(lastSoldDate).getTime())) {
+            console.log(`Warning: Could not parse sale date "${lastSoldDate}", ignoring`);
+            lastSoldDate = undefined;
+          }
+          
+          if (lastSoldPrice) {
+            console.log(`Found last sale: $${lastSoldPrice.toLocaleString()} on ${lastSoldDate || 'Unknown date'}`);
+          }
+        }
+      }
+      
+      // Ensure redfinEstimate is a valid number
+      const redfinEstimate = typeof extractedData.estimate === 'number' && extractedData.estimate > 0 
+        ? extractedData.estimate 
+        : undefined;
+      
+      // Convert extractedData to PropertyData format with estimate and sale history
       const propertyData: PropertyData = {
         address: extractedData.address || 'Address not found',
         price: extractedData.price,
@@ -307,9 +345,19 @@ export async function scrapeRedfinProperty(url: string): Promise<PropertyData> {
         lotSize: extractedData.lotSize || undefined,
         description: extractedData.description || extractedData.homeType || undefined,
         images: extractedData.images || [],
+        redfinEstimate,
+        lastSoldPrice,
+        lastSoldDate,
+        priceHistory: extractedData.priceHistory || undefined,
       };
       
       console.log("Final Redfin data:", propertyData);
+      if (propertyData.redfinEstimate) {
+        console.log(`📊 Redfin Estimate: $${propertyData.redfinEstimate.toLocaleString()}`);
+      }
+      if (propertyData.lastSoldPrice) {
+        console.log(`💰 Last Sold: $${propertyData.lastSoldPrice.toLocaleString()} (${propertyData.lastSoldDate || 'Unknown date'})`);
+      }
       return propertyData;
     }
     

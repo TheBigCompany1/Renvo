@@ -61,6 +61,14 @@ export const propertyDataSchema = z.object({
   description: z.string().optional(),
   images: z.array(z.string()).optional(),
   location: locationSchema.optional(),
+  redfinEstimate: z.number().optional(),
+  lastSoldPrice: z.number().optional(),
+  lastSoldDate: z.string().optional(),
+  priceHistory: z.array(z.object({
+    date: z.string().optional(),
+    price: z.number().optional(),
+    event: z.string().optional(),
+  })).optional(),
 });
 
 export const contractorSchema = z.object({

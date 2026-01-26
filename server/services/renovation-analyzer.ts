@@ -28,6 +28,9 @@ export async function processRenovationAnalysis(
         finalDescription += ` Appeals to ${project.buyer_profile.toLowerCase()}.`;
       }
       
+      // Calculate newTotalSqft (total sqft after renovation)
+      const newTotalSqft = project.new_total_sqft || (sqftAdded ? propertyData.sqft + sqftAdded : propertyData.sqft);
+      
       return {
         id: `project-${index + 1}`,
         name: project.name,
@@ -40,6 +43,7 @@ export async function processRenovationAnalysis(
         priority: index + 1,
         // Enhanced fields for detailed breakdown
         sqftAdded: sqftAdded,
+        newTotalSqft: newTotalSqft,
         costPerSqft: project.cost_per_sqft,
         valuePerSqft: project.value_per_sqft,
         detailedDescription: project.detailed_description || project.description
@@ -67,7 +71,7 @@ export async function processRenovationAnalysis(
     
     // Analyze pricing strategies used across projects
     const pricingStrategies = sortedProjects.map(p => p.pricingSources?.pricingStrategy).filter(Boolean);
-    const uniqueStrategies = [...new Set(pricingStrategies)];
+    const uniqueStrategies = Array.from(new Set(pricingStrategies));
     const avgConfidence = sortedProjects.reduce((sum, p) => sum + (p.pricingSources?.confidence || 0), 0) / sortedProjects.length;
     
     console.log(`📊 Pricing Analysis:`);
