@@ -6,24 +6,36 @@ The platform now includes comprehensive marketing pages and lead generation capa
 
 # Recent Changes
 
-## Simplified Architecture - Redfin First (January 2026)
+## Gemini Research Architecture (January 2026)
 
-Removed the slow/inaccurate Deep Research agent in favor of a faster, more accurate pipeline:
+Major simplification: Replaced the complex scraper + Deep Research pipeline with a single Gemini call that does everything.
 
 **New Architecture:**
-1. **Address Input** → Gemini 2.5 Pro with Google Search grounding finds Redfin URL (fast, ~3-5 seconds) → Redfin scraper gets accurate data → Gemini 2.5 Pro analyzes renovations
-2. **URL Input** → Redfin scraper only (no AI research) → Gemini 2.5 Pro analyzes renovations
-3. **No Redfin Listing** → Graceful failure with clear message asking user to provide direct URL
+1. User enters address OR property URL
+2. Single Gemini API call with Google Search grounding researches:
+   - Property data (beds, baths, sqft, price, lot size, year built)
+   - Comparable sales from the neighborhood
+   - Market analysis and neighborhood context
+   - Renovation recommendations with ROI calculations
+3. Street View and Satellite imagery added for visuals
+4. Contractor recommendations generated
 
-**Why This Change:**
-- Deep Research was slow (1-3 minutes vs 5-10 seconds now)
-- Deep Research returned inaccurate data (wrong prices, stock photos, unrealistic $10M estimates)
-- Redfin scraper provides accurate, verified property data with real listing photos
+**Key Benefits:**
+- Much simpler codebase (one service instead of scraper + deep research + multiple fallbacks)
+- Better analysis quality (matches manual Gemini conversations)
+- More reliable (no scraper blocking issues)
+- Faster (~20 seconds for complete analysis)
 
 **Technical Details:**
-- `findRedfinUrl()` uses Gemini 2.5 Pro with `googleSearch` tool for fast URL discovery
-- Supports both redfin.com and redf.in (mobile short links)
-- Parses JSON responses with fenced/unfenced format handling and regex fallback
+- New `server/services/gemini-research.ts` handles all property research
+- Uses `gemini-3-flash-preview` model with `googleSearch` grounding tool
+- Strict data integrity: requires verified data, fails with clear error if property not found
+- URL validation: Only accepts Redfin, Zillow, Realtor.com URLs (prevents SSRF)
+
+**Data Integrity:**
+- Prompt explicitly requires verified data from sources (Redfin, Zillow, MLS)
+- Validation layer rejects responses missing critical fields (address, sqft, price)
+- Returns clear error message if property data cannot be found
 
 ## Data Integrity Fix - No Fake Fallback Data (January 2026)
 

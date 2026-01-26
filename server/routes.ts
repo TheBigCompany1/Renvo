@@ -2,11 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAnalysisReportSchema, insertEmailSignupSchema, type AnalysisReport, type EmailSignup, type ComparableProperty } from "@shared/schema";
-import { scrapeRedfinProperty, scrapeZillowProperty, findComparableProperties, getDynamicComparableProperties } from "./services/scraper";
-import { processRenovationAnalysis } from "./services/renovation-analyzer";
+import { researchProperty, convertToPropertyData, convertToRenovationProjects, convertToComparables } from "./services/gemini-research";
 import { generateContractorRecommendations } from "./services/openai";
 import { extractLocationFromProperty } from "./services/location-service";
-import { findLocationBasedComparables } from "./services/location-comparables";
 import { findLocationBasedContractors } from "./services/location-contractors";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -17,17 +15,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Determine input type and validate accordingly
       if (validatedData.inputType === 'url' && validatedData.propertyUrl) {
-        // Secure URL validation to prevent SSRF
+        // Strict URL validation to prevent SSRF - only allow known real estate sites
         try {
           const parsedUrl = new URL(validatedData.propertyUrl);
-          const allowedHosts = ['redfin.com', 'www.redfin.com', 'redf.in'];
-          if (!allowedHosts.includes(parsedUrl.hostname.toLowerCase())) {
-            return res.status(400).json({ 
-              message: "Invalid URL. Please provide a valid Redfin property URL (www.redfin.com or redf.in)." 
-            });
-          }
           if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
             return res.status(400).json({ message: "Invalid URL protocol" });
+          }
+          // Only accept URLs from trusted real estate websites
+          const allowedHosts = ['redfin.com', 'www.redfin.com', 'redf.in', 'zillow.com', 'www.zillow.com', 'realtor.com', 'www.realtor.com'];
+          const hostname = parsedUrl.hostname.toLowerCase();
+          const isAllowedHost = allowedHosts.some(host => hostname === host || hostname.endsWith('.' + host.replace('www.', '')));
+          if (!isAllowedHost) {
+            return res.status(400).json({ 
+              message: "Please provide a property URL from Redfin, Zillow, or Realtor.com. Or enter the property address directly." 
+            });
           }
         } catch (urlError) {
           return res.status(400).json({ message: "Invalid URL format" });
@@ -211,7 +212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Async processing function
+  // Async processing function - SIMPLIFIED with Gemini + Google Search grounding
   async function processAnalysisReport(reportId: string) {
     try {
       const report = await storage.getAnalysisReport(reportId);
@@ -220,252 +221,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update status to processing
       await storage.updateAnalysisReportStatus(reportId, 'processing');
 
-      let propertyData;
-
-      // Branch based on input type
-      if (report.inputType === 'url' && report.propertyUrl) {
-        // URL provided: Use ONLY the Redfin scraper - NO Deep Research fallback
-        // This ensures accurate data from the actual listing
-        console.log('Using Redfin scraper for property data from URL');
-        try {
-          propertyData = await scrapeRedfinProperty(report.propertyUrl);
-          console.log('✅ Redfin scraper succeeded');
-          
-          // Mark data source as redfin_scraper
-          await storage.updateAnalysisReportData(reportId, { 
-            dataSource: 'redfin_scraper'
-          });
-          
-          // Store geocoded data
-          try {
-            const { geocodeAddress } = await import('./services/gemini-enhanced');
-            const geoData = await geocodeAddress(propertyData.address);
-            await storage.updateAnalysisReportData(reportId, { geoData });
-          } catch (geoError) {
-            console.log('Geocoding failed, continuing without coordinates');
-          }
-          
-        } catch (scraperError) {
-          // Scraper failed - try AI research as fallback
-          console.error('Redfin scraper failed, trying AI research fallback:', scraperError);
-          
-          // Try to extract address from the Redfin URL for AI research
-          try {
-            const { getPropertyDataFromAddress } = await import('./services/deep-research');
-            
-            // Extract address from Redfin URL path (format: /STATE/City/123-Street-Name-12345/home/id)
-            const urlPath = new URL(report.propertyUrl).pathname;
-            const pathParts = urlPath.split('/').filter(Boolean);
-            
-            if (pathParts.length >= 3) {
-              const state = pathParts[0];
-              const city = pathParts[1].replace(/-/g, ' ');
-              const streetPart = pathParts[2].replace(/-/g, ' ');
-              const addressFromUrl = `${streetPart}, ${city}, ${state}`;
-              
-              console.log(`🔄 Attempting AI research for: ${addressFromUrl}`);
-              const aiData = await getPropertyDataFromAddress(addressFromUrl);
-              
-              propertyData = {
-                address: aiData.address,
-                price: aiData.price,
-                beds: aiData.beds,
-                baths: aiData.baths,
-                sqft: aiData.sqft,
-                yearBuilt: aiData.yearBuilt,
-                lotSize: aiData.lotSize,
-                description: aiData.description || aiData.propertyType,
-                images: aiData.images
-              };
-              
-              console.log('✅ AI research succeeded as fallback');
-              await storage.updateAnalysisReportData(reportId, { 
-                dataSource: 'ai_research'
-              });
-            } else {
-              throw new Error('Could not parse address from URL');
-            }
-          } catch (aiError) {
-            // Both scraper and AI research failed
-            console.error('AI research fallback also failed:', aiError);
-            const scraperErrorMessage = (scraperError as Error).message;
-            
-            await storage.updateAnalysisReportData(reportId, { 
-              status: 'failed',
-              failureReason: `We couldn't access this property data. ${scraperErrorMessage.includes('blocked') || scraperErrorMessage.includes('Human Verification') ? 'The site is blocking automated access. Please try entering the property address directly.' : 'Please check the URL and try again.'}`,
-              dataSource: undefined
-            });
-            throw scraperError;
-          }
-        }
-      } else if (report.inputType === 'address' && report.propertyAddress) {
-        // Step 1b: NEW ARCHITECTURE - Find Redfin URL → Scrape → Analyze
-        console.log('🔍 Starting URL discovery for address:', report.propertyAddress);
-        
-        // Import services
-        const { findRedfinUrl } = await import('./services/deep-research');
-        
-        // Step 1b.1: Use AI to find the Redfin URL for this address
-        console.log('Step 1b.1: Searching for Redfin listing URL...');
-        const urlResult = await findRedfinUrl(report.propertyAddress);
-        
-        if (urlResult.found && urlResult.redfinUrl) {
-          // Step 1b.2: Use the Redfin scraper for accurate data
-          console.log(`✅ Found Redfin URL: ${urlResult.redfinUrl}`);
-          console.log('Step 1b.2: Scraping Redfin for accurate property data...');
-          
-          // Store the discovered URL in the report object for later use
-          report.propertyUrl = urlResult.redfinUrl;
-          
-          try {
-            propertyData = await scrapeRedfinProperty(urlResult.redfinUrl);
-            console.log('✅ Redfin scraper succeeded with accurate data');
-            console.log(`📊 Property: ${propertyData.beds}bd/${propertyData.baths}ba, ${propertyData.sqft} sqft`);
-            console.log(`💰 Price: $${propertyData.price?.toLocaleString() || 'Unknown'}`);
-            console.log(`📸 Images: ${propertyData.images?.length || 0}`);
-            
-            // Store the discovered URL and mark data source in database
-            await storage.updateAnalysisReportData(reportId, { 
-              propertyUrl: urlResult.redfinUrl,
-              dataSource: 'redfin_scraper_via_url_discovery'
-            });
-            
-            // Store geocoded data
-            try {
-              const { geocodeAddress } = await import('./services/gemini-enhanced');
-              const geoData = await geocodeAddress(propertyData.address);
-              await storage.updateAnalysisReportData(reportId, { geoData });
-            } catch (geoError) {
-              console.log('Geocoding failed, using placeholder coordinates');
-            }
-            
-          } catch (scraperError) {
-            // Scraper failed - fall back to AI research
-            console.log('❌ Scraper failed for discovered URL, falling back to AI research');
-            console.error('Scraper error:', scraperError);
-            
-            // Use AI research as fallback
-            const { getPropertyDataFromAddress } = await import('./services/deep-research');
-            console.log(`🔄 Using AI research for: ${report.propertyAddress}`);
-            
-            const aiData = await getPropertyDataFromAddress(report.propertyAddress!);
-            
-            propertyData = {
-              address: aiData.address,
-              price: aiData.price,
-              beds: aiData.beds,
-              baths: aiData.baths,
-              sqft: aiData.sqft,
-              yearBuilt: aiData.yearBuilt,
-              lotSize: aiData.lotSize,
-              description: aiData.description || aiData.propertyType,
-              images: aiData.images
-            };
-            
-            console.log('✅ AI research succeeded as fallback');
-            await storage.updateAnalysisReportData(reportId, { 
-              propertyUrl: urlResult.redfinUrl,
-              dataSource: 'ai_research'
-            });
-          }
-        } else {
-          // Could not find a Redfin URL - use AI research directly
-          console.log('❌ Could not find Redfin URL, using AI research directly');
-          
-          const { getPropertyDataFromAddress } = await import('./services/deep-research');
-          console.log(`🔄 Using AI research for: ${report.propertyAddress}`);
-          
-          const aiData = await getPropertyDataFromAddress(report.propertyAddress!);
-          
-          propertyData = {
-            address: aiData.address,
-            price: aiData.price,
-            beds: aiData.beds,
-            baths: aiData.baths,
-            sqft: aiData.sqft,
-            yearBuilt: aiData.yearBuilt,
-            lotSize: aiData.lotSize,
-            description: aiData.description || aiData.propertyType,
-            images: aiData.images
-          };
-          
-          console.log('✅ AI research succeeded');
-          await storage.updateAnalysisReportData(reportId, { 
-            dataSource: 'ai_research'
-          });
-        }
-        
-        console.log('✅ Address-to-URL workflow completed successfully');
-      } else {
+      // Determine the input to research
+      const addressOrUrl = report.inputType === 'url' && report.propertyUrl 
+        ? report.propertyUrl 
+        : report.propertyAddress;
+      
+      if (!addressOrUrl) {
         throw new Error('Invalid report: missing both propertyUrl and propertyAddress');
       }
-      
-      await storage.updateAnalysisReportData(reportId, { propertyData });
 
-      // Step 2: Extract location from property data using new location service
+      console.log('\n🚀 Starting Gemini-powered property analysis');
+      console.log(`📍 Input: ${addressOrUrl}`);
+
+      // Step 1: Use Gemini with Google Search grounding for complete analysis
+      // This single call gets property data, comps, and renovation recommendations
+      const research = await researchProperty(addressOrUrl);
+      
+      // Convert research results to our standard formats
+      const propertyData = convertToPropertyData(research);
+      const renovationProjects = convertToRenovationProjects(research);
+      const comparableProperties = convertToComparables(research);
+
+      console.log(`\n✅ Gemini research complete:`);
+      console.log(`  📊 Property: ${propertyData.address}`);
+      console.log(`  💰 Estimated: $${propertyData.price?.toLocaleString()}`);
+      console.log(`  🏠 Comparables: ${comparableProperties.length}`);
+      console.log(`  🔨 Renovation projects: ${renovationProjects.length}`);
+      console.log(`  📈 Verdict: ${research.renovationAnalysis?.verdict}`);
+
+      // Step 2: Extract location for contractor lookup
       const location = await extractLocationFromProperty(propertyData.address, report.propertyUrl ?? undefined);
       
-      // Update property data with location
       const updatedPropertyData = {
         ...propertyData,
         location
       };
-      await storage.updateAnalysisReportData(reportId, { propertyData: updatedPropertyData });
-      
-      console.log(`Extracted location: ${location.city}, ${location.state} ${location.zip}`);
 
-      // Step 3: Find comparable properties using location-based approach
-      let comparableProperties: ComparableProperty[] = [];
+      // Step 3: Get Street View and Satellite imagery
+      let imagery: { streetViewUrl?: string; satelliteUrl?: string } | undefined;
       try {
-        console.log(`Finding location-based comparables for ${location.city}, ${location.state}`);
-        comparableProperties = await findLocationBasedComparables(updatedPropertyData, location);
-        
-        if (comparableProperties.length === 0 && report.propertyUrl) {
-          console.log('Location-based comparables returned empty, falling back to scraper method');
-          comparableProperties = await findComparableProperties(updatedPropertyData, report.propertyUrl);
-        } else if (comparableProperties.length === 0) {
-          console.log('No comparables found for address-based input (scraper fallback skipped)');
-          comparableProperties = []; // Return empty array for address inputs without URL
+        const { generateImageryUrls } = await import('./services/gemini-enhanced');
+        if (location.lat && location.lng) {
+          imagery = await generateImageryUrls(location.lat, location.lng);
+          console.log(`📸 Generated Street View and Satellite imagery URLs`);
         }
-      } catch (error) {
-        console.log('Location-based comparables failed:', error);
-        if (report.propertyUrl) {
-          console.log('Falling back to scraper method');
-          comparableProperties = await findComparableProperties(updatedPropertyData, report.propertyUrl);
-        } else {
-          console.log('Skipping scraper fallback for address-only input');
-          comparableProperties = [];
-        }
+      } catch (imgError) {
+        console.log('Imagery generation failed, continuing without images');
       }
-      await storage.updateAnalysisReportData(reportId, { comparableProperties });
 
-      // Step 4: Analyze renovations and calculate financials with validation
-      const { projects, financialSummary, validationSummary } = await processRenovationAnalysis(
-        updatedPropertyData, 
-        comparableProperties, 
-        location
-      );
-      await storage.updateAnalysisReportData(reportId, { 
-        renovationProjects: projects,
-        financialSummary,
-        validationSummary 
-      });
-
-      // Step 5: Generate project-specific contractor recommendations
+      // Step 4: Generate contractor recommendations for each project
       const projectsWithContractors = await Promise.all(
-        projects.map(async (project) => {
+        renovationProjects.map(async (project: any) => {
           let projectContractors;
           try {
             console.log(`Finding contractors for ${project.name} in ${location.city}, ${location.state}`);
             projectContractors = await findLocationBasedContractors(location, project.name);
             
             if (projectContractors.length === 0) {
-              console.log(`Location-based contractors returned empty for ${project.name}, falling back to AI generation`);
               const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
               projectContractors = await generateContractorRecommendations(locationQuery, project.name);
             }
           } catch (error) {
-            console.log(`Location-based contractors failed for ${project.name}, falling back to AI generation:`, error);
+            console.log(`Contractor lookup failed for ${project.name}, using AI generation`);
             const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
             projectContractors = await generateContractorRecommendations(locationQuery, project.name);
           }
@@ -477,41 +294,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      // Update with projects that now include contractors
-      await storage.updateAnalysisReportData(reportId, { 
-        renovationProjects: projectsWithContractors,
-        contractors: [] // Keep empty for backward compatibility
-      });
+      // Step 5: Create financial summary from research (matching expected schema)
+      const currentValue = propertyData.price || research.propertyData.currentEstimate || 0;
+      const totalRenovationCost = renovationProjects.reduce((sum: number, p: any) => sum + ((p.costRangeLow + p.costRangeHigh) / 2 || 0), 0);
+      const totalValueAdd = renovationProjects.reduce((sum: number, p: any) => sum + (p.valueAdd || 0), 0);
+      const afterRepairValue = currentValue + totalValueAdd;
+      const totalROI = totalRenovationCost > 0 ? ((totalValueAdd - totalRenovationCost) / totalRenovationCost) * 100 : 0;
+      const avgPricePsf = research.neighborhoodContext.pricePerSqft || 0;
 
-      // Mark as completed with data source
+      const financialSummary = {
+        currentValue,
+        totalRenovationCost,
+        totalValueAdd,
+        afterRepairValue,
+        totalROI,
+        avgPricePsf,
+      };
+
+      // Convert neighborhood context to maps context format
+      const mapsContext = {
+        neighborhoodInsights: `${research.neighborhoodContext.name}: ${research.neighborhoodContext.description}. ${research.neighborhoodContext.marketTrend || ''}`.trim(),
+        nearbyPOIs: research.neighborhoodContext.nearbyAmenities?.map((amenity: string) => ({
+          name: amenity,
+          type: 'amenity',
+        })),
+      };
+
+      // Save all data
       await storage.updateAnalysisReportData(reportId, { 
+        propertyData: updatedPropertyData,
+        comparableProperties,
+        renovationProjects: projectsWithContractors,
+        financialSummary,
+        imagery,
+        mapsContext,
+        dataSource: 'gemini_research',
         status: 'completed',
-        dataSource: report.inputType === 'url' ? 'redfin_scraper' : 'deep_research',
-        failureReason: null as any, // Clear any previous failure reason
+        failureReason: null as any,
         completedAt: new Date()
       });
+
+      console.log('\n✅ Analysis complete and saved!');
 
     } catch (error) {
       console.error("Error processing analysis report:", error);
       
-      // Extract user-friendly error message
       let failureReason = "An unexpected error occurred while processing your request.";
       
       if (error instanceof Error) {
-        if (error.message.includes('SCRAPE_FAILED')) {
-          // Extract the user-friendly part of the scraping error
-          failureReason = "We couldn't retrieve property data from Redfin. This may be due to Redfin blocking automated requests. Please try entering the property address manually instead.";
+        if (error.message.includes('Failed to parse')) {
+          failureReason = "We couldn't find enough information about this property. Please try a different address or provide more details.";
         } else if (error.message.includes('fetch')) {
-          failureReason = "Unable to connect to the property data source. Please check your internet connection and try again.";
-        } else if (error.message.includes('timeout')) {
-          failureReason = "The request took too long to complete. Please try again.";
+          failureReason = "Unable to connect to the research service. Please check your internet connection and try again.";
         } else {
-          // Use a sanitized version of the error message
-          failureReason = error.message.replace(/SCRAPE_FAILED:|Error:/gi, '').trim() || failureReason;
+          failureReason = error.message;
         }
       }
       
-      // Update with failure status and reason
       await storage.updateAnalysisReportData(reportId, { 
         status: 'failed',
         failureReason: failureReason
