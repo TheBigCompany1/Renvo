@@ -105,7 +105,7 @@ export default function Home() {
               <AddressAutocomplete
                 value={propertyInput}
                 onChange={setPropertyInput}
-                placeholder="Enter Redfin URL or property address (e.g., 123 Main St, Los Angeles, CA)"
+                placeholder="Enter property address or paste Redfin/Zillow URL"
                 className="h-14 text-lg px-6 bg-white/95 backdrop-blur-sm border-0 shadow-lg text-gray-900 placeholder:text-gray-500"
                 data-testid="input-property"
               />
