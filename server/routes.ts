@@ -320,12 +320,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })),
       };
 
+      // Create validation summary with owner and investor analysis
+      const validationSummary = {
+        verdict: research.renovationAnalysis.verdict,
+        reasoning: research.renovationAnalysis.reasoning,
+        bestStrategy: research.renovationAnalysis.bestStrategy,
+        importantConsiderations: research.renovationAnalysis.importantConsiderations,
+        ownerAnalysis: research.renovationAnalysis.ownerAnalysis,
+        investorAnalysis: research.renovationAnalysis.investorAnalysis,
+        sources: research.sources,
+      };
+
       // Save all data
       await storage.updateAnalysisReportData(reportId, { 
         propertyData: updatedPropertyData,
         comparableProperties,
         renovationProjects: projectsWithContractors,
         financialSummary,
+        validationSummary,
         imagery,
         mapsContext,
         dataSource: 'gemini_research',

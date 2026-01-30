@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,7 +100,23 @@ export default function Report() {
   const validationSummary = report.validationSummary as any;
 
   const reportDate = report.completedAt ? new Date(report.completedAt).toLocaleDateString() : new Date().toLocaleDateString();
-  const propertyImage = propertyData.images?.[0] || "https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=400";
+  
+  // Only use verified property images - never show wrong stock photos
+  // Use Google Street View as fallback if we have API key and address
+  const getPropertyImage = () => {
+    if (propertyData.images?.[0] && !propertyData.images[0].includes('unsplash.com')) {
+      return propertyData.images[0];
+    }
+    // Only attempt Street View if we have both an API key and address
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const address = encodeURIComponent(propertyData.address || '');
+    if (apiKey && address) {
+      return `https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${address}&key=${apiKey}`;
+    }
+    return null; // No image available - will show placeholder
+  };
+  const propertyImage = getPropertyImage();
+  const [imageLoadError, setImageLoadError] = useState(false);
   
   // Calculate opportunity score (average ROI)
   const opportunityScore = Math.round(renovationProjects.reduce((sum, project) => sum + project.roi, 0) / renovationProjects.length);
@@ -135,45 +152,9 @@ export default function Report() {
     }
   };
 
-  // Calculate estimated current value using dynamic market data
-  const calculateEstimatedCurrentValue = (propertyData: PropertyData, comparableProperties: ComparableProperty[], renovationProjects: RenovationProject[]) => {
-    if (!propertyData.price || !propertyData.sqft) {
-      return 'N/A';
-    }
-
-    // Find the maximum square footage addition from all renovation projects
-    const maxAddedSqft = renovationProjects && renovationProjects.length > 0 
-      ? Math.max(...renovationProjects.map(p => p.sqftAdded || 0), 0)
-      : 0;
-    
-    // Total livable square footage including best renovation option
-    const totalLivableSqft = propertyData.sqft + maxAddedSqft;
-
-    console.log('🔍 Estimated Current Value Debug:');
-    console.log('  Base sqft:', propertyData.sqft);
-    console.log('  Max added sqft:', maxAddedSqft);
-    console.log('  Total livable sqft:', totalLivableSqft);
-    console.log('  Renovation projects:', renovationProjects?.map(p => ({ name: p.name, sqftAdded: p.sqftAdded })));
-    console.log('  Comparable properties count:', comparableProperties?.length);
-
-    // Use average price per sqft from comparable properties if available
-    if (comparableProperties && comparableProperties.length > 0) {
-      const avgPricePsf = comparableProperties.reduce((sum, comp) => sum + comp.pricePsf, 0) / comparableProperties.length;
-      console.log('  Avg comp price per sqft:', avgPricePsf);
-      if (avgPricePsf > 100) { // Sanity check
-        const estimatedValue = Math.floor(totalLivableSqft * avgPricePsf);
-        console.log('  Using comparables - Estimated value:', estimatedValue);
-        return formatCurrency(estimatedValue);
-      }
-    }
-
-    // Fallback: use current price per sqft applied to total livable space
-    const currentPricePsf = propertyData.price / propertyData.sqft;
-    const estimatedValue = Math.floor(totalLivableSqft * currentPricePsf);
-    console.log('  Using fallback - Current price per sqft:', currentPricePsf);
-    console.log('  Using fallback - Estimated value:', estimatedValue);
-    return formatCurrency(estimatedValue);
-  };
+  // Extract owner and investor analysis from validation summary if available
+  const ownerAnalysis = validationSummary?.ownerAnalysis;
+  const investorAnalysis = validationSummary?.investorAnalysis;
 
   return (
     <div className="min-h-screen bg-gray-50" data-testid="report-completed">
@@ -254,14 +235,25 @@ export default function Report() {
                 </div>
               </div>
               
-              {/* Property Image */}
+              {/* Property Image - only show if we have a verified image */}
               <div className="flex justify-center">
-                <img
-                  src={propertyImage}
-                  alt="Property"
-                  className="rounded-lg shadow-lg w-full h-64 object-cover"
-                  data-testid="img-property-main"
-                />
+                {propertyImage && !imageLoadError ? (
+                  <img
+                    src={propertyImage}
+                    alt="Property"
+                    className="rounded-lg shadow-lg w-full h-64 object-cover"
+                    data-testid="img-property-main"
+                    onError={() => setImageLoadError(true)}
+                  />
+                ) : (
+                  <div className="rounded-lg shadow-lg w-full h-64 bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center">
+                    <div className="text-center">
+                      <Home className="w-16 h-16 text-teal-300 mx-auto mb-2" />
+                      <p className="text-teal-600 font-medium">Property Analysis</p>
+                      <p className="text-teal-500 text-sm">{propertyData.address}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -343,16 +335,16 @@ export default function Report() {
                   <div className="text-3xl font-bold text-orange-600" data-testid="text-opportunity-score">
                     {Math.round(opportunityScore)}%
                   </div>
-                  <div className="text-sm text-gray-600 mt-2">Opportunity Score</div>
+                  <div className="text-sm text-gray-600 mt-2">Average ROI</div>
                   <Badge variant="secondary" className="mt-2 bg-orange-100 text-orange-700">
-                    Average
+                    {opportunityScore >= 75 ? 'Excellent' : opportunityScore >= 50 ? 'Good' : opportunityScore >= 25 ? 'Average' : 'Marginal'}
                   </Badge>
                 </div>
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <div className="text-2xl font-bold text-blue-600" data-testid="text-property-estimated-price">
-                    {calculateEstimatedCurrentValue(propertyData, comparableProperties, renovationProjects)}
+                    {financialSummary?.afterRepairValue ? formatCurrency(financialSummary.afterRepairValue) : 'N/A'}
                   </div>
-                  <div className="text-sm text-gray-600">Estimated Post-Renovation Value</div>
+                  <div className="text-sm text-gray-600">After Renovation Value</div>
                 </div>
               </div>
             </div>
@@ -411,6 +403,93 @@ export default function Report() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Owner & Investor Analysis */}
+        {(ownerAnalysis || investorAnalysis) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Current Owner Analysis */}
+            <Card className="border-2 border-blue-200">
+              <CardHeader className="bg-blue-50">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Home className="w-5 h-5 text-blue-600" />
+                  For Current Homeowners
+                </CardTitle>
+                <p className="text-sm text-gray-600">Maximize the value of your property</p>
+              </CardHeader>
+              <CardContent className="pt-4">
+                {ownerAnalysis ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <div className="text-sm text-gray-600">Your Purchase Price</div>
+                        <div className="text-lg font-bold text-gray-800">
+                          {formatCurrency(ownerAnalysis.purchasePrice || propertyData.price || 0)}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <div className="text-sm text-gray-600">Current Equity</div>
+                        <div className="text-lg font-bold text-blue-600">
+                          {formatCurrency(ownerAnalysis.currentEquity || 0)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="text-sm text-green-700 font-medium">Best Strategy: {ownerAnalysis.bestProjectForOwner}</div>
+                      <div className="text-2xl font-bold text-green-600 mt-1">
+                        +{formatCurrency(ownerAnalysis.projectedNetProfit || 0)} Net Profit
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 italic">{ownerAnalysis.recommendation}</p>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">Analysis data not available</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Real Estate Investor Analysis */}
+            <Card className="border-2 border-orange-200">
+              <CardHeader className="bg-orange-50">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-orange-600" />
+                  For Real Estate Investors
+                </CardTitle>
+                <p className="text-sm text-gray-600">What price makes this deal work?</p>
+              </CardHeader>
+              <CardContent className="pt-4">
+                {investorAnalysis ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="text-sm text-gray-600">Max Purchase Price</div>
+                        <div className="text-lg font-bold text-green-600">
+                          {formatCurrency(investorAnalysis.maxPurchasePriceForProfit || 0)}
+                        </div>
+                        <div className="text-xs text-gray-500">For profitable flip</div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <div className="text-sm text-gray-600">Target Profit</div>
+                        <div className="text-lg font-bold text-gray-800">
+                          {formatCurrency(investorAnalysis.targetProfit || 0)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                      <div className="text-sm text-red-700 font-medium">Break-Even Point</div>
+                      <div className="text-xl font-bold text-red-600">
+                        {formatCurrency(investorAnalysis.breakEvenPrice || 0)}
+                      </div>
+                      <div className="text-xs text-red-500">Don't pay more than this!</div>
+                    </div>
+                    <p className="text-sm text-gray-600 italic">{investorAnalysis.recommendation}</p>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">Analysis data not available</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Top Renovation Opportunities */}
         <Card>
@@ -493,7 +572,7 @@ export default function Report() {
                     <div className="text-lg font-bold text-orange-600">
                       {(project as any).computedValue ? 
                         formatCurrency((project as any).computedValue) : 
-                        (propertyData.price ? formatCurrency(propertyData.price + project.valueAdd) : 'N/A')
+                        (financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue + project.valueAdd) : 'N/A')
                       }
                     </div>
                     <div className="text-sm text-gray-600">Post-Renovation Value</div>

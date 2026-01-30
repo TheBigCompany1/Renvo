@@ -65,11 +65,25 @@ export interface PropertyResearchResult {
         net: number;
       };
       roi: number;
+      maxPurchasePrice?: number;
       timeline: string;
       feasibility: string;
       risks: string[];
       steps: string[];
     }>;
+    ownerAnalysis?: {
+      purchasePrice: number;
+      currentEquity: number;
+      bestProjectForOwner: string;
+      projectedNetProfit: number;
+      recommendation: string;
+    };
+    investorAnalysis?: {
+      maxPurchasePriceForProfit: number;
+      targetProfit: number;
+      breakEvenPrice: number;
+      recommendation: string;
+    };
     importantConsiderations: string[];
   };
   sources: string[];
@@ -102,6 +116,11 @@ For the renovation analysis, consider:
 - Target sale price based on comparable renovated properties
 - Net profit after closing costs (typically 5-6% of sale price)
 - Timeline and permit considerations
+
+IMPORTANT: Provide AT LEAST 2-3 different renovation opportunities, ranked by ROI. For example:
+1. Major expansion (adding square footage)
+2. ADU addition (for rental income potential)
+3. Cosmetic renovation (kitchen/bath updates)
 
 Be specific with numbers. Use real comparable sales from the area. Calculate actual profit potential.
 
@@ -171,12 +190,54 @@ Respond with a JSON object in this exact format:
           "net": 500000
         },
         "roi": 55,
+        "maxPurchasePrice": 2200000,
         "timeline": "18-24 months including permits",
         "feasibility": "High - deep lot provides expansion room",
         "risks": ["Permit delays", "Construction cost overruns", "Market changes"],
         "steps": ["Architectural plans", "Permit application", "Construction", "Finishing"]
+      },
+      {
+        "name": "ADU Addition (400 sqft)",
+        "description": "Build detached ADU for rental income or resale value",
+        "sqftAdded": 400,
+        "newTotalSqft": 1600,
+        "estimatedCost": {
+          "low": 150000,
+          "medium": 200000,
+          "high": 250000
+        },
+        "costPerSqft": 500,
+        "estimatedValueAdd": {
+          "low": 200000,
+          "medium": 300000,
+          "high": 400000
+        },
+        "targetSalePrice": 2000000,
+        "potentialProfit": {
+          "gross": 100000,
+          "net": 50000
+        },
+        "roi": 25,
+        "maxPurchasePrice": 1650000,
+        "timeline": "8-12 months",
+        "feasibility": "Medium - requires sufficient lot space",
+        "risks": ["Permit complexity", "Utility connections"],
+        "steps": ["Design", "Permits", "Construction", "Finishing"]
       }
     ],
+    "ownerAnalysis": {
+      "purchasePrice": 1550000,
+      "currentEquity": 150000,
+      "bestProjectForOwner": "Major Expansion",
+      "projectedNetProfit": 500000,
+      "recommendation": "If you bought at $1.55M, the expansion yields $500K net profit"
+    },
+    "investorAnalysis": {
+      "maxPurchasePriceForProfit": 2200000,
+      "targetProfit": 300000,
+      "breakEvenPrice": 2500000,
+      "recommendation": "Purchase under $2.2M for 15%+ profit margin after renovation"
+    },
     "importantConsiderations": [
       "LA permitting takes 6-12 months",
       "5-6% closing costs on sale",
@@ -263,6 +324,11 @@ CRITICAL DATA INTEGRITY RULES:
 
     if (!parsed.propertyData.currentEstimate || parsed.propertyData.currentEstimate <= 0) {
       throw new Error('INVALID_DATA: Could not determine property value - cannot provide accurate analysis');
+    }
+
+    // Validate minimum 2 renovation projects - fail if not provided
+    if (!parsed.renovationAnalysis?.projects || parsed.renovationAnalysis.projects.length < 2) {
+      throw new Error('INVALID_DATA: At least 2 renovation opportunities are required for analysis. Please try a different property.');
     }
 
     const sources = extractSources(groundingMetadata);
