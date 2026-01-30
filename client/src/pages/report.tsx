@@ -94,28 +94,37 @@ export default function Report() {
   }
 
   const propertyData = report.propertyData as PropertyData;
-  const renovationProjects = (report.renovationProjects as RenovationProject[]).sort((a, b) => b.roi - a.roi);
+  const renovationProjectsRaw = report.renovationProjects as RenovationProject[];
+  // Sort by calculated ROI for consistency with displayed values
+  const renovationProjects = [...renovationProjectsRaw].sort((a, b) => {
+    const costA = (a.costRangeLow + a.costRangeHigh) / 2;
+    const costB = (b.costRangeLow + b.costRangeHigh) / 2;
+    const roiA = costA > 0 ? ((a.valueAdd - costA) / costA) * 100 : 0;
+    const roiB = costB > 0 ? ((b.valueAdd - costB) / costB) * 100 : 0;
+    return roiB - roiA;
+  });
   const comparableProperties = (report.comparableProperties as ComparableProperty[]) || [];
   const financialSummary = report.financialSummary as FinancialSummaryType;
   const validationSummary = report.validationSummary as any;
+  const imagery = report.imagery as { streetViewUrl?: string; satelliteUrl?: string } | undefined;
 
   const reportDate = report.completedAt ? new Date(report.completedAt).toLocaleDateString() : new Date().toLocaleDateString();
   
-  // Use Google Street View as the primary image source - guaranteed accuracy
-  // Street View uses the address, so it always shows the correct property
-  const getStreetViewUrl = () => {
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey || !propertyData.address) {
-      return null;
-    }
-    const address = encodeURIComponent(propertyData.address);
-    return `https://maps.googleapis.com/maps/api/streetview?size=800x600&location=${address}&fov=90&pitch=10&key=${apiKey}`;
-  };
-  const streetViewUrl = getStreetViewUrl();
+  // Use the Street View URL from the backend (already includes API key)
+  const streetViewUrl = imagery?.streetViewUrl || null;
   const [imageLoadError, setImageLoadError] = useState(false);
   
-  // Calculate opportunity score (average ROI)
-  const opportunityScore = Math.round(renovationProjects.reduce((sum, project) => sum + project.roi, 0) / renovationProjects.length);
+  // Calculate ROI properly: (Value Add - Cost) / Cost * 100
+  const calculateROI = (project: RenovationProject) => {
+    const cost = (project.costRangeLow + project.costRangeHigh) / 2;
+    if (cost <= 0) return 0;
+    return Math.round(((project.valueAdd - cost) / cost) * 100);
+  };
+  
+  // Calculate opportunity score (average ROI across all projects)
+  const opportunityScore = renovationProjects.length > 0 
+    ? Math.round(renovationProjects.reduce((sum, project) => sum + calculateROI(project), 0) / renovationProjects.length)
+    : 0;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -345,11 +354,11 @@ export default function Report() {
                           <Badge className={profit > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
                             {profit > 0 ? '+' : ''}{formatCurrency(profit)} profit
                           </Badge>
-                          <span className="font-bold text-orange-600">{Math.round(project.roi)}% ROI</span>
+                          <span className="font-bold text-orange-600">{calculateROI(project)}% ROI</span>
                         </div>
                       </div>
                       <Progress 
-                        value={Math.min(project.roi, 100)} 
+                        value={Math.min(calculateROI(project), 100)} 
                         className="h-2"
                         data-testid={`progress-roi-${index}`}
                       />
@@ -381,10 +390,10 @@ export default function Report() {
                       </h3>
                       {/* Star Rating - uses backend value, falls back for older reports */}
                       <div className="flex items-center gap-2 mt-1" data-testid={`star-rating-${index}`}>
-                        <StarRating rating={project.starRating ?? getRoiStarRating(project.roi ?? 0)} />
+                        <StarRating rating={project.starRating ?? getRoiStarRating(calculateROI(project))} />
                         <span className="text-sm text-gray-500">
                           {(() => {
-                            const stars = project.starRating ?? getRoiStarRating(project.roi ?? 0);
+                            const stars = project.starRating ?? getRoiStarRating(calculateROI(project));
                             return `(${stars >= 4 ? 'Excellent' : stars >= 3 ? 'Good' : 'Fair'} ROI)`;
                           })()}
                         </span>
@@ -400,7 +409,7 @@ export default function Report() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-bold text-lg px-3 py-1">
-                      {Math.round(project.roi)}% ROI
+                      {calculateROI(project)}% ROI
                     </Badge>
                   </div>
                 </div>
