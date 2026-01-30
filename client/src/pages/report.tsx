@@ -321,181 +321,73 @@ export default function Report() {
           </CardContent>
         </Card>
 
-        {/* Investment Thesis */}
+        {/* Investment Analysis Overview */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl font-semibold" data-testid="title-investment-thesis">Investment Thesis</CardTitle>
+            <CardTitle className="text-xl font-semibold" data-testid="title-investment-analysis">Investment Analysis</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div>
-                <p className="text-gray-700 mb-4" data-testid="text-investment-summary">
-                  The top recommendation is an <strong>ADU Conversion</strong>. This project scores an 
-                  <strong> Average Opportunity</strong> due to its high potential ROI of {Math.round(renovationProjects[0]?.roi || 0)}% and strong 
-                  rental income opportunities in this market. The existing property features, particularly the {propertyData.sqft} 
-                  sq ft of space and {propertyData.lotSize} lot, make this the most strategic investment for this property.
-                </p>
-              </div>
-              <div className="text-center space-y-6">
-                <div className="inline-block p-6 bg-orange-50 rounded-full">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Summary Stats */}
+              <div className="space-y-4">
+                <div className="text-center p-6 bg-orange-50 rounded-lg">
                   <div className="text-3xl font-bold text-orange-600" data-testid="text-opportunity-score">
                     {Math.round(opportunityScore)}%
                   </div>
-                  <div className="text-sm text-gray-600 mt-2">Average ROI</div>
+                  <div className="text-sm text-gray-600 mt-1">Average ROI</div>
                   <Badge variant="secondary" className="mt-2 bg-orange-100 text-orange-700">
-                    {opportunityScore >= 75 ? 'Excellent' : opportunityScore >= 50 ? 'Good' : opportunityScore >= 25 ? 'Average' : 'Marginal'}
+                    {opportunityScore >= 75 ? 'Excellent' : opportunityScore >= 50 ? 'Good' : opportunityScore >= 25 ? 'Average' : 'Marginal'} Opportunity
                   </Badge>
                 </div>
-                <div className="p-4 bg-blue-50 rounded-lg">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
                   <div className="text-2xl font-bold text-blue-600" data-testid="text-property-estimated-price">
                     {financialSummary?.afterRepairValue ? formatCurrency(financialSummary.afterRepairValue) : 'N/A'}
                   </div>
                   <div className="text-sm text-gray-600">After Renovation Value</div>
                 </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">
+                    {financialSummary?.currentValue && financialSummary?.afterRepairValue ? 
+                      formatCurrency(financialSummary.afterRepairValue - financialSummary.currentValue) : 'N/A'}
+                  </div>
+                  <div className="text-sm text-gray-600">Total Value Uplift</div>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Renovation Analysis & ROI */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold" data-testid="title-renovation-analysis">Renovation Analysis & ROI</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* ROI Comparison Chart */}
-              <div>
-                <h4 className="font-semibold mb-4" data-testid="title-roi-comparison">ROI Comparison</h4>
-                <div className="space-y-4">
-                  {renovationProjects.map((project, index) => (
-                    <div key={project.id} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">{project.name}</span>
-                        <span className="text-sm font-bold text-orange-600">{Math.round(project.roi)}%</span>
-                      </div>
-                      <Progress 
-                        value={project.roi} 
-                        className="h-2"
-                        data-testid={`progress-roi-${index}`}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Cost vs Value Added */}
-              <div>
-                <h4 className="font-semibold mb-4" data-testid="title-cost-value">Cost vs Value Added</h4>
-                <div className="space-y-4">
-                  {renovationProjects.map((project, index) => (
-                    <div key={project.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="font-medium">{project.name}</div>
-                        <div className="text-sm text-gray-600">
-                          Cost: {formatCurrency((project.costRangeLow + project.costRangeHigh) / 2)}
+              <div className="lg:col-span-2">
+                <h4 className="font-semibold mb-4" data-testid="title-roi-comparison">ROI by Project</h4>
+                <div className="space-y-3">
+                  {renovationProjects.map((project, index) => {
+                    const cost = (project.costRangeLow + project.costRangeHigh) / 2;
+                    const profit = project.valueAdd - cost;
+                    return (
+                      <div key={project.id} className="p-3 bg-gray-50 rounded-lg">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-medium">{project.name}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-gray-600">
+                              {formatCurrency(cost)} → <span className="text-green-600 font-medium">+{formatCurrency(project.valueAdd)}</span>
+                            </span>
+                            <Badge className={profit > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                              {profit > 0 ? '+' : ''}{formatCurrency(profit)} profit
+                            </Badge>
+                            <span className="font-bold text-orange-600">{Math.round(project.roi)}% ROI</span>
+                          </div>
                         </div>
+                        <Progress 
+                          value={Math.min(project.roi, 100)} 
+                          className="h-2"
+                          data-testid={`progress-roi-${index}`}
+                        />
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-green-600">
-                          +{formatCurrency(project.valueAdd)}
-                        </div>
-                        <div className="text-sm text-gray-600">Value Add</div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Owner & Investor Analysis */}
-        {(ownerAnalysis || investorAnalysis) && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Current Owner Analysis */}
-            <Card className="border-2 border-blue-200">
-              <CardHeader className="bg-blue-50">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Home className="w-5 h-5 text-blue-600" />
-                  For Current Homeowners
-                </CardTitle>
-                <p className="text-sm text-gray-600">Maximize the value of your property</p>
-              </CardHeader>
-              <CardContent className="pt-4">
-                {ownerAnalysis ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <div className="text-sm text-gray-600">Your Purchase Price</div>
-                        <div className="text-lg font-bold text-gray-800">
-                          {formatCurrency(ownerAnalysis.purchasePrice || propertyData.price || 0)}
-                        </div>
-                      </div>
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <div className="text-sm text-gray-600">Current Equity</div>
-                        <div className="text-lg font-bold text-blue-600">
-                          {formatCurrency(ownerAnalysis.currentEquity || 0)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <div className="text-sm text-green-700 font-medium">Best Strategy: {ownerAnalysis.bestProjectForOwner}</div>
-                      <div className="text-2xl font-bold text-green-600 mt-1">
-                        +{formatCurrency(ownerAnalysis.projectedNetProfit || 0)} Net Profit
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-600 italic">{ownerAnalysis.recommendation}</p>
-                  </div>
-                ) : (
-                  <p className="text-gray-500">Analysis data not available</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Real Estate Investor Analysis */}
-            <Card className="border-2 border-orange-200">
-              <CardHeader className="bg-orange-50">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-orange-600" />
-                  For Real Estate Investors
-                </CardTitle>
-                <p className="text-sm text-gray-600">What price makes this deal work?</p>
-              </CardHeader>
-              <CardContent className="pt-4">
-                {investorAnalysis ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                        <div className="text-sm text-gray-600">Max Purchase Price</div>
-                        <div className="text-lg font-bold text-green-600">
-                          {formatCurrency(investorAnalysis.maxPurchasePriceForProfit || 0)}
-                        </div>
-                        <div className="text-xs text-gray-500">For profitable flip</div>
-                      </div>
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <div className="text-sm text-gray-600">Target Profit</div>
-                        <div className="text-lg font-bold text-gray-800">
-                          {formatCurrency(investorAnalysis.targetProfit || 0)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                      <div className="text-sm text-red-700 font-medium">Break-Even Point</div>
-                      <div className="text-xl font-bold text-red-600">
-                        {formatCurrency(investorAnalysis.breakEvenPrice || 0)}
-                      </div>
-                      <div className="text-xs text-red-500">Don't pay more than this!</div>
-                    </div>
-                    <p className="text-sm text-gray-600 italic">{investorAnalysis.recommendation}</p>
-                  </div>
-                ) : (
-                  <p className="text-gray-500">Analysis data not available</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
 
         {/* Top Renovation Opportunities */}
         <Card>
@@ -547,60 +439,69 @@ export default function Report() {
                 </p>
 
                 {/* Project Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-lg font-bold text-teal-600">
-                      {(project as any).computedCost ? formatCurrency((project as any).computedCost) : formatCurrency((project.costRangeLow + project.costRangeHigh) / 2)}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {(project as any).computedCost ? 'Validated Cost' : 'Est. Cost'}
-                    </div>
-                    {(project as any).costPerSqftUsed && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        ${(project as any).costPerSqftUsed}/sqft
+                {(() => {
+                  const projectCost = (project as any).computedCost || (project.costRangeLow + project.costRangeHigh) / 2;
+                  const netProfit = project.valueAdd - projectCost;
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                      <div className="text-center p-4 bg-gray-50 rounded-lg">
+                        <div className="text-lg font-bold text-teal-600">
+                          {formatCurrency(projectCost)}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {(project as any).computedCost ? 'Validated Cost' : 'Est. Cost'}
+                        </div>
+                        {(project as any).costPerSqftUsed && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            ${(project as any).costPerSqftUsed}/sqft
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-lg font-bold text-green-600">
-                      {formatCurrency(project.valueAdd)}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {(project as any).corrected ? 'Validated Value Add' : 'Est. Value Add'}
-                    </div>
-                    {(project as any).pricePsfUsed && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        ${(project as any).pricePsfUsed}/sqft
+                      <div className="text-center p-4 bg-gray-50 rounded-lg">
+                        <div className="text-lg font-bold text-green-600">
+                          +{formatCurrency(project.valueAdd)}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {(project as any).corrected ? 'Validated Value Add' : 'Est. Value Add'}
+                        </div>
+                        {(project as any).pricePsfUsed && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            ${(project as any).pricePsfUsed}/sqft
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className="text-center p-4 bg-orange-50 rounded-lg">
-                    <div className="text-lg font-bold text-orange-600">
-                      {(project as any).computedValue ? 
-                        formatCurrency((project as any).computedValue) : 
-                        (financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue + project.valueAdd) : 'N/A')
-                      }
-                    </div>
-                    <div className="text-sm text-gray-600">Post-Renovation Value</div>
-                    {(project as any).newTotalSqft && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {(project as any).newTotalSqft.toLocaleString()} sqft total
+                      <div className={`text-center p-4 rounded-lg ${netProfit > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                        <div className={`text-lg font-bold ${netProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {netProfit > 0 ? '+' : ''}{formatCurrency(netProfit)}
+                        </div>
+                        <div className="text-sm text-gray-600">Net Profit</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Value Add - Cost
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-lg font-bold text-blue-600">
-                      {project.timeline}
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <div className="text-lg font-bold text-blue-600">
+                          {project.timeline}
+                        </div>
+                        <div className="text-sm text-gray-600">Timeline</div>
+                      </div>
+                      <div className="text-center p-4 bg-orange-50 rounded-lg">
+                        <div className="text-lg font-bold text-orange-600">
+                          {(project as any).computedValue ? 
+                            formatCurrency((project as any).computedValue) : 
+                            (financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue + project.valueAdd) : 'N/A')
+                          }
+                        </div>
+                        <div className="text-sm text-gray-600">Post-Reno Value</div>
+                        {(project as any).newTotalSqft && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {(project as any).newTotalSqft.toLocaleString()} sqft
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-600">Timeline</div>
-                  </div>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-lg font-bold text-purple-600">
-                      {index === 0 ? 'Moderate' : index === 1 ? 'Difficult' : 'Moderate'}
-                    </div>
-                    <div className="text-sm text-gray-600">Difficulty</div>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* Project Details Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
