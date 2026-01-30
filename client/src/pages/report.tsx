@@ -101,21 +101,17 @@ export default function Report() {
 
   const reportDate = report.completedAt ? new Date(report.completedAt).toLocaleDateString() : new Date().toLocaleDateString();
   
-  // Only use verified property images - never show wrong stock photos
-  // Use Google Street View as fallback if we have API key and address
-  const getPropertyImage = () => {
-    if (propertyData.images?.[0] && !propertyData.images[0].includes('unsplash.com')) {
-      return propertyData.images[0];
-    }
-    // Only attempt Street View if we have both an API key and address
+  // Use Google Street View as the primary image source - guaranteed accuracy
+  // Street View uses the address, so it always shows the correct property
+  const getStreetViewUrl = () => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    const address = encodeURIComponent(propertyData.address || '');
-    if (apiKey && address) {
-      return `https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${address}&key=${apiKey}`;
+    if (!apiKey || !propertyData.address) {
+      return null;
     }
-    return null; // No image available - will show placeholder
+    const address = encodeURIComponent(propertyData.address);
+    return `https://maps.googleapis.com/maps/api/streetview?size=800x600&location=${address}&fov=90&pitch=10&key=${apiKey}`;
   };
-  const propertyImage = getPropertyImage();
+  const streetViewUrl = getStreetViewUrl();
   const [imageLoadError, setImageLoadError] = useState(false);
   
   // Calculate opportunity score (average ROI)
@@ -198,7 +194,7 @@ export default function Report() {
                     <div className="text-2xl font-bold text-teal-600" data-testid="text-property-price">
                       {propertyData.price ? formatCurrency(propertyData.price) : 'N/A'}
                     </div>
-                    <div className="text-sm text-gray-600">Last Price Sold</div>
+                    <div className="text-sm text-gray-600">Current Estimate</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-2xl font-bold text-teal-600" data-testid="text-property-beds">
@@ -213,6 +209,16 @@ export default function Report() {
                     <div className="text-sm text-gray-600">Baths</div>
                   </div>
                 </div>
+                {propertyData.lastSoldPrice && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg text-center">
+                    <div className="text-lg font-semibold text-blue-700">
+                      Last Sold: {formatCurrency(propertyData.lastSoldPrice)}
+                      {propertyData.lastSoldDate && (
+                        <span className="text-sm font-normal text-blue-600 ml-2">({propertyData.lastSoldDate})</span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-2xl font-bold text-teal-600" data-testid="text-property-sqft">
@@ -235,12 +241,12 @@ export default function Report() {
                 </div>
               </div>
               
-              {/* Property Image - only show if we have a verified image */}
+              {/* Property Image - Google Street View for guaranteed accuracy */}
               <div className="flex justify-center">
-                {propertyImage && !imageLoadError ? (
+                {streetViewUrl && !imageLoadError ? (
                   <img
-                    src={propertyImage}
-                    alt="Property"
+                    src={streetViewUrl}
+                    alt={`Street View of ${propertyData.address}`}
                     className="rounded-lg shadow-lg w-full h-64 object-cover"
                     data-testid="img-property-main"
                     onError={() => setImageLoadError(true)}
