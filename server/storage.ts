@@ -21,7 +21,7 @@ import {
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq } from "drizzle-orm";
+import { eq, and, gte, or, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -56,6 +56,8 @@ export interface IStorage {
   createEmailSignup(emailSignup: InsertEmailSignup): Promise<EmailSignup>;
   getEmailSignups(): Promise<EmailSignup[]>;
   getEmailSignupsBySource(source: string): Promise<EmailSignup[]>;
+  
+  findCachedReport(address: string, maxAgeDays?: number): Promise<AnalysisReport | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -191,6 +193,24 @@ export class MemStorage implements IStorage {
       (signup) => signup.signupSource === source
     );
   }
+
+  async findCachedReport(address: string, maxAgeDays: number = 30): Promise<AnalysisReport | undefined> {
+    const normalizedAddress = address.toLowerCase().trim();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+    
+    const reports = Array.from(this.analysisReports.values());
+    return reports.find(report => {
+      if (report.status !== 'completed') return false;
+      if (!report.completedAt || new Date(report.completedAt) < cutoffDate) return false;
+      
+      // Check if address matches (either propertyAddress or address in propertyData)
+      const reportAddress = (report.propertyAddress || 
+        (report.propertyData as PropertyData)?.address || '').toLowerCase().trim();
+      
+      return reportAddress.includes(normalizedAddress) || normalizedAddress.includes(reportAddress);
+    });
+  }
 }
 
 // PostgreSQL storage implementation using Drizzle
@@ -276,6 +296,30 @@ export class PostgresStorage implements IStorage {
 
   async getEmailSignupsBySource(source: string): Promise<EmailSignup[]> {
     return await this.db.select().from(emailSignups).where(eq(emailSignups.signupSource, source));
+  }
+
+  async findCachedReport(address: string, maxAgeDays: number = 30): Promise<AnalysisReport | undefined> {
+    const normalizedAddress = address.toLowerCase().trim();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+    
+    // Query for completed reports within the time window
+    // Use ILIKE for case-insensitive address matching
+    const results = await this.db.select()
+      .from(analysisReports)
+      .where(
+        and(
+          eq(analysisReports.status, 'completed'),
+          gte(analysisReports.completedAt, cutoffDate),
+          or(
+            sql`LOWER(${analysisReports.propertyAddress}) LIKE ${'%' + normalizedAddress + '%'}`,
+            sql`LOWER(${analysisReports.propertyData}->>'address') LIKE ${'%' + normalizedAddress + '%'}`
+          )
+        )
+      )
+      .limit(1);
+    
+    return results[0];
   }
 }
 

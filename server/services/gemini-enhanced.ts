@@ -212,15 +212,21 @@ export async function generateImageryUrls(
   lat: number,
   lng: number
 ): Promise<Imagery> {
-  const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || "";
+  // Use GOOGLE_MAPS_API_KEY specifically for Maps Static API (Street View, Satellite)
+  // GOOGLE_API_KEY and GEMINI_API_KEY are for Gemini AI, not Maps imagery
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || "";
+  
+  if (!apiKey) {
+    console.log('⚠️ GOOGLE_MAPS_API_KEY not set - Street View and Satellite imagery will not be available');
+  }
   
   // Include API key in URLs for authenticated requests
   const streetViewUrl = apiKey 
     ? `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${lat},${lng}&fov=90&heading=0&pitch=0&key=${apiKey}`
-    : `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${lat},${lng}&fov=90&heading=0&pitch=0`;
+    : '';
   const satelliteUrl = apiKey
     ? `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=19&size=640x480&maptype=satellite&key=${apiKey}`
-    : `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=19&size=640x480&maptype=satellite`;
+    : '';
   
   return {
     streetViewUrl,

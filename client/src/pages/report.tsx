@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getAnalysisReport } from "@/lib/api";
 import { PropertyData, RenovationProject, ComparableProperty, Contractor, FinancialSummary as FinancialSummaryType } from "@shared/schema";
-import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle, Star } from "lucide-react";
+import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle, Star, GraduationCap, Footprints, Shield, CloudRain, FileText, Wallet, Building } from "lucide-react";
 
 // Helper function to render star rating
 const StarRating = ({ rating }: { rating: number }) => {
@@ -35,6 +35,7 @@ const getRoiStarRating = (roi: number): number => {
 
 export default function Report() {
   const { id } = useParams<{ id: string }>();
+  const [imageLoadError, setImageLoadError] = useState(false);
 
   const { data: report, isLoading, error } = useQuery({
     queryKey: ['/api/reports', id],
@@ -112,7 +113,6 @@ export default function Report() {
   
   // Use the Street View URL from the backend (already includes API key)
   const streetViewUrl = imagery?.streetViewUrl || null;
-  const [imageLoadError, setImageLoadError] = useState(false);
   
   // Calculate ROI properly: (Value Add - Cost) / Cost * 100
   const calculateROI = (project: RenovationProject) => {
@@ -285,6 +285,250 @@ export default function Report() {
             </p>
           </CardContent>
         </Card>
+
+        {/* Neighborhood & Lifestyle Scores */}
+        {(propertyData.schools || propertyData.walkScores || propertyData.crimeStats || propertyData.hazardRisk) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-teal-600" />
+                Neighborhood & Lifestyle
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Schools */}
+                {propertyData.schools && propertyData.schools.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <GraduationCap className="w-4 h-4" />
+                      Nearby Schools
+                    </div>
+                    {propertyData.schools.slice(0, 3).map((school: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
+                        <span className="text-gray-700 truncate max-w-[60%]">{school.name}</span>
+                        <Badge variant={school.rating >= 8 ? "default" : school.rating >= 5 ? "secondary" : "outline"}>
+                          {school.rating}/10
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Walk Scores */}
+                {propertyData.walkScores && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <Footprints className="w-4 h-4" />
+                      Walkability Scores
+                    </div>
+                    <div className="space-y-2">
+                      {propertyData.walkScores.walkScore !== undefined && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Walk Score</span>
+                          <div className="flex items-center gap-2">
+                            <Progress value={propertyData.walkScores.walkScore} className="w-20 h-2" />
+                            <span className="font-medium w-8">{propertyData.walkScores.walkScore}</span>
+                          </div>
+                        </div>
+                      )}
+                      {propertyData.walkScores.transitScore !== undefined && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Transit Score</span>
+                          <div className="flex items-center gap-2">
+                            <Progress value={propertyData.walkScores.transitScore} className="w-20 h-2" />
+                            <span className="font-medium w-8">{propertyData.walkScores.transitScore}</span>
+                          </div>
+                        </div>
+                      )}
+                      {propertyData.walkScores.bikeScore !== undefined && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Bike Score</span>
+                          <div className="flex items-center gap-2">
+                            <Progress value={propertyData.walkScores.bikeScore} className="w-20 h-2" />
+                            <span className="font-medium w-8">{propertyData.walkScores.bikeScore}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Crime Stats */}
+                {propertyData.crimeStats && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <Shield className="w-4 h-4" />
+                      Safety & Crime
+                    </div>
+                    <div className="space-y-2">
+                      {propertyData.crimeStats.overallRating && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant={
+                            propertyData.crimeStats.overallRating === 'very_low' || propertyData.crimeStats.overallRating === 'low' 
+                              ? "default" 
+                              : propertyData.crimeStats.overallRating === 'moderate' 
+                                ? "secondary" 
+                                : "destructive"
+                          }>
+                            {propertyData.crimeStats.overallRating.replace('_', ' ').toUpperCase()} CRIME
+                          </Badge>
+                        </div>
+                      )}
+                      {propertyData.crimeStats.description && (
+                        <p className="text-sm text-gray-600">{propertyData.crimeStats.description}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Hazard Risk */}
+                {propertyData.hazardRisk && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <CloudRain className="w-4 h-4" />
+                      Natural Hazards
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      {propertyData.hazardRisk.floodZone && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Flood Zone</span>
+                          <span className="font-medium">{propertyData.hazardRisk.floodZone}</span>
+                        </div>
+                      )}
+                      {propertyData.hazardRisk.floodRisk && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Flood Risk</span>
+                          <Badge variant={propertyData.hazardRisk.floodRisk === 'minimal' || propertyData.hazardRisk.floodRisk === 'low' ? "default" : "secondary"}>
+                            {propertyData.hazardRisk.floodRisk}
+                          </Badge>
+                        </div>
+                      )}
+                      {propertyData.hazardRisk.fireRisk && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Fire Risk</span>
+                          <Badge variant={propertyData.hazardRisk.fireRisk === 'minimal' || propertyData.hazardRisk.fireRisk === 'low' ? "default" : "secondary"}>
+                            {propertyData.hazardRisk.fireRisk}
+                          </Badge>
+                        </div>
+                      )}
+                      {propertyData.hazardRisk.earthquakeRisk && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Earthquake Risk</span>
+                          <Badge variant={propertyData.hazardRisk.earthquakeRisk === 'minimal' || propertyData.hazardRisk.earthquakeRisk === 'low' ? "default" : "secondary"}>
+                            {propertyData.hazardRisk.earthquakeRisk}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Property History & Financials */}
+        {(propertyData.permitHistory || propertyData.propertyTaxAnnual || propertyData.rentalPotential) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-teal-600" />
+                Property History & Financials
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Permit History */}
+                {propertyData.permitHistory && propertyData.permitHistory.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <FileText className="w-4 h-4" />
+                      Permit History
+                    </div>
+                    <div className="space-y-2">
+                      {propertyData.permitHistory.slice(0, 4).map((permit: any, idx: number) => (
+                        <div key={idx} className="text-sm bg-gray-50 p-2 rounded">
+                          <div className="flex justify-between">
+                            <span className="font-medium text-gray-800">{permit.type}</span>
+                            {permit.date && <span className="text-gray-500">{permit.date}</span>}
+                          </div>
+                          <p className="text-gray-600 text-xs mt-1">{permit.description}</p>
+                          {permit.value && (
+                            <p className="text-teal-600 text-xs font-medium mt-1">Value: {formatCurrency(permit.value)}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Property Taxes */}
+                {propertyData.propertyTaxAnnual && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <Wallet className="w-4 h-4" />
+                      Property Taxes
+                    </div>
+                    <div className="bg-orange-50 p-4 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {formatCurrency(propertyData.propertyTaxAnnual)}
+                      </div>
+                      <div className="text-sm text-gray-600 mt-1">Annual Property Tax</div>
+                      {propertyData.propertyTaxRate && (
+                        <div className="text-xs text-gray-500 mt-2">
+                          Tax Rate: {propertyData.propertyTaxRate}%
+                        </div>
+                      )}
+                      <div className="text-sm text-gray-600 mt-2">
+                        {formatCurrency(propertyData.propertyTaxAnnual / 12)}/month
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rental Potential */}
+                {propertyData.rentalPotential && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <Building className="w-4 h-4" />
+                      Rental Income Potential
+                    </div>
+                    <div className="bg-blue-50 p-4 rounded-lg space-y-3">
+                      {propertyData.rentalPotential.estimatedMonthlyRent && (
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">
+                            {formatCurrency(propertyData.rentalPotential.estimatedMonthlyRent)}/mo
+                          </div>
+                          <div className="text-sm text-gray-600">Estimated Rent</div>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {propertyData.rentalPotential.annualRentalIncome && (
+                          <div>
+                            <div className="text-gray-600">Annual Income</div>
+                            <div className="font-medium">{formatCurrency(propertyData.rentalPotential.annualRentalIncome)}</div>
+                          </div>
+                        )}
+                        {propertyData.rentalPotential.capRate && (
+                          <div>
+                            <div className="text-gray-600">Cap Rate</div>
+                            <div className="font-medium">{propertyData.rentalPotential.capRate}%</div>
+                          </div>
+                        )}
+                      </div>
+                      {propertyData.rentalPotential.marketRentRange && (
+                        <div className="text-xs text-gray-500 text-center">
+                          Market Range: {formatCurrency(propertyData.rentalPotential.marketRentRange.low || 0)} - {formatCurrency(propertyData.rentalPotential.marketRentRange.high || 0)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Investment Analysis - Combined Overview */}
         <Card className="border-2 border-teal-500">

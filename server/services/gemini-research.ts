@@ -19,6 +19,50 @@ export interface PropertyResearchResult {
     lastSoldPrice?: number;
     lastSoldDate?: string;
     description: string;
+    // Enhanced property data
+    schools?: Array<{
+      name: string;
+      type?: 'elementary' | 'middle' | 'high' | 'private';
+      rating: number;
+      distance?: string;
+    }>;
+    walkScores?: {
+      walkScore?: number;
+      transitScore?: number;
+      bikeScore?: number;
+    };
+    crimeStats?: {
+      overallRating?: 'very_low' | 'low' | 'moderate' | 'high' | 'very_high';
+      violentCrimeIndex?: number;
+      propertyCrimeIndex?: number;
+      description?: string;
+    };
+    hazardRisk?: {
+      floodZone?: string;
+      floodRisk?: 'minimal' | 'low' | 'moderate' | 'high' | 'very_high';
+      fireRisk?: 'minimal' | 'low' | 'moderate' | 'high' | 'very_high';
+      earthquakeRisk?: 'minimal' | 'low' | 'moderate' | 'high' | 'very_high';
+      insuranceImplications?: string;
+    };
+    permitHistory?: Array<{
+      date?: string;
+      type: string;
+      description: string;
+      value?: number;
+      status?: string;
+    }>;
+    propertyTaxAnnual?: number;
+    propertyTaxRate?: number;
+    rentalPotential?: {
+      estimatedMonthlyRent?: number;
+      annualRentalIncome?: number;
+      capRate?: number;
+      rentToValueRatio?: number;
+      marketRentRange?: {
+        low?: number;
+        high?: number;
+      };
+    };
   };
   comparables: Array<{
     address: string;
@@ -107,6 +151,14 @@ RESEARCH TASKS:
 2. Find 3-5 comparable sales in the same neighborhood (recently sold properties with similar characteristics)
 3. Analyze the neighborhood and market trends
 4. Provide a comprehensive renovation investment analysis
+5. Research ENHANCED PROPERTY DATA (important for buyers):
+   - Nearby school ratings (GreatSchools scores 1-10)
+   - Walk Score, Transit Score, Bike Score (0-100)
+   - Crime statistics for the area
+   - Flood zone and natural hazard risks
+   - Permit history (any recent work done on the property)
+   - Annual property taxes
+   - Rental income potential (if investor were to rent it out)
 
 For the renovation analysis, consider:
 - Current condition vs. potential (is this a fixer or already renovated?)
@@ -140,7 +192,20 @@ Respond with a JSON object in this exact format:
     "currentEstimate": 1700000,
     "lastSoldPrice": 1550000,
     "lastSoldDate": "January 2024",
-    "description": "Brief description of current state"
+    "description": "Brief description of current state",
+    "schools": [
+      {"name": "Mar Vista Elementary", "type": "elementary", "rating": 7, "distance": "0.3 mi"},
+      {"name": "Mark Twain Middle School", "type": "middle", "rating": 6, "distance": "0.8 mi"}
+    ],
+    "walkScores": {"walkScore": 72, "transitScore": 45, "bikeScore": 68},
+    "crimeStats": {"overallRating": "low", "description": "Safe neighborhood with low crime rates"},
+    "hazardRisk": {"floodZone": "Zone X", "floodRisk": "minimal", "fireRisk": "low", "earthquakeRisk": "moderate", "insuranceImplications": "Standard insurance rates apply"},
+    "permitHistory": [
+      {"date": "2022", "type": "Renovation", "description": "Kitchen remodel", "value": 45000, "status": "Completed"}
+    ],
+    "propertyTaxAnnual": 15500,
+    "propertyTaxRate": 1.12,
+    "rentalPotential": {"estimatedMonthlyRent": 4500, "annualRentalIncome": 54000, "capRate": 3.2, "marketRentRange": {"low": 4000, "high": 5000}}
   },
   "comparables": [
     {
@@ -414,6 +479,15 @@ export function convertToPropertyData(research: PropertyResearchResult): any {
     redfinEstimate: pd.currentEstimate,
     lastSoldPrice: pd.lastSoldPrice,
     lastSoldDate: pd.lastSoldDate,
+    // Enhanced property data
+    schools: pd.schools,
+    walkScores: pd.walkScores,
+    crimeStats: pd.crimeStats,
+    hazardRisk: pd.hazardRisk,
+    permitHistory: pd.permitHistory,
+    propertyTaxAnnual: pd.propertyTaxAnnual,
+    propertyTaxRate: pd.propertyTaxRate,
+    rentalPotential: pd.rentalPotential,
   };
 }
 

@@ -50,6 +50,59 @@ export const locationSchema = z.object({
   lng: z.number().optional(),
 });
 
+// School rating schema
+export const schoolRatingSchema = z.object({
+  name: z.string(),
+  type: z.enum(['elementary', 'middle', 'high', 'private']).optional(),
+  rating: z.number().min(1).max(10),
+  distance: z.string().optional(),
+});
+
+// Walkability scores schema
+export const walkScoresSchema = z.object({
+  walkScore: z.number().min(0).max(100).optional(),
+  transitScore: z.number().min(0).max(100).optional(),
+  bikeScore: z.number().min(0).max(100).optional(),
+});
+
+// Crime statistics schema  
+export const crimeStatsSchema = z.object({
+  overallRating: z.enum(['very_low', 'low', 'moderate', 'high', 'very_high']).optional(),
+  violentCrimeIndex: z.number().optional(),
+  propertyCrimeIndex: z.number().optional(),
+  description: z.string().optional(),
+});
+
+// Hazard risk schema
+export const hazardRiskSchema = z.object({
+  floodZone: z.string().optional(),
+  floodRisk: z.enum(['minimal', 'low', 'moderate', 'high', 'very_high']).optional(),
+  fireRisk: z.enum(['minimal', 'low', 'moderate', 'high', 'very_high']).optional(),
+  earthquakeRisk: z.enum(['minimal', 'low', 'moderate', 'high', 'very_high']).optional(),
+  insuranceImplications: z.string().optional(),
+});
+
+// Permit history schema
+export const permitSchema = z.object({
+  date: z.string().optional(),
+  type: z.string(),
+  description: z.string(),
+  value: z.number().optional(),
+  status: z.string().optional(),
+});
+
+// Rental income potential schema
+export const rentalPotentialSchema = z.object({
+  estimatedMonthlyRent: z.number().optional(),
+  annualRentalIncome: z.number().optional(),
+  capRate: z.number().optional(),
+  rentToValueRatio: z.number().optional(),
+  marketRentRange: z.object({
+    low: z.number().optional(),
+    high: z.number().optional(),
+  }).optional(),
+});
+
 export const propertyDataSchema = z.object({
   address: z.string(),
   price: z.number().optional(),
@@ -69,7 +122,25 @@ export const propertyDataSchema = z.object({
     price: z.number().optional(),
     event: z.string().optional(),
   })).optional(),
+  
+  // Enhanced property data
+  schools: z.array(schoolRatingSchema).optional(),
+  walkScores: walkScoresSchema.optional(),
+  crimeStats: crimeStatsSchema.optional(),
+  hazardRisk: hazardRiskSchema.optional(),
+  permitHistory: z.array(permitSchema).optional(),
+  propertyTaxAnnual: z.number().optional(),
+  propertyTaxRate: z.number().optional(),
+  rentalPotential: rentalPotentialSchema.optional(),
 });
+
+// Export types for enhanced property data
+export type SchoolRating = z.infer<typeof schoolRatingSchema>;
+export type WalkScores = z.infer<typeof walkScoresSchema>;
+export type CrimeStats = z.infer<typeof crimeStatsSchema>;
+export type HazardRisk = z.infer<typeof hazardRiskSchema>;
+export type Permit = z.infer<typeof permitSchema>;
+export type RentalPotential = z.infer<typeof rentalPotentialSchema>;
 
 export const contractorSchema = z.object({
   name: z.string(),

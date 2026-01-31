@@ -46,12 +46,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Check for cached report (30 days) before creating a new one
+      const addressToCheck = validatedData.propertyAddress || validatedData.propertyUrl || '';
+      if (addressToCheck) {
+        const cachedReport = await storage.findCachedReport(addressToCheck, 30);
+        if (cachedReport) {
+          console.log(`📦 Found cached report for "${addressToCheck}" - returning existing report ${cachedReport.id}`);
+          return res.json({ 
+            reportId: cachedReport.id, 
+            status: cachedReport.status,
+            cached: true,
+            cachedAt: cachedReport.completedAt
+          });
+        }
+      }
+
       const report = await storage.createAnalysisReport(validatedData);
       
       // Start async processing
       processAnalysisReport(report.id);
       
-      res.json({ reportId: report.id, status: 'pending' });
+      res.json({ reportId: report.id, status: 'pending', cached: false });
     } catch (error) {
       console.error("Error creating analysis report:", error);
       
