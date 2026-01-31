@@ -286,148 +286,6 @@ export default function Report() {
           </CardContent>
         </Card>
 
-        {/* Neighborhood & Lifestyle Scores */}
-        {(propertyData.schools || propertyData.walkScores || propertyData.crimeStats || propertyData.hazardRisk) && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-teal-600" />
-                Neighborhood & Lifestyle
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* Schools */}
-                {propertyData.schools && propertyData.schools.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-teal-700 font-medium">
-                      <GraduationCap className="w-4 h-4" />
-                      Nearby Schools
-                    </div>
-                    {propertyData.schools.slice(0, 3).map((school: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
-                        <span className="text-gray-700 truncate max-w-[60%]">{school.name}</span>
-                        <Badge variant={school.rating >= 8 ? "default" : school.rating >= 5 ? "secondary" : "outline"}>
-                          {school.rating}/10
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Walk Scores */}
-                {propertyData.walkScores && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-teal-700 font-medium">
-                      <Footprints className="w-4 h-4" />
-                      Walkability Scores
-                    </div>
-                    <div className="space-y-2">
-                      {propertyData.walkScores.walkScore !== undefined && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600">Walk Score</span>
-                          <div className="flex items-center gap-2">
-                            <Progress value={propertyData.walkScores.walkScore} className="w-20 h-2" />
-                            <span className="font-medium w-8">{propertyData.walkScores.walkScore}</span>
-                          </div>
-                        </div>
-                      )}
-                      {propertyData.walkScores.transitScore !== undefined && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600">Transit Score</span>
-                          <div className="flex items-center gap-2">
-                            <Progress value={propertyData.walkScores.transitScore} className="w-20 h-2" />
-                            <span className="font-medium w-8">{propertyData.walkScores.transitScore}</span>
-                          </div>
-                        </div>
-                      )}
-                      {propertyData.walkScores.bikeScore !== undefined && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600">Bike Score</span>
-                          <div className="flex items-center gap-2">
-                            <Progress value={propertyData.walkScores.bikeScore} className="w-20 h-2" />
-                            <span className="font-medium w-8">{propertyData.walkScores.bikeScore}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Crime Stats */}
-                {propertyData.crimeStats && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-teal-700 font-medium">
-                      <Shield className="w-4 h-4" />
-                      Safety & Crime
-                    </div>
-                    <div className="space-y-2">
-                      {propertyData.crimeStats.overallRating && (
-                        <div className="flex items-center gap-2">
-                          <Badge variant={
-                            propertyData.crimeStats.overallRating === 'very_low' || propertyData.crimeStats.overallRating === 'low' 
-                              ? "default" 
-                              : propertyData.crimeStats.overallRating === 'moderate' 
-                                ? "secondary" 
-                                : "destructive"
-                          }>
-                            {propertyData.crimeStats.overallRating.replace('_', ' ').toUpperCase()} CRIME
-                          </Badge>
-                        </div>
-                      )}
-                      {propertyData.crimeStats.description && (
-                        <p className="text-sm text-gray-600">{propertyData.crimeStats.description}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Hazard Risk */}
-                {propertyData.hazardRisk && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-teal-700 font-medium">
-                      <CloudRain className="w-4 h-4" />
-                      Natural Hazards
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      {propertyData.hazardRisk.floodZone && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Flood Zone</span>
-                          <span className="font-medium">{propertyData.hazardRisk.floodZone}</span>
-                        </div>
-                      )}
-                      {propertyData.hazardRisk.floodRisk && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-600">Flood Risk</span>
-                          <Badge variant={propertyData.hazardRisk.floodRisk === 'minimal' || propertyData.hazardRisk.floodRisk === 'low' ? "default" : "secondary"}>
-                            {propertyData.hazardRisk.floodRisk}
-                          </Badge>
-                        </div>
-                      )}
-                      {propertyData.hazardRisk.fireRisk && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-600">Fire Risk</span>
-                          <Badge variant={propertyData.hazardRisk.fireRisk === 'minimal' || propertyData.hazardRisk.fireRisk === 'low' ? "default" : "secondary"}>
-                            {propertyData.hazardRisk.fireRisk}
-                          </Badge>
-                        </div>
-                      )}
-                      {propertyData.hazardRisk.earthquakeRisk && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-600">Earthquake Risk</span>
-                          <Badge variant={propertyData.hazardRisk.earthquakeRisk === 'minimal' || propertyData.hazardRisk.earthquakeRisk === 'low' ? "default" : "secondary"}>
-                            {propertyData.hazardRisk.earthquakeRisk}
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Property History & Financials */}
         {(propertyData.permitHistory || propertyData.propertyTaxAnnual || propertyData.rentalPotential) && (
           <Card>
@@ -877,6 +735,148 @@ export default function Report() {
               <div className="text-center py-8 text-gray-500">
                 <p>Comparable properties data is currently being processed or unavailable.</p>
                 <p className="text-sm mt-2">This may occur when using demonstration data or if market data is limited for this area.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Neighborhood & Lifestyle Scores */}
+        {(propertyData.schools || propertyData.walkScores || propertyData.crimeStats || propertyData.hazardRisk) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-teal-600" />
+                Neighborhood & Lifestyle
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Schools */}
+                {propertyData.schools && propertyData.schools.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <GraduationCap className="w-4 h-4" />
+                      Nearby Schools
+                    </div>
+                    {propertyData.schools.slice(0, 3).map((school: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
+                        <span className="text-gray-700 truncate max-w-[60%]">{school.name}</span>
+                        <Badge variant={school.rating >= 8 ? "default" : school.rating >= 5 ? "secondary" : "outline"}>
+                          {school.rating}/10
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Walk Scores */}
+                {propertyData.walkScores && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <Footprints className="w-4 h-4" />
+                      Walkability Scores
+                    </div>
+                    <div className="space-y-2">
+                      {propertyData.walkScores.walkScore !== undefined && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Walk Score</span>
+                          <div className="flex items-center gap-2">
+                            <Progress value={propertyData.walkScores.walkScore} className="w-20 h-2" />
+                            <span className="font-medium w-8">{propertyData.walkScores.walkScore}</span>
+                          </div>
+                        </div>
+                      )}
+                      {propertyData.walkScores.transitScore !== undefined && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Transit Score</span>
+                          <div className="flex items-center gap-2">
+                            <Progress value={propertyData.walkScores.transitScore} className="w-20 h-2" />
+                            <span className="font-medium w-8">{propertyData.walkScores.transitScore}</span>
+                          </div>
+                        </div>
+                      )}
+                      {propertyData.walkScores.bikeScore !== undefined && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Bike Score</span>
+                          <div className="flex items-center gap-2">
+                            <Progress value={propertyData.walkScores.bikeScore} className="w-20 h-2" />
+                            <span className="font-medium w-8">{propertyData.walkScores.bikeScore}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Crime Stats */}
+                {propertyData.crimeStats && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <Shield className="w-4 h-4" />
+                      Safety & Crime
+                    </div>
+                    <div className="space-y-2">
+                      {propertyData.crimeStats.overallRating && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant={
+                            propertyData.crimeStats.overallRating === 'very_low' || propertyData.crimeStats.overallRating === 'low' 
+                              ? "default" 
+                              : propertyData.crimeStats.overallRating === 'moderate' 
+                                ? "secondary" 
+                                : "destructive"
+                          }>
+                            {propertyData.crimeStats.overallRating.replace('_', ' ').toUpperCase()} CRIME
+                          </Badge>
+                        </div>
+                      )}
+                      {propertyData.crimeStats.description && (
+                        <p className="text-sm text-gray-600">{propertyData.crimeStats.description}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Hazard Risk */}
+                {propertyData.hazardRisk && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-teal-700 font-medium">
+                      <CloudRain className="w-4 h-4" />
+                      Natural Hazards
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      {propertyData.hazardRisk.floodZone && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Flood Zone</span>
+                          <span className="font-medium">{propertyData.hazardRisk.floodZone}</span>
+                        </div>
+                      )}
+                      {propertyData.hazardRisk.floodRisk && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Flood Risk</span>
+                          <Badge variant={propertyData.hazardRisk.floodRisk === 'minimal' || propertyData.hazardRisk.floodRisk === 'low' ? "default" : "secondary"}>
+                            {propertyData.hazardRisk.floodRisk}
+                          </Badge>
+                        </div>
+                      )}
+                      {propertyData.hazardRisk.fireRisk && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Fire Risk</span>
+                          <Badge variant={propertyData.hazardRisk.fireRisk === 'minimal' || propertyData.hazardRisk.fireRisk === 'low' ? "default" : "secondary"}>
+                            {propertyData.hazardRisk.fireRisk}
+                          </Badge>
+                        </div>
+                      )}
+                      {propertyData.hazardRisk.earthquakeRisk && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Earthquake Risk</span>
+                          <Badge variant={propertyData.hazardRisk.earthquakeRisk === 'minimal' || propertyData.hazardRisk.earthquakeRisk === 'low' ? "default" : "secondary"}>
+                            {propertyData.hazardRisk.earthquakeRisk}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
