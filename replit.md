@@ -179,20 +179,21 @@ Currently implements a basic user system with:
 
 ## AI Integration and Analysis
 
-The application leverages OpenAI's GPT models for intelligent renovation analysis:
+The application uses Google's Gemini AI (gemini-3-flash-preview) for all property analysis:
 
-- **AI Model**: Uses the latest GPT model for property analysis
+- **AI Model**: Gemini with Google Search grounding for property research
 - **Analysis Scope**: Identifies 3-5 most profitable renovation opportunities
-- **Input Processing**: Analyzes property data, images, and market context
+- **Input Processing**: Analyzes property data via web research, Street View/Satellite imagery, and market context
 - **Output Structure**: Structured JSON responses with cost estimates, ROI calculations, and project timelines
+- **Contractor Recommendations**: Generated via Gemini based on location and renovation type
 
 The AI system considers current market trends, property characteristics, and financial viability when recommending renovations.
 
 ## External Dependencies
 
 - **Database**: Neon Database (PostgreSQL serverless)
-- **AI Services**: OpenAI API for property analysis and renovation recommendations
-- **Web Scraping**: Property data extraction from Redfin (redfin.com and redf.in mobile deep links)
+- **AI Services**: Google Gemini API for property research, analysis, and contractor recommendations
+- **Maps/Imagery**: Google Maps API for Street View and Satellite imagery
 - **UI Components**: Radix UI primitives for accessible component foundation
 - **Styling**: Tailwind CSS for utility-first styling
 - **State Management**: TanStack Query for server state and caching
