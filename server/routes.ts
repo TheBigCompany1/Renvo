@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAnalysisReportSchema, insertEmailSignupSchema, type AnalysisReport, type EmailSignup, type ComparableProperty } from "@shared/schema";
 import { researchProperty, convertToPropertyData, convertToRenovationProjects, convertToComparables } from "./services/gemini-research";
-import { generateContractorRecommendations } from "./services/openai";
+import { generateContractorRecommendations } from "./services/gemini";
 import { extractLocationFromProperty } from "./services/location-service";
 import { findLocationBasedContractors } from "./services/location-contractors";
 
@@ -463,55 +463,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error in address autocomplete:", error);
       res.json({ predictions: [] });
-    }
-  });
-
-  // Test endpoint for RAG pricing system with 90066 (Marina del Rey)
-  app.get("/api/test/rag-90066", async (req, res) => {
-    try {
-      const { testRAGPricing90066, quickRAGTest90066 } = await import("./services/test-rag-90066");
-      
-      // Allow choosing between quick or full test
-      const testType = req.query.type === 'full' ? 'full' : 'quick';
-      
-      if (testType === 'quick') {
-        // Capture console output for quick test
-        let output = '';
-        const originalLog = console.log;
-        console.log = (...args) => {
-          output += args.join(' ') + '\n';
-          originalLog(...args);
-        };
-        
-        try {
-          await quickRAGTest90066();
-          console.log = originalLog;
-          res.json({ 
-            testType: 'quick',
-            success: true,
-            output: output,
-            message: 'Quick RAG test completed for Marina del Rey (90066)'
-          });
-        } catch (error) {
-          console.log = originalLog;
-          throw error;
-        }
-      } else {
-        // Full comprehensive test
-        const results = await testRAGPricing90066();
-        res.json({
-          testType: 'full',
-          success: true,
-          ...results,
-          message: 'Comprehensive RAG test completed for Marina del Rey (90066)'
-        });
-      }
-    } catch (error) {
-      console.error("Error in RAG 90066 test:", error);
-      res.status(500).json({ 
-        error: "RAG 90066 test failed", 
-        message: error instanceof Error ? error.message : String(error)
-      });
     }
   });
 
