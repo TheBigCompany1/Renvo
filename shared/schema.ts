@@ -2,45 +2,34 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, jsonb, timestamp, decimal, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { legitimateEmailValidator } from "./email-validation";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-});
+export * from "./models/auth";
 
 export const analysisReports = pgTable("analysis_reports", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  propertyUrl: text("property_url"), // Optional - used when input is Redfin URL
-  propertyAddress: text("property_address"), // Optional - used when input is plain address
-  inputType: text("input_type").notNull().default("url"), // "url" or "address"
-  status: text("status").notNull().default("pending"), // pending, processing, completed, failed
-  failureReason: text("failure_reason"), // Human-readable error message when status is 'failed'
-  dataSource: text("data_source"), // 'redfin_scraper', 'deep_research', 'manual' - indicates where data came from
+  userId: varchar("user_id"),
+  propertyUrl: text("property_url"),
+  propertyAddress: text("property_address"),
+  inputType: text("input_type").notNull().default("url"),
+  status: text("status").notNull().default("pending"),
+  failureReason: text("failure_reason"),
+  dataSource: text("data_source"),
   propertyData: jsonb("property_data"),
-  geoData: jsonb("geo_data"), // Geocoded location data (lat, lng, formatted address)
-  imagery: jsonb("imagery"), // Street View + Satellite image URLs
-  visionAnalysis: jsonb("vision_analysis"), // Gemini visual analysis results
-  mapsContext: jsonb("maps_context"), // Google Maps grounding context (POIs, neighborhood data)
+  geoData: jsonb("geo_data"),
+  imagery: jsonb("imagery"),
+  visionAnalysis: jsonb("vision_analysis"),
+  mapsContext: jsonb("maps_context"),
   renovationProjects: jsonb("renovation_projects"),
   comparableProperties: jsonb("comparable_properties"),
   contractors: jsonb("contractors"),
   financialSummary: jsonb("financial_summary"),
   validationSummary: jsonb("validation_summary"),
+  stripeSessionId: text("stripe_session_id"),
+  paymentStatus: text("payment_status").default("unpaid"),
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
 });
 
-export const emailSignups = pgTable("email_signups", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: text("email").notNull(),
-  signupSource: text("signup_source").notNull(), // e.g., "analysis_form", "homepage", "newsletter"
-  reportId: varchar("report_id").references(() => analysisReports.id), // Optional link to specific report
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Types for the analysis data structures
 export const locationSchema = z.object({
   address: z.string(),
   city: z.string().optional(),
@@ -50,7 +39,6 @@ export const locationSchema = z.object({
   lng: z.number().optional(),
 });
 
-// School rating schema
 export const schoolRatingSchema = z.object({
   name: z.string(),
   type: z.enum(['elementary', 'middle', 'high', 'private']).optional(),
@@ -58,14 +46,12 @@ export const schoolRatingSchema = z.object({
   distance: z.string().optional(),
 });
 
-// Walkability scores schema
 export const walkScoresSchema = z.object({
   walkScore: z.number().min(0).max(100).optional(),
   transitScore: z.number().min(0).max(100).optional(),
   bikeScore: z.number().min(0).max(100).optional(),
 });
 
-// Crime statistics schema  
 export const crimeStatsSchema = z.object({
   overallRating: z.enum(['very_low', 'low', 'moderate', 'high', 'very_high']).optional(),
   violentCrimeIndex: z.number().optional(),
@@ -73,7 +59,6 @@ export const crimeStatsSchema = z.object({
   description: z.string().optional(),
 });
 
-// Hazard risk schema
 export const hazardRiskSchema = z.object({
   floodZone: z.string().optional(),
   floodRisk: z.enum(['minimal', 'low', 'moderate', 'high', 'very_high']).optional(),
@@ -82,7 +67,6 @@ export const hazardRiskSchema = z.object({
   insuranceImplications: z.string().optional(),
 });
 
-// Permit history schema
 export const permitSchema = z.object({
   date: z.string().optional(),
   type: z.string(),
@@ -91,7 +75,6 @@ export const permitSchema = z.object({
   status: z.string().optional(),
 });
 
-// Rental income potential schema
 export const rentalPotentialSchema = z.object({
   estimatedMonthlyRent: z.number().optional(),
   annualRentalIncome: z.number().optional(),
@@ -122,8 +105,6 @@ export const propertyDataSchema = z.object({
     price: z.number().optional(),
     event: z.string().optional(),
   })).optional(),
-  
-  // Enhanced property data
   schools: z.array(schoolRatingSchema).optional(),
   walkScores: walkScoresSchema.optional(),
   crimeStats: crimeStatsSchema.optional(),
@@ -134,7 +115,6 @@ export const propertyDataSchema = z.object({
   rentalPotential: rentalPotentialSchema.optional(),
 });
 
-// Export types for enhanced property data
 export type SchoolRating = z.infer<typeof schoolRatingSchema>;
 export type WalkScores = z.infer<typeof walkScoresSchema>;
 export type CrimeStats = z.infer<typeof crimeStatsSchema>;
@@ -154,7 +134,7 @@ export const contractorSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   distanceMiles: z.number().optional(),
-  source: z.string().optional(), // 'web_search', 'api', 'fallback'
+  source: z.string().optional(),
 });
 
 export const renovationProjectSchema = z.object({
@@ -167,49 +147,39 @@ export const renovationProjectSchema = z.object({
   roi: z.number(),
   timeline: z.string(),
   priority: z.number(),
-  // Enhanced details for better breakdown
-  sqftAdded: z.number().nonnegative().optional(), // Square footage being added
-  costPerSqft: z.number().nonnegative().optional(), // Cost per square foot for this project
-  valuePerSqft: z.number().nonnegative().optional(), // Value add per square foot
-  detailedDescription: z.string().optional(), // More specific description with sqft details
-  contractors: z.array(contractorSchema).optional(), // Project-specific contractors
-  
-  // Computed fields for accuracy validation
-  newTotalSqft: z.number().nonnegative().optional(), // Computed total sqft after renovation
-  postRenovationValue: z.number().nonnegative().optional(), // Computed value after renovation
-  marketPricePsfUsed: z.number().nonnegative().optional(), // Market price per sqft used for calculations
-  costPerSqftUsed: z.number().nonnegative().optional(), // Construction cost per sqft used
-  
-  // Additional computed fields for frontend display
-  corrected: z.boolean().optional(), // Whether this project was corrected
-  computedCost: z.number().optional(), // Computed cost for display
-  computedValue: z.number().optional(), // Computed value for display  
-  pricePsfUsed: z.number().optional(), // Price per sqft used in calculations
-  
-  // ROI-based ranking and star ratings
-  starRating: z.number().min(1).max(5).optional(), // 1-5 star rating based on ROI
-  rank: z.number().optional(), // Rank among all renovation projects (1 = best ROI)
-  
-  // Pricing sources and validation
+  sqftAdded: z.number().nonnegative().optional(),
+  costPerSqft: z.number().nonnegative().optional(),
+  valuePerSqft: z.number().nonnegative().optional(),
+  detailedDescription: z.string().optional(),
+  contractors: z.array(contractorSchema).optional(),
+  newTotalSqft: z.number().nonnegative().optional(),
+  postRenovationValue: z.number().nonnegative().optional(),
+  marketPricePsfUsed: z.number().nonnegative().optional(),
+  costPerSqftUsed: z.number().nonnegative().optional(),
+  corrected: z.boolean().optional(),
+  computedCost: z.number().optional(),
+  computedValue: z.number().optional(),
+  pricePsfUsed: z.number().optional(),
+  starRating: z.number().min(1).max(5).optional(),
+  rank: z.number().optional(),
   pricingSources: z.object({
-    constructionCost: z.string(), // Source of construction cost data
-    marketPpsf: z.string(), // Source of market price per sqft data
-    modelVersion: z.string().optional(), // Version of pricing model used
-    region: z.string().optional(), // Market region for pricing context
-    pricingStrategy: z.string().optional(), // Pricing strategy used
-    confidence: z.number().optional(), // Confidence score (0-1)
-    dataFreshness: z.enum(['current', 'recent', 'stale', 'static']).optional(), // Data freshness indicator
-    methodology: z.string().optional(), // Methodology used for pricing
+    constructionCost: z.string(),
+    marketPpsf: z.string(),
+    modelVersion: z.string().optional(),
+    region: z.string().optional(),
+    pricingStrategy: z.string().optional(),
+    confidence: z.number().optional(),
+    dataFreshness: z.enum(['current', 'recent', 'stale', 'static']).optional(),
+    methodology: z.string().optional(),
   }).optional(),
-  
   validation: z.object({
-    costDeltaPct: z.number(), // Percentage difference from AI estimate
-    valueDeltaPct: z.number(), // Percentage difference from AI estimate  
-    corrected: z.boolean(), // Whether values were corrected from AI output
-    warnings: z.array(z.string()).optional(), // Validation warnings
-    recommendations: z.array(z.string()).optional(), // Validation recommendations
-    confidence: z.number().optional(), // Validation confidence score
-    pricingAccuracy: z.enum(['high', 'medium', 'low']).optional(), // Pricing accuracy level
+    costDeltaPct: z.number(),
+    valueDeltaPct: z.number(),
+    corrected: z.boolean(),
+    warnings: z.array(z.string()).optional(),
+    recommendations: z.array(z.string()).optional(),
+    confidence: z.number().optional(),
+    pricingAccuracy: z.enum(['high', 'medium', 'low']).optional(),
   }).optional(),
 });
 
@@ -222,14 +192,13 @@ export const comparablePropertySchema = z.object({
   dateSold: z.string(),
   pricePsf: z.number(),
   distanceMiles: z.number().optional(),
-  source: z.string().optional(), // 'web_search', 'api', 'fallback'
+  source: z.string().optional(),
   sourceUrl: z.string().optional(),
-  // Enhanced comparable matching fields
   yearBuilt: z.number().optional(),
-  propertyType: z.string().optional(), // 'single_family', 'condo', 'townhouse', 'multi_family'
-  condition: z.string().optional(), // 'excellent', 'good', 'fair', 'needs_work'
-  comparabilityScore: z.number().min(0).max(100).optional(), // Weighted match score 0-100
-  saleRecencyDays: z.number().optional(), // Days since sale for weighting
+  propertyType: z.string().optional(),
+  condition: z.string().optional(),
+  comparabilityScore: z.number().min(0).max(100).optional(),
+  saleRecencyDays: z.number().optional(),
 });
 
 export const financialSummarySchema = z.object({
@@ -239,12 +208,11 @@ export const financialSummarySchema = z.object({
   afterRepairValue: z.number().nonnegative(),
   totalROI: z.number(),
   avgPricePsf: z.number().nonnegative(),
-  postRenovationSqft: z.number().nonnegative().optional(), // Total sqft after all renovations
-  // Sanity check metadata - original values before capping
-  originalTotalValueAdd: z.number().optional(), // Original value before cap applied
-  originalAfterRepairValue: z.number().optional(), // Original ARV before cap applied
-  originalTotalROI: z.number().optional(), // Original ROI before cap applied
-  sanityCheckApplied: z.boolean().optional(), // Whether any caps were applied
+  postRenovationSqft: z.number().nonnegative().optional(),
+  originalTotalValueAdd: z.number().optional(),
+  originalAfterRepairValue: z.number().optional(),
+  originalTotalROI: z.number().optional(),
+  sanityCheckApplied: z.boolean().optional(),
 });
 
 export const geoDataSchema = z.object({
@@ -290,7 +258,6 @@ export const insertAnalysisReportSchema = createInsertSchema(analysisReports)
     inputType: true,
   })
   .extend({
-    // Make URL and address optional but require at least one
     propertyUrl: z.string().url().optional(),
     propertyAddress: z.string().min(5).optional(),
     inputType: z.enum(["url", "address"]),
@@ -311,22 +278,3 @@ export type GeoData = z.infer<typeof geoDataSchema>;
 export type Imagery = z.infer<typeof imagerySchema>;
 export type VisionAnalysis = z.infer<typeof visionAnalysisSchema>;
 export type MapsContext = z.infer<typeof mapsContextSchema>;
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export const insertEmailSignupSchema = createInsertSchema(emailSignups).pick({
-  email: true,
-  signupSource: true,
-  reportId: true,
-}).extend({
-  email: legitimateEmailValidator,
-  reportId: z.string().uuid().optional(), // Optional UUID for report linking
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
-export type InsertEmailSignup = z.infer<typeof insertEmailSignupSchema>;
-export type EmailSignup = typeof emailSignups.$inferSelect;

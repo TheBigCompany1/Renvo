@@ -11,6 +11,8 @@ import HowItWorks from "@/pages/how-it-works";
 import Pricing from "@/pages/pricing";
 import Processing from "@/pages/processing";
 import Report from "@/pages/report";
+import Dashboard from "@/pages/dashboard";
+import CheckoutSuccess from "@/pages/checkout-success";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -22,6 +24,8 @@ function Router() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/processing/:id" component={Processing} />
       <Route path="/report/:id" component={Report} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/checkout/success" component={CheckoutSuccess} />
       <Route component={NotFound} />
     </Switch>
   );

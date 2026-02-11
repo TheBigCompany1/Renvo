@@ -2,9 +2,48 @@
 
 Renvo is an AI-powered real estate renovation analysis platform that helps investors make data-driven decisions. The application scrapes property data from Redfin URLs, analyzes renovation opportunities using AI, finds comparable properties, and provides comprehensive reports with financial projections and contractor recommendations.
 
-The platform now includes comprehensive marketing pages and lead generation capabilities to convert visitors into users and capture valuable contact information for nurturing potential customers.
+The platform is a paid SaaS product requiring user authentication (Replit Auth) and Stripe payments before generating analysis reports.
 
 # Recent Changes
+
+## Paid Platform with Stripe Payments (February 2026)
+
+Converted from free/email-capture model to a paid platform with Stripe integration:
+
+**Authentication:**
+- Replit Auth (OpenID Connect) for user login/signup
+- Session-based auth with PostgreSQL session store
+- Protected routes require authentication
+
+**Payment Tiers:**
+- $3.99 First Report (introductory price)
+- $9.99 Single Report
+- $34.99 5-Report Bundle (save 30%)
+- $29.99/mo Pro Monthly (unlimited reports)
+
+**Payment Flow:**
+1. User must be logged in
+2. Accept TOS checkbox on pricing page
+3. Stripe Checkout for payment
+4. Credits added via webhook or checkout verification
+5. Credits deducted when generating reports
+
+**Key Files:**
+- `server/stripeClient.ts` - Stripe API client via Replit connector
+- `server/webhookHandlers.ts` - Webhook processing with signature verification
+- `server/seed-products.ts` - Creates Stripe products/prices
+- `client/src/pages/pricing.tsx` - 4-tier pricing page with TOS
+- `client/src/pages/dashboard.tsx` - User dashboard with credits/reports
+- `client/src/pages/checkout-success.tsx` - Payment verification page
+- `client/src/hooks/use-auth.ts` - Auth state hook
+
+**Security:**
+- Webhook signature verification before processing events
+- Server-side TOS acceptance validation
+- Payment gate: credits or active subscription required for reports
+- SSRF protection on property URLs
+
+# Recent Changes (Older)
 
 ## Gemini Research Architecture (January 2026)
 

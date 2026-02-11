@@ -1,27 +1,245 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAnalysisReportSchema, insertEmailSignupSchema, type AnalysisReport, type EmailSignup, type ComparableProperty } from "@shared/schema";
+import { insertAnalysisReportSchema, type AnalysisReport } from "@shared/schema";
 import { researchProperty, convertToPropertyData, convertToRenovationProjects, convertToComparables } from "./services/gemini-research";
 import { generateContractorRecommendations } from "./services/gemini";
 import { extractLocationFromProperty } from "./services/location-service";
 import { findLocationBasedContractors } from "./services/location-contractors";
+import { isAuthenticated } from "./replit_integrations/auth";
+import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Create new analysis report
-  app.post("/api/reports", async (req, res) => {
+  app.get("/api/stripe/publishable-key", async (_req, res) => {
     try {
+      const key = await getStripePublishableKey();
+      res.json({ publishableKey: key });
+    } catch (error) {
+      res.status(500).json({ message: "Stripe not configured" });
+    }
+  });
+
+  app.get("/api/user/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json({
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profileImageUrl: user.profileImageUrl,
+        reportCredits: user.reportCredits,
+        totalReportsGenerated: user.totalReportsGenerated,
+        subscriptionStatus: user.subscriptionStatus,
+        tosAcceptedAt: user.tosAcceptedAt,
+        isFirstReport: user.totalReportsGenerated === 0,
+      });
+    } catch (error) {
+      console.error("Error fetching user status:", error);
+      res.status(500).json({ message: "Failed to fetch user status" });
+    }
+  });
+
+  app.post("/api/user/accept-tos", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      await storage.updateUserTosAccepted(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error accepting TOS:", error);
+      res.status(500).json({ message: "Failed to accept terms" });
+    }
+  });
+
+  app.post("/api/checkout", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const { priceType, reportAddress, tosAccepted } = req.body;
+
+      if (!user.tosAcceptedAt && !tosAccepted) {
+        return res.status(403).json({ message: "Please accept the Terms of Service before purchasing." });
+      }
+
+      if (tosAccepted && !user.tosAcceptedAt) {
+        await storage.updateUserTosAccepted(userId);
+      }
+
+      const stripe = await getUncachableStripeClient();
+
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email || undefined,
+          metadata: { userId },
+        });
+        customerId = customer.id;
+        await storage.updateUserStripeCustomerId(userId, customerId);
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+      if (priceType === 'subscription') {
+        const prices = await stripe.prices.list({
+          active: true,
+          recurring: { interval: 'month' },
+          limit: 10,
+        });
+        const subscriptionPrice = prices.data.find(p => p.unit_amount === 2999);
+        
+        if (!subscriptionPrice) {
+          return res.status(400).json({ message: "Subscription price not found. Please run the seed script." });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+          customer: customerId,
+          payment_method_types: ['card'],
+          line_items: [{ price: subscriptionPrice.id, quantity: 1 }],
+          mode: 'subscription',
+          success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${baseUrl}/pricing`,
+          metadata: { userId, priceType: 'subscription' },
+        });
+
+        return res.json({ url: session.url });
+      }
+
+      let unitAmount: number;
+      let productName: string;
+      let credits: number;
+
+      if (priceType === 'first_report') {
+        unitAmount = 399;
+        productName = 'First Property Analysis';
+        credits = 1;
+      } else if (priceType === 'bundle') {
+        unitAmount = 3499;
+        productName = '5-Report Bundle';
+        credits = 5;
+      } else {
+        unitAmount = 999;
+        productName = 'Property Analysis Report';
+        credits = 1;
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: { name: productName },
+            unit_amount: unitAmount,
+          },
+          quantity: 1,
+        }],
+        mode: 'payment',
+        success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/pricing`,
+        metadata: { 
+          userId, 
+          priceType, 
+          credits: credits.toString(),
+          reportAddress: reportAddress || '',
+        },
+      });
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ message: "Failed to create checkout session" });
+    }
+  });
+
+  app.get("/api/checkout/verify", isAuthenticated, async (req: any, res) => {
+    try {
+      const { session_id } = req.query;
+      if (!session_id) {
+        return res.status(400).json({ message: "Missing session_id" });
+      }
+
+      const userId = req.user.claims.sub;
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.checkout.sessions.retrieve(session_id as string);
+
+      if (session.payment_status !== 'paid') {
+        return res.json({ success: false, message: "Payment not completed" });
+      }
+
+      if (session.metadata?.userId !== userId) {
+        return res.status(403).json({ message: "Session does not belong to this user" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const priceType = session.metadata?.priceType;
+      
+      if (priceType === 'subscription') {
+        const subscriptionId = typeof session.subscription === 'string' 
+          ? session.subscription 
+          : session.subscription?.id;
+        if (subscriptionId) {
+          await storage.updateUserSubscription(userId, subscriptionId, 'active');
+        }
+        return res.json({ success: true, type: 'subscription' });
+      }
+
+      const creditsToAdd = parseInt(session.metadata?.credits || '1', 10);
+      const newCredits = (user.reportCredits || 0) + creditsToAdd;
+      await storage.updateUserCredits(userId, newCredits);
+
+      const reportAddress = session.metadata?.reportAddress;
+
+      res.json({ 
+        success: true, 
+        type: 'credits',
+        credits: newCredits,
+        reportAddress: reportAddress || null,
+      });
+    } catch (error) {
+      console.error("Error verifying checkout:", error);
+      res.status(500).json({ message: "Failed to verify payment" });
+    }
+  });
+
+  app.post("/api/reports", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (!user.tosAcceptedAt) {
+        return res.status(403).json({ message: "Please accept the Terms of Service before generating a report." });
+      }
+
+      const hasCredits = (user.reportCredits || 0) > 0;
+      const hasSubscription = user.subscriptionStatus === 'active';
+
+      if (!hasCredits && !hasSubscription) {
+        return res.status(402).json({ message: "Please purchase a report or subscribe to generate analyses." });
+      }
+
       const validatedData = insertAnalysisReportSchema.parse(req.body);
       
-      // Determine input type and validate accordingly
       if (validatedData.inputType === 'url' && validatedData.propertyUrl) {
-        // Strict URL validation to prevent SSRF - only allow known real estate sites
         try {
           const parsedUrl = new URL(validatedData.propertyUrl);
           if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
             return res.status(400).json({ message: "Invalid URL protocol" });
           }
-          // Only accept URLs from trusted real estate websites
           const allowedHosts = ['redfin.com', 'www.redfin.com', 'redf.in', 'zillow.com', 'www.zillow.com', 'realtor.com', 'www.realtor.com'];
           const hostname = parsedUrl.hostname.toLowerCase();
           const isAllowedHost = allowedHosts.some(host => hostname === host || hostname.endsWith('.' + host.replace('www.', '')));
@@ -34,7 +252,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid URL format" });
         }
       } else if (validatedData.inputType === 'address' && validatedData.propertyAddress) {
-        // Address validation - basic check
         if (validatedData.propertyAddress.trim().length < 10) {
           return res.status(400).json({ 
             message: "Please provide a complete address (street, city, state, zip)" 
@@ -42,16 +259,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } else {
         return res.status(400).json({ 
-          message: "Please provide either a Redfin URL or a property address" 
+          message: "Please provide either a property URL or a property address" 
         });
       }
 
-      // Check for cached report (30 days) before creating a new one
       const addressToCheck = validatedData.propertyAddress || validatedData.propertyUrl || '';
       if (addressToCheck) {
         const cachedReport = await storage.findCachedReport(addressToCheck, 30);
         if (cachedReport) {
-          console.log(`📦 Found cached report for "${addressToCheck}" - returning existing report ${cachedReport.id}`);
+          console.log(`Found cached report for "${addressToCheck}" - returning existing report ${cachedReport.id}`);
           return res.json({ 
             reportId: cachedReport.id, 
             status: cachedReport.status,
@@ -61,16 +277,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const report = await storage.createAnalysisReport(validatedData);
+      if (!hasSubscription && hasCredits) {
+        await storage.updateUserCredits(userId, (user.reportCredits || 0) - 1);
+      }
+      await storage.incrementUserReportCount(userId);
+
+      const report = await storage.createAnalysisReport(validatedData, userId);
       
-      // Start async processing
       processAnalysisReport(report.id);
       
       res.json({ reportId: report.id, status: 'pending', cached: false });
     } catch (error) {
       console.error("Error creating analysis report:", error);
       
-      // Handle Zod validation errors
       if (error instanceof Error && 'issues' in error) {
         return res.status(400).json({ 
           message: "Invalid input data. Please check your input.",
@@ -84,7 +303,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get analysis report status and data
   app.get("/api/reports/:id", async (req, res) => {
     try {
       const { id } = req.params;
@@ -96,7 +314,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      
       res.json(report);
     } catch (error) {
       console.error("Error fetching analysis report:", error);
@@ -106,137 +323,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create new email signup
-  app.post("/api/email-signups", async (req, res) => {
+  app.get("/api/user/reports", isAuthenticated, async (req: any, res) => {
     try {
-      const validatedData = insertEmailSignupSchema.parse(req.body);
-      
-      const emailSignup = await storage.createEmailSignup(validatedData);
-      
-      res.json(emailSignup);
+      const userId = req.user.claims.sub;
+      const reports = await storage.getUserReports(userId);
+      res.json(reports);
     } catch (error) {
-      console.error("Error creating email signup:", error);
-      
-      // Handle Zod validation errors
-      if (error instanceof Error && 'issues' in error) {
-        return res.status(400).json({ 
-          message: "Invalid email signup data. Please check your input.",
-          errors: (error as any).issues
-        });
+      console.error("Error fetching user reports:", error);
+      res.status(500).json({ message: "Failed to fetch reports" });
+    }
+  });
+
+  app.post("/api/stripe/create-portal", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user?.stripeCustomerId) {
+        return res.status(400).json({ message: "No Stripe customer found" });
       }
-      
-      res.status(500).json({ 
-        message: "Failed to create email signup. Please try again." 
-      });
-    }
-  });
 
-  // Get all email signups
-  app.get("/api/email-signups", async (req, res) => {
-    try {
-      const emailSignups = await storage.getEmailSignups();
-      res.json(emailSignups);
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.billingPortal.sessions.create({
+        customer: user.stripeCustomerId,
+        return_url: `${req.protocol}://${req.get('host')}/dashboard`,
+      });
+
+      res.json({ url: session.url });
     } catch (error) {
-      console.error("Error fetching email signups:", error);
-      res.status(500).json({ 
-        message: "Failed to retrieve email signups. Please try again." 
-      });
+      console.error("Error creating portal session:", error);
+      res.status(500).json({ message: "Failed to create billing portal" });
     }
   });
 
-  // Get email signups by source
-  app.get("/api/email-signups/by-source/:source", async (req, res) => {
-    try {
-      const { source } = req.params;
-      const emailSignups = await storage.getEmailSignupsBySource(source);
-      res.json(emailSignups);
-    } catch (error) {
-      console.error("Error fetching email signups by source:", error);
-      res.status(500).json({ 
-        message: "Failed to retrieve email signups. Please try again." 
-      });
-    }
-  });
-
-  // Get analytics summary
-  app.get("/api/analytics/summary", async (req, res) => {
-    try {
-      // Get all email signups and analysis reports for analytics
-      const [emailSignups, allReports] = await Promise.all([
-        storage.getEmailSignups(),
-        storage.getAllAnalysisReports()
-      ]);
-
-      // Calculate analytics
-      const totalEmailSignups = emailSignups.length;
-      const totalReports = allReports.length;
-      const completedReports = allReports.filter((r: AnalysisReport) => r.status === 'completed').length;
-      
-      // Group by signup source
-      const signupsBySource = emailSignups.reduce((acc: Record<string, number>, signup: EmailSignup) => {
-        acc[signup.signupSource] = (acc[signup.signupSource] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      // Get popular URLs (top 10) - filter out null URLs from address-based reports
-      const urlCounts = allReports
-        .filter((report: AnalysisReport) => report.propertyUrl !== null)
-        .reduce((acc: Record<string, number>, report: AnalysisReport) => {
-          if (report.propertyUrl) {
-            acc[report.propertyUrl] = (acc[report.propertyUrl] || 0) + 1;
-          }
-          return acc;
-        }, {} as Record<string, number>);
-      
-      const popularUrls = Object.entries(urlCounts)
-        .sort(([,a], [,b]) => (b as number) - (a as number))
-        .slice(0, 10)
-        .map(([url, count]) => ({ url, count }));
-
-      // Calculate time-based metrics
-      const now = new Date();
-      const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-      const reportsLast7Days = allReports.filter((r: AnalysisReport) => r.createdAt && new Date(r.createdAt) >= last7Days).length;
-      const reportsLast30Days = allReports.filter((r: AnalysisReport) => r.createdAt && new Date(r.createdAt) >= last30Days).length;
-      const emailsLast7Days = emailSignups.filter((e: EmailSignup) => e.createdAt && new Date(e.createdAt) >= last7Days).length;
-      const emailsLast30Days = emailSignups.filter((e: EmailSignup) => e.createdAt && new Date(e.createdAt) >= last30Days).length;
-
-      const analytics = {
-        totalEmailSignups,
-        totalReports,
-        completedReports,
-        signupsBySource,
-        popularUrls,
-        timeBasedMetrics: {
-          reportsLast7Days,
-          reportsLast30Days,
-          emailsLast7Days,
-          emailsLast30Days
-        },
-        conversionRate: totalEmailSignups > 0 ? (totalReports / totalEmailSignups * 100).toFixed(1) : '0'
-      };
-
-      res.json(analytics);
-    } catch (error) {
-      console.error("Error fetching analytics:", error);
-      res.status(500).json({ 
-        message: "Failed to retrieve analytics. Please try again." 
-      });
-    }
-  });
-
-  // Async processing function - SIMPLIFIED with Gemini + Google Search grounding
   async function processAnalysisReport(reportId: string) {
     try {
       const report = await storage.getAnalysisReport(reportId);
       if (!report) return;
 
-      // Update status to processing
       await storage.updateAnalysisReportStatus(reportId, 'processing');
 
-      // Determine the input to research
       const addressOrUrl = report.inputType === 'url' && report.propertyUrl 
         ? report.propertyUrl 
         : report.propertyAddress;
@@ -245,26 +370,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('Invalid report: missing both propertyUrl and propertyAddress');
       }
 
-      console.log('\n🚀 Starting Gemini-powered property analysis');
-      console.log(`📍 Input: ${addressOrUrl}`);
+      console.log('\nStarting Gemini-powered property analysis');
+      console.log(`Input: ${addressOrUrl}`);
 
-      // Step 1: Use Gemini with Google Search grounding for complete analysis
-      // This single call gets property data, comps, and renovation recommendations
       const research = await researchProperty(addressOrUrl);
       
-      // Convert research results to our standard formats
       const propertyData = convertToPropertyData(research);
       const renovationProjects = convertToRenovationProjects(research);
       const comparableProperties = convertToComparables(research);
 
-      console.log(`\n✅ Gemini research complete:`);
-      console.log(`  📊 Property: ${propertyData.address}`);
-      console.log(`  💰 Estimated: $${propertyData.price?.toLocaleString()}`);
-      console.log(`  🏠 Comparables: ${comparableProperties.length}`);
-      console.log(`  🔨 Renovation projects: ${renovationProjects.length}`);
-      console.log(`  📈 Verdict: ${research.renovationAnalysis?.verdict}`);
+      console.log(`\nGemini research complete:`);
+      console.log(`  Property: ${propertyData.address}`);
+      console.log(`  Estimated: $${propertyData.price?.toLocaleString()}`);
+      console.log(`  Comparables: ${comparableProperties.length}`);
+      console.log(`  Renovation projects: ${renovationProjects.length}`);
 
-      // Step 2: Extract location for contractor lookup
       const location = await extractLocationFromProperty(propertyData.address, report.propertyUrl ?? undefined);
       
       const updatedPropertyData = {
@@ -272,19 +392,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         location
       };
 
-      // Step 3: Get Street View and Satellite imagery
       let imagery: { streetViewUrl?: string; satelliteUrl?: string } | undefined;
       try {
         const { generateImageryUrls } = await import('./services/gemini-enhanced');
         if (location.lat && location.lng) {
           imagery = await generateImageryUrls(location.lat, location.lng, propertyData.address);
-          console.log(`📸 Generated Street View and Satellite imagery URLs`);
+          console.log(`Generated Street View and Satellite imagery URLs`);
         }
       } catch (imgError) {
         console.log('Imagery generation failed, continuing without images');
       }
 
-      // Step 4: Generate contractor recommendations for each project
       const projectsWithContractors = await Promise.all(
         renovationProjects.map(async (project: any) => {
           let projectContractors;
@@ -309,7 +427,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      // Step 5: Create financial summary from research (matching expected schema)
       const currentValue = propertyData.price || research.propertyData.currentEstimate || 0;
       const totalRenovationCost = renovationProjects.reduce((sum: number, p: any) => sum + ((p.costRangeLow + p.costRangeHigh) / 2 || 0), 0);
       const totalValueAdd = renovationProjects.reduce((sum: number, p: any) => sum + (p.valueAdd || 0), 0);
@@ -326,7 +443,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         avgPricePsf,
       };
 
-      // Convert neighborhood context to maps context format
       const mapsContext = {
         neighborhoodInsights: `${research.neighborhoodContext.name}: ${research.neighborhoodContext.description}. ${research.neighborhoodContext.marketTrend || ''}`.trim(),
         nearbyPOIs: research.neighborhoodContext.nearbyAmenities?.map((amenity: string) => ({
@@ -335,7 +451,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })),
       };
 
-      // Create validation summary with owner and investor analysis
       const validationSummary = {
         verdict: research.renovationAnalysis.verdict,
         reasoning: research.renovationAnalysis.reasoning,
@@ -346,7 +461,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sources: research.sources,
       };
 
-      // Save all data
       await storage.updateAnalysisReportData(reportId, { 
         propertyData: updatedPropertyData,
         comparableProperties,
@@ -361,7 +475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         completedAt: new Date()
       });
 
-      console.log('\n✅ Analysis complete and saved!');
+      console.log('\nAnalysis complete and saved!');
 
     } catch (error) {
       console.error("Error processing analysis report:", error);
@@ -385,7 +499,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  // Address autocomplete endpoint using Google Places API
   app.get("/api/address-autocomplete", async (req, res) => {
     try {
       const { input } = req.query;
@@ -400,7 +513,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ predictions: [] });
       }
 
-      // Try the new Places API first
       console.log('Trying Places API (New) for:', input);
       const newApiUrl = 'https://places.googleapis.com/v1/places:autocomplete';
       const requestBody = {
@@ -422,7 +534,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newApiData = await newApiResponse.json();
 
       if (newApiData.suggestions && newApiData.suggestions.length > 0) {
-        console.log('Places API (New) returned', newApiData.suggestions.length, 'suggestions');
         const predictions = newApiData.suggestions.map((suggestion: any) => ({
           description: suggestion.placePrediction?.text?.text || '',
           place_id: suggestion.placePrediction?.placeId || '',
@@ -434,11 +545,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ predictions });
       }
 
-      // If new API returns error, try legacy API
       if (newApiData.error) {
         console.log('Places API (New) error:', newApiData.error.message, '- trying legacy API');
         
-        // Try legacy Places API
         const legacyUrl = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
         legacyUrl.searchParams.append('input', input);
         legacyUrl.searchParams.append('types', 'address');
@@ -449,13 +558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const legacyData = await legacyResponse.json();
 
         if (legacyData.status === 'OK' && legacyData.predictions?.length > 0) {
-          console.log('Legacy Places API returned', legacyData.predictions.length, 'predictions');
           return res.json({ predictions: legacyData.predictions });
-        }
-
-        if (legacyData.status === 'REQUEST_DENIED') {
-          console.error('Places API request denied:', legacyData.error_message);
-          return res.json({ predictions: [], error: 'API access denied - Places API may need to be enabled' });
         }
       }
 

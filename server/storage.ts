@@ -1,6 +1,5 @@
 import { 
-  type User, 
-  type InsertUser, 
+  type User,
   type AnalysisReport, 
   type InsertAnalysisReport,
   type PropertyData,
@@ -8,30 +7,30 @@ import {
   type ComparableProperty,
   type Contractor,
   type FinancialSummary,
-  type EmailSignup,
-  type InsertEmailSignup,
   type GeoData,
   type Imagery,
   type VisionAnalysis,
   type MapsContext,
   users,
   analysisReports,
-  emailSignups
 } from "@shared/schema";
-import { randomUUID } from "crypto";
-import { drizzle } from "drizzle-orm/neon-http";
-import { neon } from "@neondatabase/serverless";
-import { eq, and, gte, or, sql } from "drizzle-orm";
+import { eq, and, gte, or, sql, desc } from "drizzle-orm";
+import { db } from "./db";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  updateUserCredits(userId: string, credits: number): Promise<void>;
+  updateUserStripeCustomerId(userId: string, customerId: string): Promise<void>;
+  updateUserSubscription(userId: string, subscriptionId: string, status: string): Promise<void>;
+  updateUserTosAccepted(userId: string): Promise<void>;
+  incrementUserReportCount(userId: string): Promise<void>;
   
-  createAnalysisReport(report: InsertAnalysisReport): Promise<AnalysisReport>;
+  createAnalysisReport(report: InsertAnalysisReport, userId?: string): Promise<AnalysisReport>;
   getAnalysisReport(id: string): Promise<AnalysisReport | undefined>;
   getAllAnalysisReports(): Promise<AnalysisReport[]>;
+  getUserReports(userId: string): Promise<AnalysisReport[]>;
   updateAnalysisReportStatus(id: string, status: string): Promise<void>;
+  updateAnalysisReportPayment(id: string, stripeSessionId: string, paymentStatus: string): Promise<void>;
   updateAnalysisReportData(
     id: string, 
     data: {
@@ -53,213 +52,83 @@ export interface IStorage {
     }
   ): Promise<void>;
   
-  createEmailSignup(emailSignup: InsertEmailSignup): Promise<EmailSignup>;
-  getEmailSignups(): Promise<EmailSignup[]>;
-  getEmailSignupsBySource(source: string): Promise<EmailSignup[]>;
-  
   findCachedReport(address: string, maxAgeDays?: number): Promise<AnalysisReport | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private analysisReports: Map<string, AnalysisReport>;
-  private emailSignups: Map<string, EmailSignup>;
-
-  constructor() {
-    this.users = new Map();
-    this.analysisReports = new Map();
-    this.emailSignups = new Map();
-  }
-
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
-  }
-
-  async createAnalysisReport(insertReport: InsertAnalysisReport): Promise<AnalysisReport> {
-    const id = randomUUID();
-    const report: AnalysisReport = {
-      id,
-      propertyUrl: insertReport.propertyUrl || null,
-      propertyAddress: insertReport.propertyAddress || null,
-      inputType: insertReport.inputType,
-      status: "pending",
-      failureReason: null,
-      dataSource: null,
-      propertyData: null,
-      geoData: null,
-      imagery: null,
-      visionAnalysis: null,
-      mapsContext: null,
-      renovationProjects: null,
-      comparableProperties: null,
-      contractors: null,
-      financialSummary: null,
-      validationSummary: null,
-      createdAt: new Date(),
-      completedAt: null,
-    };
-    this.analysisReports.set(id, report);
-    return report;
-  }
-
-  async getAnalysisReport(id: string): Promise<AnalysisReport | undefined> {
-    return this.analysisReports.get(id);
-  }
-
-  async getAllAnalysisReports(): Promise<AnalysisReport[]> {
-    return Array.from(this.analysisReports.values());
-  }
-
-  async updateAnalysisReportStatus(id: string, status: string): Promise<void> {
-    const report = this.analysisReports.get(id);
-    if (report) {
-      report.status = status;
-      this.analysisReports.set(id, report);
-    }
-  }
-
-  async updateAnalysisReportData(
-    id: string, 
-    data: {
-      propertyData?: PropertyData;
-      propertyUrl?: string;
-      geoData?: GeoData;
-      imagery?: Imagery;
-      visionAnalysis?: VisionAnalysis;
-      mapsContext?: MapsContext;
-      renovationProjects?: RenovationProject[];
-      comparableProperties?: ComparableProperty[];
-      contractors?: Contractor[];
-      financialSummary?: FinancialSummary;
-      validationSummary?: any;
-      status?: string;
-      failureReason?: string;
-      dataSource?: string;
-      completedAt?: Date;
-    }
-  ): Promise<void> {
-    const report = this.analysisReports.get(id);
-    if (report) {
-      if (data.propertyData) report.propertyData = data.propertyData;
-      if (data.propertyUrl) report.propertyUrl = data.propertyUrl;
-      if (data.geoData) report.geoData = data.geoData;
-      if (data.imagery) report.imagery = data.imagery;
-      if (data.visionAnalysis) report.visionAnalysis = data.visionAnalysis;
-      if (data.mapsContext) report.mapsContext = data.mapsContext;
-      if (data.renovationProjects) report.renovationProjects = data.renovationProjects;
-      if (data.comparableProperties) report.comparableProperties = data.comparableProperties;
-      if (data.contractors) report.contractors = data.contractors;
-      if (data.financialSummary) report.financialSummary = data.financialSummary;
-      if (data.validationSummary) report.validationSummary = data.validationSummary;
-      if (data.status) report.status = data.status;
-      if ('failureReason' in data) (report as any).failureReason = data.failureReason;
-      if ('dataSource' in data) (report as any).dataSource = data.dataSource;
-      if (data.completedAt) report.completedAt = data.completedAt;
-      this.analysisReports.set(id, report);
-    }
-  }
-
-  async createEmailSignup(insertEmailSignup: InsertEmailSignup): Promise<EmailSignup> {
-    const id = randomUUID();
-    const emailSignup: EmailSignup = {
-      id,
-      ...insertEmailSignup,
-      reportId: insertEmailSignup.reportId || null,
-      createdAt: new Date(),
-    };
-    this.emailSignups.set(id, emailSignup);
-    return emailSignup;
-  }
-
-  async getEmailSignups(): Promise<EmailSignup[]> {
-    return Array.from(this.emailSignups.values());
-  }
-
-  async getEmailSignupsBySource(source: string): Promise<EmailSignup[]> {
-    return Array.from(this.emailSignups.values()).filter(
-      (signup) => signup.signupSource === source
-    );
-  }
-
-  async findCachedReport(address: string, maxAgeDays: number = 30): Promise<AnalysisReport | undefined> {
-    const normalizedAddress = address.toLowerCase().trim();
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
-    
-    const reports = Array.from(this.analysisReports.values());
-    return reports.find(report => {
-      if (report.status !== 'completed') return false;
-      if (!report.completedAt || new Date(report.completedAt) < cutoffDate) return false;
-      
-      // Check if address matches (either propertyAddress or address in propertyData)
-      const reportAddress = (report.propertyAddress || 
-        (report.propertyData as PropertyData)?.address || '').toLowerCase().trim();
-      
-      return reportAddress.includes(normalizedAddress) || normalizedAddress.includes(reportAddress);
-    });
-  }
-}
-
-// PostgreSQL storage implementation using Drizzle
 export class PostgresStorage implements IStorage {
-  private db;
-
-  constructor() {
-    if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL environment variable is required");
-    }
-    const sql = neon(process.env.DATABASE_URL);
-    this.db = drizzle(sql);
-  }
-
   async getUser(id: string): Promise<User | undefined> {
-    const result = await this.db.select().from(users).where(eq(users.id, id));
+    const result = await db.select().from(users).where(eq(users.id, id));
     return result[0];
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await this.db.select().from(users).where(eq(users.username, username));
-    return result[0];
+  async updateUserCredits(userId: string, credits: number): Promise<void> {
+    await db.update(users)
+      .set({ reportCredits: credits, updatedAt: new Date() })
+      .where(eq(users.id, userId));
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const result = await this.db.insert(users).values(insertUser).returning();
-    return result[0];
+  async updateUserStripeCustomerId(userId: string, customerId: string): Promise<void> {
+    await db.update(users)
+      .set({ stripeCustomerId: customerId, updatedAt: new Date() })
+      .where(eq(users.id, userId));
   }
 
-  async createAnalysisReport(insertReport: InsertAnalysisReport): Promise<AnalysisReport> {
-    const result = await this.db.insert(analysisReports).values(insertReport).returning();
+  async updateUserSubscription(userId: string, subscriptionId: string, status: string): Promise<void> {
+    await db.update(users)
+      .set({ subscriptionId, subscriptionStatus: status, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  }
+
+  async updateUserTosAccepted(userId: string): Promise<void> {
+    await db.update(users)
+      .set({ tosAcceptedAt: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  }
+
+  async incrementUserReportCount(userId: string): Promise<void> {
+    await db.update(users)
+      .set({ 
+        totalReportsGenerated: sql`${users.totalReportsGenerated} + 1`,
+        updatedAt: new Date() 
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async createAnalysisReport(insertReport: InsertAnalysisReport, userId?: string): Promise<AnalysisReport> {
+    const result = await db.insert(analysisReports).values({
+      ...insertReport,
+      userId: userId || null,
+    }).returning();
     return result[0];
   }
 
   async getAnalysisReport(id: string): Promise<AnalysisReport | undefined> {
-    const result = await this.db.select().from(analysisReports).where(eq(analysisReports.id, id));
+    const result = await db.select().from(analysisReports).where(eq(analysisReports.id, id));
     return result[0];
   }
 
   async getAllAnalysisReports(): Promise<AnalysisReport[]> {
-    return await this.db.select().from(analysisReports);
+    return await db.select().from(analysisReports);
+  }
+
+  async getUserReports(userId: string): Promise<AnalysisReport[]> {
+    return await db.select().from(analysisReports)
+      .where(eq(analysisReports.userId, userId))
+      .orderBy(desc(analysisReports.createdAt));
   }
 
   async updateAnalysisReportStatus(id: string, status: string): Promise<void> {
-    await this.db.update(analysisReports)
+    await db.update(analysisReports)
       .set({ status })
       .where(eq(analysisReports.id, id));
   }
 
+  async updateAnalysisReportPayment(id: string, stripeSessionId: string, paymentStatus: string): Promise<void> {
+    await db.update(analysisReports)
+      .set({ stripeSessionId, paymentStatus })
+      .where(eq(analysisReports.id, id));
+  }
+
   async updateAnalysisReportData(
     id: string, 
     data: {
@@ -280,22 +149,9 @@ export class PostgresStorage implements IStorage {
       completedAt?: Date;
     }
   ): Promise<void> {
-    await this.db.update(analysisReports)
+    await db.update(analysisReports)
       .set(data)
       .where(eq(analysisReports.id, id));
-  }
-
-  async createEmailSignup(insertEmailSignup: InsertEmailSignup): Promise<EmailSignup> {
-    const result = await this.db.insert(emailSignups).values(insertEmailSignup).returning();
-    return result[0];
-  }
-
-  async getEmailSignups(): Promise<EmailSignup[]> {
-    return await this.db.select().from(emailSignups);
-  }
-
-  async getEmailSignupsBySource(source: string): Promise<EmailSignup[]> {
-    return await this.db.select().from(emailSignups).where(eq(emailSignups.signupSource, source));
   }
 
   async findCachedReport(address: string, maxAgeDays: number = 30): Promise<AnalysisReport | undefined> {
@@ -303,9 +159,7 @@ export class PostgresStorage implements IStorage {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
     
-    // Query for completed reports within the time window
-    // Use ILIKE for case-insensitive address matching
-    const results = await this.db.select()
+    const results = await db.select()
       .from(analysisReports)
       .where(
         and(
@@ -323,5 +177,4 @@ export class PostgresStorage implements IStorage {
   }
 }
 
-// Use PostgreSQL storage when DATABASE_URL is available, otherwise fall back to memory
-export const storage = process.env.DATABASE_URL ? new PostgresStorage() : new MemStorage();
+export const storage = new PostgresStorage();
