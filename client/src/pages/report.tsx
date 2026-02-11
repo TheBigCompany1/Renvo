@@ -286,6 +286,90 @@ export default function Report() {
           </CardContent>
         </Card>
 
+        {/* Investment Analysis - Combined Overview */}
+        <Card className="border-2 border-teal-500">
+          <CardHeader className="bg-gradient-to-r from-teal-50 to-white">
+            <CardTitle className="text-xl font-semibold flex items-center gap-2" data-testid="title-investment-analysis">
+              <TrendingUp className="w-5 h-5 text-teal-600" />
+              Investment Analysis
+            </CardTitle>
+            <p className="text-sm text-gray-600">Property valuation and renovation ROI breakdown</p>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {/* Value Summary Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="text-center p-4 bg-teal-50 rounded-lg">
+                <div className="text-2xl font-bold text-teal-600" data-testid="text-current-value">
+                  {financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue) : 'N/A'}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">Current Value</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {propertyData.sqft?.toLocaleString() || 'N/A'} sqft × ${financialSummary?.avgPricePsf?.toLocaleString() || 'N/A'}/sqft
+                </div>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600" data-testid="text-after-repair-value">
+                  {financialSummary?.afterRepairValue ? formatCurrency(financialSummary.afterRepairValue) : 'N/A'}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">After Renovation</div>
+                <div className="text-xs text-gray-500 mt-1">With all improvements</div>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600" data-testid="text-value-uplift">
+                  {financialSummary?.currentValue && financialSummary?.afterRepairValue ? 
+                    formatCurrency(financialSummary.afterRepairValue - financialSummary.currentValue) : 'N/A'}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">Value Uplift</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {financialSummary?.currentValue && financialSummary?.afterRepairValue ? 
+                    `+${Math.round(((financialSummary.afterRepairValue - financialSummary.currentValue) / financialSummary.currentValue) * 100)}%` : 'N/A'}
+                </div>
+              </div>
+              <div className="text-center p-4 bg-orange-50 rounded-lg">
+                <div className="text-2xl font-bold text-orange-600" data-testid="text-opportunity-score">
+                  {Math.round(opportunityScore)}%
+                </div>
+                <div className="text-sm text-gray-600 mt-1">Avg ROI</div>
+                <Badge variant="secondary" className="mt-1 bg-orange-100 text-orange-700 text-xs">
+                  {opportunityScore >= 75 ? 'Excellent' : opportunityScore >= 50 ? 'Good' : opportunityScore >= 25 ? 'Average' : 'Marginal'}
+                </Badge>
+              </div>
+            </div>
+
+            {/* ROI by Project */}
+            <div>
+              <h4 className="font-semibold mb-4" data-testid="title-roi-comparison">ROI by Project</h4>
+              <div className="space-y-3">
+                {renovationProjects.map((project, index) => {
+                  const cost = (project.costRangeLow + project.costRangeHigh) / 2;
+                  const profit = project.valueAdd - cost;
+                  return (
+                    <div key={project.id} className="p-3 bg-gray-50 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-medium">{project.name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-gray-600">
+                            {formatCurrency(cost)} → <span className="text-green-600 font-medium">+{formatCurrency(project.valueAdd)}</span>
+                          </span>
+                          <Badge className={profit > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                            {profit > 0 ? '+' : ''}{formatCurrency(profit)} profit
+                          </Badge>
+                          <span className="font-bold text-orange-600">{calculateROI(project)}% ROI</span>
+                        </div>
+                      </div>
+                      <Progress 
+                        value={Math.min(calculateROI(project), 100)} 
+                        className="h-2"
+                        data-testid={`progress-roi-${index}`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Property History & Financials */}
         {(propertyData.permitHistory || propertyData.propertyTaxAnnual || propertyData.rentalPotential) && (
           <Card>
@@ -387,90 +471,6 @@ export default function Report() {
             </CardContent>
           </Card>
         )}
-
-        {/* Investment Analysis - Combined Overview */}
-        <Card className="border-2 border-teal-500">
-          <CardHeader className="bg-gradient-to-r from-teal-50 to-white">
-            <CardTitle className="text-xl font-semibold flex items-center gap-2" data-testid="title-investment-analysis">
-              <TrendingUp className="w-5 h-5 text-teal-600" />
-              Investment Analysis
-            </CardTitle>
-            <p className="text-sm text-gray-600">Property valuation and renovation ROI breakdown</p>
-          </CardHeader>
-          <CardContent className="pt-6">
-            {/* Value Summary Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="text-center p-4 bg-teal-50 rounded-lg">
-                <div className="text-2xl font-bold text-teal-600" data-testid="text-current-value">
-                  {financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue) : 'N/A'}
-                </div>
-                <div className="text-sm text-gray-600 mt-1">Current Value</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {propertyData.sqft?.toLocaleString() || 'N/A'} sqft × ${financialSummary?.avgPricePsf?.toLocaleString() || 'N/A'}/sqft
-                </div>
-              </div>
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600" data-testid="text-after-repair-value">
-                  {financialSummary?.afterRepairValue ? formatCurrency(financialSummary.afterRepairValue) : 'N/A'}
-                </div>
-                <div className="text-sm text-gray-600 mt-1">After Renovation</div>
-                <div className="text-xs text-gray-500 mt-1">With all improvements</div>
-              </div>
-              <div className="text-center p-4 bg-purple-50 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600" data-testid="text-value-uplift">
-                  {financialSummary?.currentValue && financialSummary?.afterRepairValue ? 
-                    formatCurrency(financialSummary.afterRepairValue - financialSummary.currentValue) : 'N/A'}
-                </div>
-                <div className="text-sm text-gray-600 mt-1">Value Uplift</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {financialSummary?.currentValue && financialSummary?.afterRepairValue ? 
-                    `+${Math.round(((financialSummary.afterRepairValue - financialSummary.currentValue) / financialSummary.currentValue) * 100)}%` : 'N/A'}
-                </div>
-              </div>
-              <div className="text-center p-4 bg-orange-50 rounded-lg">
-                <div className="text-2xl font-bold text-orange-600" data-testid="text-opportunity-score">
-                  {Math.round(opportunityScore)}%
-                </div>
-                <div className="text-sm text-gray-600 mt-1">Avg ROI</div>
-                <Badge variant="secondary" className="mt-1 bg-orange-100 text-orange-700 text-xs">
-                  {opportunityScore >= 75 ? 'Excellent' : opportunityScore >= 50 ? 'Good' : opportunityScore >= 25 ? 'Average' : 'Marginal'}
-                </Badge>
-              </div>
-            </div>
-
-            {/* ROI by Project */}
-            <div>
-              <h4 className="font-semibold mb-4" data-testid="title-roi-comparison">ROI by Project</h4>
-              <div className="space-y-3">
-                {renovationProjects.map((project, index) => {
-                  const cost = (project.costRangeLow + project.costRangeHigh) / 2;
-                  const profit = project.valueAdd - cost;
-                  return (
-                    <div key={project.id} className="p-3 bg-gray-50 rounded-lg">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-medium">{project.name}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm text-gray-600">
-                            {formatCurrency(cost)} → <span className="text-green-600 font-medium">+{formatCurrency(project.valueAdd)}</span>
-                          </span>
-                          <Badge className={profit > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                            {profit > 0 ? '+' : ''}{formatCurrency(profit)} profit
-                          </Badge>
-                          <span className="font-bold text-orange-600">{calculateROI(project)}% ROI</span>
-                        </div>
-                      </div>
-                      <Progress 
-                        value={Math.min(calculateROI(project), 100)} 
-                        className="h-2"
-                        data-testid={`progress-roi-${index}`}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Top Renovation Opportunities */}
         <Card>
