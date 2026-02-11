@@ -5,8 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 // - Using gemini-3-flash-preview model per official docs
 //   - do not change this unless explicitly requested by the user
 
-// This API key is from Gemini Developer API Key, not vertex AI API Key
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || "" });
 
 export interface RenovationAnalysis {
   renovation_ideas: Array<{
@@ -39,8 +38,7 @@ export async function analyzePropertyForRenovations(
 ): Promise<RenovationAnalysis> {
   try {
     console.log("DEBUG: Starting Gemini analysis...");
-    console.log("DEBUG: GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
-    console.log("DEBUG: Using Gemini 3 Flash Preview model");
+    console.log("DEBUG: API key exists:", !!(process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY));
 
     const prompt = `You are an expert real estate renovation analyst with 20+ years of experience specializing in transformative, high-ROI projects. 
         
