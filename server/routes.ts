@@ -277,7 +277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { generateImageryUrls } = await import('./services/gemini-enhanced');
         if (location.lat && location.lng) {
-          imagery = await generateImageryUrls(location.lat, location.lng);
+          imagery = await generateImageryUrls(location.lat, location.lng, propertyData.address);
           console.log(`📸 Generated Street View and Satellite imagery URLs`);
         }
       } catch (imgError) {
