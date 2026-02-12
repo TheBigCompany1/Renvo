@@ -9,6 +9,12 @@ import { findLocationBasedContractors } from "./services/location-contractors";
 import { isAuthenticated } from "./replit_integrations/auth";
 import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
 
+const ADMIN_EMAILS = ['alexkingsm@gmail.com'];
+
+function isAdmin(email: string | null | undefined): boolean {
+  return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stripe/publishable-key", async (_req, res) => {
     try {
@@ -37,6 +43,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscriptionStatus: user.subscriptionStatus,
         tosAcceptedAt: user.tosAcceptedAt,
         isFirstReport: user.totalReportsGenerated === 0,
+        isAdmin: isAdmin(user.email),
       });
     } catch (error) {
       console.error("Error fetching user status:", error);
@@ -221,14 +228,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      if (!user.tosAcceptedAt) {
+      const userIsAdmin = isAdmin(user.email);
+
+      if (!userIsAdmin && !user.tosAcceptedAt) {
         return res.status(403).json({ message: "Please accept the Terms of Service before generating a report." });
       }
 
       const hasCredits = (user.reportCredits || 0) > 0;
       const hasSubscription = user.subscriptionStatus === 'active';
 
-      if (!hasCredits && !hasSubscription) {
+      if (!userIsAdmin && !hasCredits && !hasSubscription) {
         return res.status(402).json({ message: "Please purchase a report or subscribe to generate analyses." });
       }
 
@@ -277,7 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      if (!hasSubscription && hasCredits) {
+      if (!userIsAdmin && !hasSubscription && hasCredits) {
         await storage.updateUserCredits(userId, (user.reportCredits || 0) - 1);
       }
       await storage.incrementUserReportCount(userId);

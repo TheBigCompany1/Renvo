@@ -111,7 +111,9 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm text-muted-foreground">Subscription</p>
                   <p className="text-lg font-bold capitalize">
-                    {userStatus?.subscriptionStatus === 'active' ? (
+                    {userStatus?.isAdmin ? (
+                      <Badge className="bg-amber-500">Admin</Badge>
+                    ) : userStatus?.subscriptionStatus === 'active' ? (
                       <Badge className="bg-green-500">Pro Active</Badge>
                     ) : (
                       <span className="text-muted-foreground">None</span>
