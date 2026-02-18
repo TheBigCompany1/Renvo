@@ -1,44 +1,40 @@
-import { getStripeSync, getUncachableStripeClient } from './stripeClient';
+import { stripe } from './stripeClient';
 import { storage } from './storage';
+import Stripe from 'stripe';
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string): Promise<void> {
-    if (!Buffer.isBuffer(payload)) {
-      throw new Error(
-        'STRIPE WEBHOOK ERROR: Payload must be a Buffer. ' +
-        'Received type: ' + typeof payload + '. ' +
-        'Ensure webhook route is registered BEFORE app.use(express.json()).'
-      );
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
+      throw new Error('STRIPE_WEBHOOK_SECRET is not set');
     }
 
-    let sync;
+    let event: Stripe.Event;
+
     try {
-      sync = await getStripeSync();
-      await sync.processWebhook(payload, signature);
-    } catch (syncErr: any) {
-      console.error('Stripe webhook signature verification failed:', syncErr.message);
-      throw new Error('Webhook signature verification failed');
+      event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+    } catch (err: any) {
+      console.error(`Webhook signature verification failed: ${err.message}`);
+      throw new Error(`Webhook signature verification failed: ${err.message}`);
     }
 
-    const body = JSON.parse(payload.toString());
-    const eventType = body?.type;
-
-    console.log(`Stripe webhook verified and received: ${eventType}`);
+    console.log(`Stripe webhook verified and received: ${event.type}`);
 
     try {
-      if (eventType === 'checkout.session.completed') {
-        await WebhookHandlers.handleCheckoutCompleted(body.data?.object);
-      } else if (eventType === 'customer.subscription.deleted') {
-        await WebhookHandlers.handleSubscriptionCancelled(body.data?.object);
-      } else if (eventType === 'customer.subscription.updated') {
-        await WebhookHandlers.handleSubscriptionUpdated(body.data?.object);
+      if (event.type === 'checkout.session.completed') {
+        await WebhookHandlers.handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+      } else if (event.type === 'customer.subscription.deleted') {
+        await WebhookHandlers.handleSubscriptionCancelled(event.data.object as Stripe.Subscription);
+      } else if (event.type === 'customer.subscription.updated') {
+        await WebhookHandlers.handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
       }
     } catch (handlerErr) {
       console.error('Error in webhook event handler:', handlerErr);
     }
   }
 
-  static async handleCheckoutCompleted(session: any): Promise<void> {
+  static async handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
     if (!session?.metadata?.userId) return;
 
     const userId = session.metadata.userId;
@@ -65,36 +61,43 @@ export class WebhookHandlers {
     }
   }
 
-  static async handleSubscriptionCancelled(subscription: any): Promise<void> {
-    const stripe = await getUncachableStripeClient();
+  static async handleSubscriptionCancelled(subscription: Stripe.Subscription): Promise<void> {
     const customerId = typeof subscription.customer === 'string'
       ? subscription.customer
       : subscription.customer?.id;
 
     if (!customerId) return;
 
-    const customer = await stripe.customers.retrieve(customerId);
-    const userId = (customer as any).metadata?.userId;
+    // We can't easily get the user from customerId without a lookup table if not syncing users to stripe customers
+    // But typically we store stripeCustomerId in our users table.
+    // For now we try to rely on metadata if available, or we might need to look up user by stripeCustomerId
+    // Replit sync was handling this mapping.
+    // If metadata is on the subscription object, we use it.
+
+    // Stripe subscriptions usually inherit metadata from checkout session but it's not guaranteed.
+    // Let's check logic: storage.updateUserSubscription uses userId.
+
+    // We need to find the user by Stripe Customer ID if metadata is missing.
+    // Since we don't have a direct method `getUserByStripeCustomerId` in storage interface seen so far, 
+    // we might need to add it or rely on metadata being present.
+
+    const userId = subscription.metadata?.userId;
     if (userId) {
       await storage.updateUserSubscription(userId, subscription.id, 'cancelled');
       console.log(`Subscription cancelled for user ${userId}`);
+    } else {
+      console.warn(`Could not find userId in subscription metadata for cancelled subscription ${subscription.id}`);
     }
   }
 
-  static async handleSubscriptionUpdated(subscription: any): Promise<void> {
-    const stripe = await getUncachableStripeClient();
-    const customerId = typeof subscription.customer === 'string'
-      ? subscription.customer
-      : subscription.customer?.id;
-
-    if (!customerId) return;
-
-    const customer = await stripe.customers.retrieve(customerId);
-    const userId = (customer as any).metadata?.userId;
+  static async handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
+    const userId = subscription.metadata?.userId;
     if (userId) {
       const status = subscription.status === 'active' ? 'active' : subscription.status;
       await storage.updateUserSubscription(userId, subscription.id, status);
       console.log(`Subscription updated for user ${userId}: ${status}`);
+    } else {
+      console.warn(`Could not find userId in subscription metadata for subscription ${subscription.id}`);
     }
   }
 }

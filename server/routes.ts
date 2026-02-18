@@ -6,10 +6,16 @@ import { researchProperty, convertToPropertyData, convertToRenovationProjects, c
 import { generateContractorRecommendations } from "./services/gemini";
 import { extractLocationFromProperty } from "./services/location-service";
 import { findLocationBasedContractors } from "./services/location-contractors";
-import { isAuthenticated } from "./replit_integrations/auth";
-import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
+import { getStripeClient, getStripePublishableKey } from "./stripeClient";
 
 const ADMIN_EMAILS = ['alexkingsm@gmail.com'];
+
+function isAuthenticated(req: any, res: any, next: any) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ message: "Not authenticated" });
+}
 
 function isAdmin(email: string | null | undefined): boolean {
   return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
@@ -80,7 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserTosAccepted(userId);
       }
 
-      const stripe = await getUncachableStripeClient();
+      const stripe = await getStripeClient();
 
       let customerId = user.stripeCustomerId;
       if (!customerId) {
@@ -101,7 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           limit: 10,
         });
         const subscriptionPrice = prices.data.find(p => p.unit_amount === 2999);
-        
+
         if (!subscriptionPrice) {
           return res.status(400).json({ message: "Subscription price not found. Please run the seed script." });
         }
@@ -151,9 +157,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mode: 'payment',
         success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/pricing`,
-        metadata: { 
-          userId, 
-          priceType, 
+        metadata: {
+          userId,
+          priceType,
           credits: credits.toString(),
           reportAddress: reportAddress || '',
         },
@@ -174,7 +180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = req.user.claims.sub;
-      const stripe = await getUncachableStripeClient();
+      const stripe = await getStripeClient();
       const session = await stripe.checkout.sessions.retrieve(session_id as string);
 
       if (session.payment_status !== 'paid') {
@@ -191,10 +197,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const priceType = session.metadata?.priceType;
-      
+
       if (priceType === 'subscription') {
-        const subscriptionId = typeof session.subscription === 'string' 
-          ? session.subscription 
+        const subscriptionId = typeof session.subscription === 'string'
+          ? session.subscription
           : session.subscription?.id;
         if (subscriptionId) {
           await storage.updateUserSubscription(userId, subscriptionId, 'active');
@@ -208,8 +214,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const reportAddress = session.metadata?.reportAddress;
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         type: 'credits',
         credits: newCredits,
         reportAddress: reportAddress || null,
@@ -242,7 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const validatedData = insertAnalysisReportSchema.parse(req.body);
-      
+
       if (validatedData.inputType === 'url' && validatedData.propertyUrl) {
         try {
           const parsedUrl = new URL(validatedData.propertyUrl);
@@ -253,8 +259,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const hostname = parsedUrl.hostname.toLowerCase();
           const isAllowedHost = allowedHosts.some(host => hostname === host || hostname.endsWith('.' + host.replace('www.', '')));
           if (!isAllowedHost) {
-            return res.status(400).json({ 
-              message: "Please provide a property URL from Redfin, Zillow, or Realtor.com. Or enter the property address directly." 
+            return res.status(400).json({
+              message: "Please provide a property URL from Redfin, Zillow, or Realtor.com. Or enter the property address directly."
             });
           }
         } catch (urlError) {
@@ -262,13 +268,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } else if (validatedData.inputType === 'address' && validatedData.propertyAddress) {
         if (validatedData.propertyAddress.trim().length < 10) {
-          return res.status(400).json({ 
-            message: "Please provide a complete address (street, city, state, zip)" 
+          return res.status(400).json({
+            message: "Please provide a complete address (street, city, state, zip)"
           });
         }
       } else {
-        return res.status(400).json({ 
-          message: "Please provide either a property URL or a property address" 
+        return res.status(400).json({
+          message: "Please provide either a property URL or a property address"
         });
       }
 
@@ -277,8 +283,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const cachedReport = await storage.findCachedReport(addressToCheck, 30);
         if (cachedReport) {
           console.log(`Found cached report for "${addressToCheck}" - returning existing report ${cachedReport.id}`);
-          return res.json({ 
-            reportId: cachedReport.id, 
+          return res.json({
+            reportId: cachedReport.id,
             status: cachedReport.status,
             cached: true,
             cachedAt: cachedReport.completedAt
@@ -292,22 +298,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.incrementUserReportCount(userId);
 
       const report = await storage.createAnalysisReport(validatedData, userId);
-      
+
       processAnalysisReport(report.id);
-      
+
       res.json({ reportId: report.id, status: 'pending', cached: false });
     } catch (error) {
       console.error("Error creating analysis report:", error);
-      
+
       if (error instanceof Error && 'issues' in error) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: "Invalid input data. Please check your input.",
           errors: (error as any).issues
         });
       }
-      
-      res.status(500).json({ 
-        message: "Failed to create analysis report. Please check your input and try again." 
+
+      res.status(500).json({
+        message: "Failed to create analysis report. Please check your input and try again."
       });
     }
   });
@@ -316,18 +322,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const report = await storage.getAnalysisReport(id);
-      
+
       if (!report) {
-        return res.status(404).json({ 
-          message: "Analysis report not found. Please check the report ID." 
+        return res.status(404).json({
+          message: "Analysis report not found. Please check the report ID."
         });
       }
-      
+
       res.json(report);
     } catch (error) {
       console.error("Error fetching analysis report:", error);
-      res.status(500).json({ 
-        message: "Failed to retrieve analysis report. Please try again." 
+      res.status(500).json({
+        message: "Failed to retrieve analysis report. Please try again."
       });
     }
   });
@@ -351,7 +357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No Stripe customer found" });
       }
 
-      const stripe = await getUncachableStripeClient();
+      const stripe = await getStripeClient();
       const session = await stripe.billingPortal.sessions.create({
         customer: user.stripeCustomerId,
         return_url: `${req.protocol}://${req.get('host')}/dashboard`,
@@ -371,10 +377,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.updateAnalysisReportStatus(reportId, 'processing');
 
-      const addressOrUrl = report.inputType === 'url' && report.propertyUrl 
-        ? report.propertyUrl 
+      const addressOrUrl = report.inputType === 'url' && report.propertyUrl
+        ? report.propertyUrl
         : report.propertyAddress;
-      
+
       if (!addressOrUrl) {
         throw new Error('Invalid report: missing both propertyUrl and propertyAddress');
       }
@@ -383,7 +389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Input: ${addressOrUrl}`);
 
       const research = await researchProperty(addressOrUrl);
-      
+
       const propertyData = convertToPropertyData(research);
       const renovationProjects = convertToRenovationProjects(research);
       const comparableProperties = convertToComparables(research);
@@ -395,7 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`  Renovation projects: ${renovationProjects.length}`);
 
       const location = await extractLocationFromProperty(propertyData.address, report.propertyUrl ?? undefined);
-      
+
       const updatedPropertyData = {
         ...propertyData,
         location
@@ -418,7 +424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             console.log(`Finding contractors for ${project.name} in ${location.city}, ${location.state}`);
             projectContractors = await findLocationBasedContractors(location, project.name);
-            
+
             if (projectContractors.length === 0) {
               const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
               projectContractors = await generateContractorRecommendations(locationQuery, project.name);
@@ -428,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
             projectContractors = await generateContractorRecommendations(locationQuery, project.name);
           }
-          
+
           return {
             ...project,
             contractors: projectContractors
@@ -470,7 +476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sources: research.sources,
       };
 
-      await storage.updateAnalysisReportData(reportId, { 
+      await storage.updateAnalysisReportData(reportId, {
         propertyData: updatedPropertyData,
         comparableProperties,
         renovationProjects: projectsWithContractors,
@@ -488,9 +494,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error) {
       console.error("Error processing analysis report:", error);
-      
+
       let failureReason = "An unexpected error occurred while processing your request.";
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Failed to parse')) {
           failureReason = "We couldn't find enough information about this property. Please try a different address or provide more details.";
@@ -500,8 +506,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           failureReason = error.message;
         }
       }
-      
-      await storage.updateAnalysisReportData(reportId, { 
+
+      await storage.updateAnalysisReportData(reportId, {
         status: 'failed',
         failureReason: failureReason
       });
@@ -511,7 +517,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/address-autocomplete", async (req, res) => {
     try {
       const { input } = req.query;
-      
+
       if (!input || typeof input !== 'string' || input.length < 3) {
         return res.json({ predictions: [] });
       }
@@ -556,7 +562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (newApiData.error) {
         console.log('Places API (New) error:', newApiData.error.message, '- trying legacy API');
-        
+
         const legacyUrl = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
         legacyUrl.searchParams.append('input', input);
         legacyUrl.searchParams.append('types', 'address');
