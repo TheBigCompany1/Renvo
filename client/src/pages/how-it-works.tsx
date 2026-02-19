@@ -1,38 +1,38 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { 
-  Search, 
-  Brain, 
-  FileText, 
-  DollarSign, 
-  MapPin, 
-  Users, 
-  ArrowRight, 
-  CheckCircle 
+import {
+  Search,
+  Brain,
+  FileText,
+  DollarSign,
+  MapPin,
+  Users,
+  ArrowRight,
+  CheckCircle
 } from "lucide-react";
 
 export default function HowItWorks() {
   const steps = [
     {
       number: "01",
-      title: "Enter Property URL",
-      description: "Simply paste a Redfin or Zillow URL of the property you're interested in analyzing. Our system works with most major real estate platforms.",
+      title: "Enter Property Address",
+      description: "Simply enter the address of the property you're interested in analyzing. Our system works with any residential property.",
       icon: Search,
       features: [
-        "Support for Redfin and Zillow URLs",
+        "Support for any residential address",
         "No account registration required",
         "Instant property data extraction",
         "Secure and private analysis"
       ]
     },
     {
-      number: "02", 
+      number: "02",
       title: "AI Analyzes the Property",
       description: "Our advanced AI system analyzes the property using machine learning models trained on thousands of successful renovations and market data.",
       icon: Brain,
       features: [
-        "Property condition assessment", 
+        "Property condition assessment",
         "Market trends analysis",
         "Neighborhood evaluation",
         "Comparable property research"
@@ -40,12 +40,12 @@ export default function HowItWorks() {
     },
     {
       number: "03",
-      title: "Get Your Comprehensive Report", 
+      title: "Get Your Comprehensive Report",
       description: "Receive a detailed renovation report with ROI calculations, comparable properties, and vetted contractor recommendations to maximize your investment.",
       icon: FileText,
       features: [
         "ROI calculations & projections",
-        "Comparable property analysis", 
+        "Comparable property analysis",
         "Contractor recommendations",
         "Detailed renovation roadmap"
       ]
@@ -76,7 +76,7 @@ export default function HowItWorks() {
       <div className="relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.1),transparent)] dark:bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.05),transparent)]" />
-        
+
         <div className="relative z-10 container mx-auto px-4 py-20 lg:py-32">
           <div className="text-center max-w-4xl mx-auto">
             <h1 className="text-4xl lg:text-6xl font-bold text-white mb-6 tracking-tight" data-testid="title-how-it-works">
@@ -98,7 +98,7 @@ export default function HowItWorks() {
           {steps.map((step, index) => {
             const IconComponent = step.icon;
             const isEven = index % 2 === 0;
-            
+
             return (
               <div key={step.number} className={`relative flex flex-col ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-12 lg:gap-20`} data-testid={`step-${step.number}`}>
                 {/* Content */}
@@ -111,7 +111,7 @@ export default function HowItWorks() {
                       {step.title}
                     </h2>
                   </div>
-                  
+
                   <p className="text-lg text-white/80 leading-relaxed" data-testid={`step-description-${step.number}`}>
                     {step.description}
                   </p>
@@ -205,7 +205,7 @@ export default function HowItWorks() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/" data-testid="link-start-analysis">
-              <Button 
+              <Button
                 className="h-14 px-8 text-lg font-semibold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 border-0 shadow-lg"
                 data-testid="button-start-analysis"
               >
@@ -213,8 +213,8 @@ export default function HowItWorks() {
               </Button>
             </Link>
             <Link href="/" data-testid="link-view-example">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="h-14 px-8 text-lg font-semibold bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20"
                 data-testid="button-view-example"
               >
