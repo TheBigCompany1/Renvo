@@ -82,7 +82,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden bg-black">
       <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 gap-1">
         {videoGridItems.map((item, index) => (
           <div key={index} className="relative overflow-hidden">
