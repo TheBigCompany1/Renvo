@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
-const client = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || ""
+const client = new GoogleGenAI({ 
+  apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || "" 
 });
 
 export interface PropertyResearchResult {
@@ -324,7 +324,7 @@ CRITICAL DATA INTEGRITY RULES:
 
   try {
     console.log('🌐 Sending request to Gemini with Google Search grounding...');
-
+    
     const response = await client.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -367,9 +367,8 @@ CRITICAL DATA INTEGRITY RULES:
       }
     }
 
-    console.log('Creates response text:', responseText);
     const parsed = parseJsonFromResponse(responseText);
-
+    
     if (!parsed) {
       throw new Error('Failed to parse JSON from Gemini response');
     }
@@ -383,7 +382,7 @@ CRITICAL DATA INTEGRITY RULES:
     if (!parsed.propertyData || !parsed.propertyData.address) {
       throw new Error('INVALID_DATA: Property address not found in research results');
     }
-
+    
     if (!parsed.propertyData.sqft || parsed.propertyData.sqft <= 0) {
       throw new Error('INVALID_DATA: Property square footage not found - cannot provide accurate analysis');
     }
@@ -445,7 +444,7 @@ function parseJsonFromResponse(text: string): any {
 
 function extractSources(groundingMetadata: any): string[] {
   const sources: string[] = [];
-
+  
   if (groundingMetadata?.groundingChunks) {
     for (const chunk of groundingMetadata.groundingChunks) {
       if (chunk.web?.uri) {
@@ -461,7 +460,7 @@ function extractSources(groundingMetadata: any): string[] {
       }
     }
   }
-
+  
   return sources.slice(0, 10);
 }
 
@@ -494,7 +493,7 @@ export function convertToPropertyData(research: PropertyResearchResult): any {
 
 export function convertToRenovationProjects(research: PropertyResearchResult): any[] {
   const projects = research.renovationAnalysis?.projects || [];
-
+  
   return projects.map((project, index) => ({
     id: `gemini-${index + 1}`,
     name: project.name,

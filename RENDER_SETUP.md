@@ -43,3 +43,27 @@ You will be prompted to enter the values for the environment variables defined i
     *   Select events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
     *   Copy the **Signing Secret** (`whsec_...`).
     *   Update the `STRIPE_WEBHOOK_SECRET` in Render dashboard (Environment tab) if it's different from what you initially set.
+
+## 6. Custom Domain Setup (HostGator)
+To use your HostGator domain (e.g., `www.yourdomain.com`) with Render:
+
+### Step A: Add Domain in Render
+1.  In your Render Dashboard, go to your Web Service > **Settings**.
+2.  Scroll down to **"Custom Domains"**.
+3.  Click **"Add Custom Domain"**.
+4.  Enter your domain name (e.g., `www.yourdomain.com`).
+5.  Render will provide you with a **DNS Target** (e.g., `renvo-xxxx.onrender.com`) and a **Verification** value.
+
+### Step B: Update DNS in HostGator (cPanel)
+1.  Log in to HostGator **cPanel**.
+2.  Find **"Zone Editor"** or **"Simple Zone Editor"** under "Domains".
+3.  **For `www.yourdomain.com`**:
+    *   Add a **CNAME Record**.
+    *   **Name**: `www`
+    *   **CNAME**: `renvo-xxxx.onrender.com` (The value from Render).
+4.  **For root `yourdomain.com`**:
+    *   Render recommends using an **A Record**.
+    *   Find the "Root Domain" instructions in Render's "Add Custom Domain" window. It will give you an IP address (e.g., `216.24.57.1`).
+    *   In HostGator Zone Editor, edit/add the **A Record** for `yourdomain.com` (or `@`) to point to that IP.
+
+*Note: DNS changes can take up to 24-48 hours to propagate, but often happen within minutes.*

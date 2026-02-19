@@ -1,6 +1,6 @@
-import {
+import { 
   type User,
-  type AnalysisReport,
+  type AnalysisReport, 
   type InsertAnalysisReport,
   type PropertyData,
   type RenovationProject,
@@ -17,22 +17,14 @@ import {
 import { eq, and, gte, or, sql, desc } from "drizzle-orm";
 import { db } from "./db";
 
-import session from "express-session";
-import createMemoryStore from "memorystore";
-import connectPgSimple from "connect-pg-simple";
-
-const MemoryStore = createMemoryStore(session);
-const PgSession = connectPgSimple(session);
-
 export interface IStorage {
-  sessionStore: session.Store;
   getUser(id: string): Promise<User | undefined>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
   updateUserStripeCustomerId(userId: string, customerId: string): Promise<void>;
   updateUserSubscription(userId: string, subscriptionId: string, status: string): Promise<void>;
   updateUserTosAccepted(userId: string): Promise<void>;
   incrementUserReportCount(userId: string): Promise<void>;
-
+  
   createAnalysisReport(report: InsertAnalysisReport, userId?: string): Promise<AnalysisReport>;
   getAnalysisReport(id: string): Promise<AnalysisReport | undefined>;
   getAllAnalysisReports(): Promise<AnalysisReport[]>;
@@ -40,7 +32,7 @@ export interface IStorage {
   updateAnalysisReportStatus(id: string, status: string): Promise<void>;
   updateAnalysisReportPayment(id: string, stripeSessionId: string, paymentStatus: string): Promise<void>;
   updateAnalysisReportData(
-    id: string,
+    id: string, 
     data: {
       propertyData?: PropertyData;
       propertyUrl?: string;
@@ -59,23 +51,11 @@ export interface IStorage {
       completedAt?: Date;
     }
   ): Promise<void>;
-
+  
   findCachedReport(address: string, maxAgeDays?: number): Promise<AnalysisReport | undefined>;
 }
 
 export class PostgresStorage implements IStorage {
-  sessionStore: session.Store;
-
-  constructor() {
-    this.sessionStore = new PgSession({
-      conObject: {
-        connectionString: process.env.DATABASE_URL,
-      },
-      createTableIfMissing: false,
-      tableName: 'sessions', // Must match the table defined in shared/models/auth.ts
-    });
-  }
-
   async getUser(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id));
     return result[0];
@@ -107,9 +87,9 @@ export class PostgresStorage implements IStorage {
 
   async incrementUserReportCount(userId: string): Promise<void> {
     await db.update(users)
-      .set({
+      .set({ 
         totalReportsGenerated: sql`${users.totalReportsGenerated} + 1`,
-        updatedAt: new Date()
+        updatedAt: new Date() 
       })
       .where(eq(users.id, userId));
   }
@@ -150,7 +130,7 @@ export class PostgresStorage implements IStorage {
   }
 
   async updateAnalysisReportData(
-    id: string,
+    id: string, 
     data: {
       propertyData?: PropertyData;
       propertyUrl?: string;
@@ -178,7 +158,7 @@ export class PostgresStorage implements IStorage {
     const normalizedAddress = address.toLowerCase().trim();
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
-
+    
     const results = await db.select()
       .from(analysisReports)
       .where(
@@ -192,7 +172,7 @@ export class PostgresStorage implements IStorage {
         )
       )
       .limit(1);
-
+    
     return results[0];
   }
 }
