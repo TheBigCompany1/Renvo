@@ -67,7 +67,7 @@ function App() {
           <Header />
           <Switch>
             <Route path="/auth" component={AuthPage} />
-            <Route path="/:rest*">
+            <Route>
               <div className="flex-1 flex flex-col">
                 <main className="flex-1">
                   <Router />
