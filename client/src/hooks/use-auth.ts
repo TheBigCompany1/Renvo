@@ -74,5 +74,6 @@ export function useAuth() {
     loginMutation,
     registerMutation,
     logoutMutation,
+    isAuthenticated: !!user,
   };
 }
