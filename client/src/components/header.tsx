@@ -59,11 +59,11 @@ export default function Header() {
                 </a>
               </>
             ) : (
-              <a href="/api/login">
+              <Link href="/auth">
                 <Button className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
                   Sign In
                 </Button>
-              </a>
+              </Link>
             )}
           </div>
         </div>

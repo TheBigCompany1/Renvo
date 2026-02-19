@@ -62,7 +62,7 @@ export default function Home() {
 
     if (!isAuthenticated) {
       sessionStorage.setItem('pendingAddress', propertyInput.trim());
-      window.location.href = "/api/login";
+      navigate("/auth");
       return;
     }
 
