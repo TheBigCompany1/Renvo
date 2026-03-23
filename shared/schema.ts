@@ -160,6 +160,11 @@ export const renovationProjectSchema = z.object({
   computedCost: z.number().optional(),
   computedValue: z.number().optional(),
   pricePsfUsed: z.number().optional(),
+  feasibility: z.string().optional(),
+  potential_risks: z.array(z.string()).optional(),
+  roadmap_steps: z.array(z.string()).optional(),
+  value_drivers: z.array(z.string()).optional(),
+  target_demographic: z.string().optional(),
   starRating: z.number().min(1).max(5).optional(),
   rank: z.number().optional(),
   pricingSources: z.object({

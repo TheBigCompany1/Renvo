@@ -114,6 +114,8 @@ export interface PropertyResearchResult {
       feasibility: string;
       risks: string[];
       steps: string[];
+      valueDrivers?: string[];
+      targetDemographic?: string;
     }>;
     ownerAnalysis?: {
       purchasePrice: number;
@@ -262,7 +264,9 @@ Respond with a JSON object in this exact format:
         "timeline": "18-24 months including permits",
         "feasibility": "High - deep lot provides expansion room",
         "risks": ["Permit delays", "Construction cost overruns", "Market changes"],
-        "steps": ["Architectural plans", "Permit application", "Construction", "Finishing"]
+        "steps": ["Architectural plans", "Permit application", "Construction", "Finishing"],
+        "valueDrivers": ["Modernizes 1960s layout", "Creates open concept flow", "Adds highly-demanded 4th bedroom"],
+        "targetDemographic": "Growing families and upgrading professionals"
       },
       {
         "name": "ADU Addition (400 sqft)",
@@ -290,7 +294,9 @@ Respond with a JSON object in this exact format:
         "timeline": "8-12 months",
         "feasibility": "Medium - requires sufficient lot space",
         "risks": ["Permit complexity", "Utility connections"],
-        "steps": ["Design", "Permits", "Construction", "Finishing"]
+        "steps": ["Design", "Permits", "Construction", "Finishing"],
+        "valueDrivers": ["Creates passive rental income stream", "Maximizes unused backyard space", "Increases multi-generational housing appeal"],
+        "targetDemographic": "House hackers and investors"
       }
     ],
     "ownerAnalysis": {
@@ -516,6 +522,8 @@ export function convertToRenovationProjects(research: PropertyResearchResult): a
     feasibility: project.feasibility,
     potential_risks: project.risks,
     roadmap_steps: project.steps,
+    value_drivers: project.valueDrivers,
+    target_demographic: project.targetDemographic,
   }));
 }
 

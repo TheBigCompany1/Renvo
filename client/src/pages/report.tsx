@@ -523,8 +523,9 @@ export default function Report() {
                     {/* Balanced UX Layout */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mt-6">
                       
-                      {/* Left Column: Narrative Analysis */}
+                      {/* Left Column: Narrative Analysis & Structured Data */}
                       <div className="lg:col-span-2 space-y-6">
+                        {/* Narrative Description */}
                         <div>
                           <h4 className="font-semibold text-gray-900 mb-3 text-lg flex items-center">
                             <Sparkles className="w-5 h-5 mr-2 text-blue-500" />
@@ -535,25 +536,77 @@ export default function Report() {
                           </div>
                         </div>
 
-                        {/* Note: Dynamic Risks Rendering */}
-                        {(project as any).risks && (project as any).risks.length > 0 && (
-                          <div>
-                            <h4 className="font-semibold text-gray-900 mb-3 text-lg flex items-center">
-                              <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
-                              Important Risk Factors
-                            </h4>
-                            <div className="bg-orange-50/50 p-5 rounded-xl border border-orange-100">
-                              <ul className="space-y-2 text-orange-800 text-sm">
-                                {(project as any).risks.map((risk: string, i: number) => (
+                        {/* Value Drivers & Target Demographic */}
+                        {((project as any).value_drivers?.length > 0 || (project as any).target_demographic) && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {(project as any).value_drivers?.length > 0 && (
+                              <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100">
+                                <h4 className="font-semibold text-emerald-900 mb-3 text-sm uppercase tracking-wider flex items-center">
+                                  <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
+                                  Value Drivers
+                                </h4>
+                                <ul className="space-y-2 text-emerald-800 text-sm">
+                                  {(project as any).value_drivers.map((driver: string, i: number) => (
+                                    <li key={i} className="flex items-start">
+                                      <span className="mr-2 text-emerald-500">✓</span>
+                                      <span className="leading-snug">{driver}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {(project as any).target_demographic && (
+                              <div className="bg-purple-50/50 p-5 rounded-xl border border-purple-100">
+                                <h4 className="font-semibold text-purple-900 mb-3 text-sm uppercase tracking-wider flex items-center">
+                                  <Users className="w-4 h-4 mr-2 text-purple-600" />
+                                  Target Market
+                                </h4>
+                                <p className="text-purple-800 text-sm leading-relaxed">
+                                  {(project as any).target_demographic}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Execution Roadmap & Risks */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {(project as any).roadmap_steps && (project as any).roadmap_steps.length > 0 && (
+                            <div className="bg-gray-50/50 p-5 rounded-xl border border-gray-200">
+                              <h4 className="font-semibold text-gray-900 mb-3 text-sm uppercase tracking-wider flex items-center">
+                                <CheckCircle className="w-4 h-4 mr-2 text-gray-600" />
+                                Execution Roadmap
+                              </h4>
+                              <ul className="space-y-3 text-gray-700 text-sm">
+                                {(project as any).roadmap_steps.map((step: string, i: number) => (
                                   <li key={i} className="flex items-start">
-                                    <span className="mr-2 opacity-60">•</span>
-                                    <span>{risk}</span>
+                                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">{i + 1}</div>
+                                    <span className="leading-snug">{step}</span>
                                   </li>
                                 ))}
                               </ul>
                             </div>
-                          </div>
-                        )}
+                          )}
+
+                          {(project as any).potential_risks && (project as any).potential_risks.length > 0 && (
+                            <div className="bg-orange-50/50 p-5 rounded-xl border border-orange-100">
+                              <h4 className="font-semibold text-orange-900 mb-3 text-sm uppercase tracking-wider flex items-center">
+                                <AlertTriangle className="w-4 h-4 mr-2 text-orange-500" />
+                                Risk Factors
+                              </h4>
+                              <ul className="space-y-2 text-orange-800 text-sm">
+                                {(project as any).potential_risks.map((risk: string, i: number) => (
+                                  <li key={i} className="flex items-start">
+                                    <span className="mr-2 opacity-60">•</span>
+                                    <span className="leading-snug">{risk}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+
                       </div>
 
                       {/* Right Column: Financial Breakdown ("Receipt" format) */}
