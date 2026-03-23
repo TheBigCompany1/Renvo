@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getAnalysisReport } from "@/lib/api";
 import { PropertyData, RenovationProject, ComparableProperty, Contractor, FinancialSummary as FinancialSummaryType } from "@shared/schema";
-import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle, Star, GraduationCap, Footprints, Shield, CloudRain, FileText, Wallet, Building, MessageSquare } from "lucide-react";
+import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle, Star, GraduationCap, Footprints, Shield, CloudRain, FileText, Wallet, Building, MessageSquare, Sparkles } from "lucide-react";
 import { ReportChatPanel } from "@/components/report-chat-panel";
 
 // Helper function to render star rating
@@ -520,110 +520,97 @@ export default function Report() {
                       </div>
                     </div>
 
-                    {/* Project Description */}
-                    <p className="text-gray-700 mb-6" data-testid={`text-project-description-${index}`}>
-                      {project.description}
-                    </p>
-
-                    {/* Project Metrics */}
-                    {(() => {
-                      const projectCost = (project as any).computedCost || (project.costRangeLow + project.costRangeHigh) / 2;
-                      const netProfit = project.valueAdd - projectCost;
-                      return (
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                          <div className="text-center p-4 bg-gray-50 rounded-lg">
-                            <div className="text-lg font-bold text-teal-600">
-                              {formatCurrency(projectCost)}
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {(project as any).computedCost ? 'Validated Cost' : 'Est. Cost'}
-                            </div>
-                            {(project as any).costPerSqftUsed && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                ${(project as any).costPerSqftUsed}/sqft
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-center p-4 bg-gray-50 rounded-lg">
-                            <div className="text-lg font-bold text-green-600">
-                              +{formatCurrency(project.valueAdd)}
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {(project as any).corrected ? 'Validated Value Add' : 'Est. Value Add'}
-                            </div>
-                            {(project as any).pricePsfUsed && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                ${(project as any).pricePsfUsed}/sqft
-                              </div>
-                            )}
-                          </div>
-                          <div className={`text-center p-4 rounded-lg ${netProfit > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                            <div className={`text-lg font-bold ${netProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {netProfit > 0 ? '+' : ''}{formatCurrency(netProfit)}
-                            </div>
-                            <div className="text-sm text-gray-600">Net Profit</div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              Value Add - Cost
-                            </div>
-                          </div>
-                          <div className="text-center p-4 bg-blue-50 rounded-lg">
-                            <div className="text-lg font-bold text-blue-600">
-                              {project.timeline}
-                            </div>
-                            <div className="text-sm text-gray-600">Timeline</div>
-                          </div>
-                          <div className="text-center p-4 bg-orange-50 rounded-lg">
-                            <div className="text-lg font-bold text-orange-600">
-                              {(project as any).computedValue ?
-                                formatCurrency((project as any).computedValue) :
-                                (financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue + project.valueAdd) : 'N/A')
-                              }
-                            </div>
-                            <div className="text-sm text-gray-600">Post-Reno Value</div>
-                            {(project as any).newTotalSqft && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {(project as any).newTotalSqft.toLocaleString()} sqft
-                              </div>
-                            )}
+                    {/* Balanced UX Layout */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mt-6">
+                      
+                      {/* Left Column: Narrative Analysis */}
+                      <div className="lg:col-span-2 space-y-6">
+                        <div>
+                          <h4 className="font-semibold text-gray-900 mb-3 text-lg flex items-center">
+                            <Sparkles className="w-5 h-5 mr-2 text-blue-500" />
+                            Strategy & Opportunity
+                          </h4>
+                          <div className="prose prose-blue max-w-none text-gray-700 leading-relaxed bg-blue-50/50 p-5 rounded-xl border border-blue-100" data-testid={`text-project-description-${index}`}>
+                            {project.description}
                           </div>
                         </div>
-                      );
-                    })()}
 
-                    {/* Project Details Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {/* Project Roadmap */}
-                      <div>
-                        <h4 className="font-semibold mb-3 flex items-center">
-                          <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                          Project Roadmap
-                        </h4>
-                        <ul className="text-sm space-y-2 text-gray-700">
-                          <li>• Obtain necessary permits (check local regulations in Los Angeles)</li>
-                          <li>• Hire a contractor experienced in ADU conversions</li>
-                          <li>• Design and plan layout, considering existing garage structure and utilities</li>
-                          <li>• Execute construction, focusing on insulation, electrical, and plumbing</li>
-                          <li>• Complete ADU adhering to building codes and receive final inspection</li>
-                          <li>• Obtain Certificate of Occupancy</li>
-                        </ul>
+                        {/* Note: Dynamic Risks Rendering */}
+                        {(project as any).risks && (project as any).risks.length > 0 && (
+                          <div>
+                            <h4 className="font-semibold text-gray-900 mb-3 text-lg flex items-center">
+                              <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
+                              Important Risk Factors
+                            </h4>
+                            <div className="bg-orange-50/50 p-5 rounded-xl border border-orange-100">
+                              <ul className="space-y-2 text-orange-800 text-sm">
+                                {(project as any).risks.map((risk: string, i: number) => (
+                                  <li key={i} className="flex items-start">
+                                    <span className="mr-2 opacity-60">•</span>
+                                    <span>{risk}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Potential Risks */}
-                      <div>
-                        <h4 className="font-semibold mb-3 flex items-center">
-                          <AlertTriangle className="w-4 h-4 mr-2 text-orange-600" />
-                          Potential Risks
-                        </h4>
-                        <ul className="text-sm space-y-2 text-gray-700">
-                          <li>• Permitting delays (common in Los Angeles)</li>
-                          <li>• Unexpected construction costs (add 10-20% contingency)</li>
-                          <li>• Compliance with local building codes</li>
-                          <li>• Finding qualified contractors experienced with ADU regulations</li>
-                          <li>• Potential plumbing and electrical upgrades</li>
-                        </ul>
-                      </div>
+                      {/* Right Column: Financial Breakdown ("Receipt" format) */}
+                      {(() => {
+                        const projectCost = (project as any).computedCost || (project.costRangeLow + project.costRangeHigh) / 2;
+                        const netProfit = project.valueAdd - projectCost;
+                        return (
+                          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col justify-center space-y-4">
+                            <h4 className="font-semibold text-gray-900 mb-1 border-b pb-3 text-center tracking-tight uppercase text-sm">
+                              Financial Breakdown
+                            </h4>
 
-                      {/* Removed Recommended Pros Section */}
+                            <div className="flex justify-between items-center py-2 border-b border-gray-50 border-dashed">
+                              <span className="text-gray-600 font-medium">Est. Cost</span>
+                              <div className="text-right">
+                                <span className="font-bold text-teal-700">{formatCurrency(projectCost)}</span>
+                                {(project as any).costPerSqftUsed && <div className="text-xs text-gray-400 mt-0.5">${(project as any).costPerSqftUsed}/sqft</div>}
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center py-2 border-b border-gray-50 border-dashed">
+                              <span className="text-gray-600 font-medium">Value Add</span>
+                              <div className="text-right">
+                                <span className="font-bold text-green-700">+{formatCurrency(project.valueAdd)}</span>
+                                {(project as any).pricePsfUsed && <div className="text-xs text-gray-400 mt-0.5">${(project as any).pricePsfUsed}/sqft</div>}
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center py-2 border-b border-gray-50 border-dashed">
+                              <span className="text-gray-600 font-medium">Timeline</span>
+                              <span className="font-bold text-blue-700">{project.timeline}</span>
+                            </div>
+
+                            <div className={`flex justify-between items-center p-3 rounded-lg ${netProfit > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                              <span className="font-semibold text-gray-800">Net Profit</span>
+                              <span className={`font-bold ${netProfit > 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                {netProfit > 0 ? '+' : ''}{formatCurrency(netProfit)}
+                              </span>
+                            </div>
+
+                            <div className="flex justify-between items-center p-3 bg-gray-900 rounded-lg text-white mt-2">
+                              <span className="font-medium text-gray-300">Post-Reno Value</span>
+                              <div className="text-right">
+                                <span className="font-bold text-lg text-white">
+                                  {(project as any).computedValue ?
+                                    formatCurrency((project as any).computedValue) :
+                                    (financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue + project.valueAdd) : 'N/A')
+                                  }
+                                </span>
+                                {(project as any).newTotalSqft && <div className="text-xs text-gray-400 mt-0.5">{(project as any).newTotalSqft.toLocaleString()} sqft</div>}
+                              </div>
+                            </div>
+
+                          </div>
+                        );
+                      })()}
+
                     </div>
                   </div>
                 ))}
