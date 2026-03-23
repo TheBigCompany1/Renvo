@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getAnalysisReport } from "@/lib/api";
 import { PropertyData, RenovationProject, ComparableProperty, Contractor, FinancialSummary as FinancialSummaryType } from "@shared/schema";
-import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle, Star, GraduationCap, Footprints, Shield, CloudRain, FileText, Wallet, Building, MessageSquare, Sparkles } from "lucide-react";
+import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle, Star, GraduationCap, Footprints, Shield, CloudRain, FileText, Wallet, Building, MessageSquare, Sparkles, LineChart, Briefcase } from "lucide-react";
 import { ReportChatPanel } from "@/components/report-chat-panel";
 
 // Helper function to render star rating
@@ -290,89 +290,119 @@ export default function Report() {
               </CardContent>
             </Card>
 
-            {/* Investment Analysis - Combined Overview */}
-            <Card className="border-2 border-teal-500">
-              <CardHeader className="bg-gradient-to-r from-teal-50 to-white">
-                <CardTitle className="text-xl font-semibold flex items-center gap-2" data-testid="title-investment-analysis">
-                  <TrendingUp className="w-5 h-5 text-teal-600" />
-                  Investment Analysis
-                </CardTitle>
-                <p className="text-sm text-gray-600">Property valuation and renovation ROI breakdown</p>
-              </CardHeader>
-              <CardContent className="pt-6">
-                {/* Value Summary Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <div className="text-center p-4 bg-teal-50 rounded-lg">
-                    <div className="text-2xl font-bold text-teal-600" data-testid="text-current-value">
-                      {financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue) : 'N/A'}
+            {/* Investment Verdict & Scoring Overview */}
+            {validationSummary && (
+              <Card className={`border-2 ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'border-green-500' : validationSummary.verdict?.includes('Poor') ? 'border-red-500' : 'border-orange-500'}`}>
+                <CardHeader className={`bg-gradient-to-r ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'from-green-50' : validationSummary.verdict?.includes('Poor') ? 'from-red-50' : 'from-orange-50'} to-white`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-xl font-bold flex items-center gap-2" data-testid="title-investment-analysis">
+                        <LineChart className={`w-6 h-6 ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'text-green-600' : 'text-orange-600'}`} />
+                        Investment Thesis & Verdict
+                      </CardTitle>
+                      <p className="text-sm text-gray-600 mt-1">AI-generated risk assessment and strategic recommendation</p>
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">Current Value</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {propertyData.sqft?.toLocaleString() || 'N/A'} sqft × ${financialSummary?.avgPricePsf?.toLocaleString() || 'N/A'}/sqft
+                    <div className="text-right">
+                      <Badge className={`text-sm px-3 py-1 ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'bg-green-100 text-green-800' : validationSummary.verdict?.includes('Poor') ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>
+                        {validationSummary.verdict || (opportunityScore >= 75 ? 'Strong Investment' : opportunityScore >= 50 ? 'Good Opportunity' : opportunityScore >= 25 ? 'Marginal' : 'High Risk')}
+                      </Badge>
+                      <div className="text-xs text-gray-500 mt-2 font-medium">Confidence Score: {Math.round(opportunityScore)}/100</div>
                     </div>
                   </div>
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600" data-testid="text-after-repair-value">
-                      {financialSummary?.afterRepairValue ? formatCurrency(financialSummary.afterRepairValue) : 'N/A'}
+                </CardHeader>
+                <CardContent className="pt-6 space-y-6">
+                  {/* Thesis Reasoning */}
+                  {validationSummary.reasoning && (
+                    <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
+                      <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
+                        <Target className="w-4 h-4 mr-2 text-blue-600" />
+                        Executive Summary
+                      </h4>
+                      <p className="text-gray-700 leading-relaxed text-sm">
+                        {validationSummary.reasoning}
+                      </p>
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">After Renovation</div>
-                    <div className="text-xs text-gray-500 mt-1">With all improvements</div>
-                  </div>
-                  <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600" data-testid="text-value-uplift">
-                      {financialSummary?.currentValue && financialSummary?.afterRepairValue ?
-                        formatCurrency(financialSummary.afterRepairValue - financialSummary.currentValue) : 'N/A'}
-                    </div>
-                    <div className="text-sm text-gray-600 mt-1">Value Uplift</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {financialSummary?.currentValue && financialSummary?.afterRepairValue ?
-                        `+${Math.round(((financialSummary.afterRepairValue - financialSummary.currentValue) / financialSummary.currentValue) * 100)}%` : 'N/A'}
-                    </div>
-                  </div>
-                  <div className="text-center p-4 bg-orange-50 rounded-lg">
-                    <div className="text-2xl font-bold text-orange-600" data-testid="text-opportunity-score">
-                      {Math.round(opportunityScore)}%
-                    </div>
-                    <div className="text-sm text-gray-600 mt-1">Avg ROI</div>
-                    <Badge variant="secondary" className="mt-1 bg-orange-100 text-orange-700 text-xs">
-                      {opportunityScore >= 75 ? 'Excellent' : opportunityScore >= 50 ? 'Good' : opportunityScore >= 25 ? 'Average' : 'Marginal'}
-                    </Badge>
-                  </div>
-                </div>
+                  )}
 
-                {/* ROI by Project */}
-                <div>
-                  <h4 className="font-semibold mb-4" data-testid="title-roi-comparison">ROI by Project</h4>
-                  <div className="space-y-3">
-                    {renovationProjects.map((project, index) => {
-                      const cost = (project.costRangeLow + project.costRangeHigh) / 2;
-                      const profit = project.valueAdd - cost;
-                      return (
-                        <div key={project.id} className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="font-medium">{project.name}</span>
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm text-gray-600">
-                                {formatCurrency(cost)} → <span className="text-green-600 font-medium">+{formatCurrency(project.valueAdd)}</span>
-                              </span>
-                              <Badge className={profit > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                                {profit > 0 ? '+' : ''}{formatCurrency(profit)} profit
-                              </Badge>
-                              <span className="font-bold text-orange-600">{calculateROI(project)}% ROI</span>
-                            </div>
-                          </div>
-                          <Progress
-                            value={Math.min(calculateROI(project), 100)}
-                            className="h-2"
-                            data-testid={`progress-roi-${index}`}
-                          />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Best Strategy */}
+                    {validationSummary.bestStrategy && (
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-gray-900 text-sm uppercase tracking-wider">Primary Strategy</h4>
+                        <div className="flex bg-blue-50/50 p-4 rounded-lg border border-blue-100 h-full items-center">
+                          <span className="font-medium text-blue-900">{validationSummary.bestStrategy}</span>
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
+
+                    {/* Important Considerations */}
+                    {validationSummary.importantConsiderations && validationSummary.importantConsiderations.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-gray-900 text-sm uppercase tracking-wider">Critical Factors</h4>
+                        <ul className="bg-orange-50/50 p-4 rounded-lg border border-orange-100 h-full space-y-2">
+                          {validationSummary.importantConsiderations.map((consideration: string, i: number) => (
+                            <li key={i} className="flex items-start text-sm text-orange-900">
+                              <span className="mr-2 opacity-60">•</span>
+                              <span className="leading-snug">{consideration}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+
+                  {/* Investor vs Owner Analysis */}
+                  {(validationSummary.investorAnalysis || validationSummary.ownerAnalysis) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
+                      {validationSummary.investorAnalysis && (
+                        <div>
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center text-sm uppercase tracking-wider">
+                            <Briefcase className="w-4 h-4 mr-2 text-indigo-600" />
+                            Investor Profile
+                          </h4>
+                          <div className="space-y-3 bg-indigo-50/30 p-4 rounded-lg">
+                            <div className="flex justify-between text-sm py-1 border-b border-indigo-100 border-dashed">
+                              <span className="text-gray-600">Target Profit Margin</span>
+                              <span className="font-medium text-indigo-900">{formatCurrency(validationSummary.investorAnalysis.targetProfit || 0)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm py-1 border-b border-indigo-100 border-dashed">
+                              <span className="text-gray-600">Max Purchase Price</span>
+                              <span className="font-medium text-indigo-900">{formatCurrency(validationSummary.investorAnalysis.maxPurchasePriceForProfit || 0)}</span>
+                            </div>
+                            <p className="text-xs text-indigo-800 mt-2 bg-indigo-100/50 p-2 rounded">
+                              {validationSummary.investorAnalysis.recommendation}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {validationSummary.ownerAnalysis && (
+                        <div>
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center text-sm uppercase tracking-wider">
+                            <Home className="w-4 h-4 mr-2 text-emerald-600" />
+                            Homeowner Profile
+                          </h4>
+                          <div className="space-y-3 bg-emerald-50/30 p-4 rounded-lg">
+                            <div className="flex justify-between text-sm py-1 border-b border-emerald-100 border-dashed">
+                              <span className="text-gray-600">Current Equity Est.</span>
+                              <span className="font-medium text-emerald-900">{formatCurrency(validationSummary.ownerAnalysis.currentEquity || 0)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm py-1 border-b border-emerald-100 border-dashed">
+                              <span className="text-gray-600">Best Path Forward</span>
+                              <span className="font-medium text-emerald-900">{validationSummary.ownerAnalysis.bestProjectForOwner}</span>
+                            </div>
+                            <p className="text-xs text-emerald-800 mt-2 bg-emerald-100/50 p-2 rounded">
+                              {validationSummary.ownerAnalysis.recommendation}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                </CardContent>
+              </Card>
+            )}
 
             {/* Property History & Financials */}
             {(propertyData.permitHistory || propertyData.propertyTaxAnnual || propertyData.rentalPotential) && (
