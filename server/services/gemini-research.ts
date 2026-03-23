@@ -176,6 +176,9 @@ IMPORTANT: Provide AT LEAST 2-3 different renovation opportunities, ranked by RO
 
 Be specific with numbers. Use real comparable sales from the area. Calculate actual profit potential.
 
+CRITICAL INSTRUCTION FOR RENOVATION DESCRIPTIONS:
+The "description" field for each renovation project MUST BE HIGHLY DETAILED. Write a comprehensive, deep narrative explaining EXACTLY what the renovation entails, the specific architectural or design changes recommended, and the strategic reasoning behind why this specific renovation maximizes ROI for this specific property. Do not write short 1-line descriptions.
+
 Respond with a JSON object in this exact format:
 \`\`\`json
 {
@@ -235,7 +238,7 @@ Respond with a JSON object in this exact format:
     "projects": [
       {
         "name": "Major Expansion to 3000 sqft",
-        "description": "Add 1800 sqft via second story and rear addition",
+        "description": "A comprehensive, highly detailed strategic narrative detailing exactly what this expansion entails. It should cover the architectural additions, layout changes, and why this specific neighborhood supports a 3000 sqft home. This must read like an expert investor's detailed thesis, explaining exactly where the value is unlocked and how the design fits the market.",
         "sqftAdded": 1800,
         "newTotalSqft": 3000,
         "estimatedCost": {
@@ -263,7 +266,7 @@ Respond with a JSON object in this exact format:
       },
       {
         "name": "ADU Addition (400 sqft)",
-        "description": "Build detached ADU for rental income or resale value",
+        "description": "A detailed strategic breakdown of the ADU construction plan, including placement, target renter demographics, and how the detached structure impacts the primary residence's lot utilization and overall resale appeal.",
         "sqftAdded": 400,
         "newTotalSqft": 1600,
         "estimatedCost": {
