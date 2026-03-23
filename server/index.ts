@@ -11,7 +11,7 @@ app.use(express.static('client/public'));
 
 // Stripe Webhook - must be before express.json()
 app.post(
-  '/api/stripe/webhook',
+  '/api/webhooks/stripe',
   express.raw({ type: 'application/json' }),
   async (req, res) => {
     const signature = req.headers['stripe-signature'];

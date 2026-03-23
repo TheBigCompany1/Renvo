@@ -134,15 +134,14 @@ export default function Dashboard() {
             <CreditCard className="w-4 h-4" />
             Buy Credits
           </Button>
-          {userStatus?.stripeCustomerId && (
+          {userStatus?.subscriptionStatus === 'active' && (
             <Button
-              onClick={() => portalMutation.mutate()}
-              variant="outline"
-              className="gap-2"
-              disabled={portalMutation.isPending}
+              onClick={() => window.open('https://billing.stripe.com/p/login/4gM7sK5QE6Fy9D4bQT5sA00', '_blank')}
+              variant="destructive"
+              className="gap-2 bg-red-600 hover:bg-red-700 text-white"
             >
               <ExternalLink className="w-4 h-4" />
-              Manage Billing
+              Cancel Subscription
             </Button>
           )}
         </div>

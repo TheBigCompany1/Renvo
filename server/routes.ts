@@ -102,55 +102,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
 
       if (priceType === 'subscription') {
-        const prices = await stripe.prices.list({
-          active: true,
-          recurring: { interval: 'month' },
-          limit: 10,
-        });
-        const subscriptionPrice = prices.data.find(p => p.unit_amount === 2999);
-
-        if (!subscriptionPrice) {
-          return res.status(400).json({ message: "Subscription price not found. Please run the seed script." });
-        }
-
         const session = await stripe.checkout.sessions.create({
           customer: customerId,
+          client_reference_id: userId.toString(),
           payment_method_types: ['card'],
-          line_items: [{ price: subscriptionPrice.id, quantity: 1 }],
+          line_items: [{
+            price_data: {
+              currency: 'usd',
+              product: 'prod_UCPjR7VIdg4yee',
+              unit_amount: 2999,
+              recurring: { interval: 'month' },
+            },
+            quantity: 1
+          }],
           mode: 'subscription',
           success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${baseUrl}/pricing`,
-          metadata: { userId, priceType: 'subscription' },
+          metadata: { userId: userId.toString(), priceType: 'subscription' },
         });
 
         return res.json({ url: session.url });
       }
 
       let unitAmount: number;
-      let productName: string;
+      let stripeProductId: string;
       let credits: number;
 
       if (priceType === 'first_report') {
         unitAmount = 399;
-        productName = 'First Property Analysis';
+        stripeProductId = 'prod_UCPh4TRetQNkoY';
         credits = 1;
       } else if (priceType === 'bundle') {
         unitAmount = 3499;
-        productName = '5-Report Bundle';
+        stripeProductId = 'prod_UCPjHeRdc8u3Ko';
         credits = 5;
       } else {
         unitAmount = 999;
-        productName = 'Property Analysis Report';
+        stripeProductId = 'prod_UCPiqYNFIWvEcV';
         credits = 1;
       }
 
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
+        client_reference_id: userId.toString(),
         payment_method_types: ['card'],
         line_items: [{
           price_data: {
             currency: 'usd',
-            product_data: { name: productName },
+            product: stripeProductId,
             unit_amount: unitAmount,
           },
           quantity: 1,
@@ -159,7 +158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/pricing`,
         metadata: {
-          userId,
+          userId: userId.toString(),
           priceType,
           credits: credits.toString(),
           reportAddress: reportAddress || '',
