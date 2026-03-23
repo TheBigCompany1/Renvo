@@ -110,7 +110,6 @@ export default function Processing() {
     { id: 'analysis', label: 'AI renovation analysis', completed: !!report.renovationProjects },
     { id: 'calculations', label: 'Financial calculations', completed: !!report.financialSummary },
     { id: 'comparables', label: 'Comparable property search', completed: !!report.comparableProperties },
-    { id: 'contractors', label: 'Contractor recommendations', completed: !!report.contractors },
   ];
 
   const currentStep = steps.findIndex(step => !step.completed);
@@ -176,7 +175,7 @@ export default function Processing() {
             <div className="mt-8">
               <p className="text-sm text-muted-foreground">
                 Estimated completion: <span className="font-medium">
-                  {completedSteps < 5 ? `${Math.ceil((5 - completedSteps) * 0.5)} minutes` : 'Almost done'}
+                  {completedSteps < 4 ? `${Math.ceil((4 - completedSteps) * 0.5)} minutes` : 'Almost done'}
                 </span>
               </p>
             </div>

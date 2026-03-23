@@ -623,56 +623,7 @@ export default function Report() {
                         </ul>
                       </div>
 
-                      {/* Recommended Pros */}
-                      <div>
-                        <h4 className="font-semibold mb-3 flex items-center">
-                          <Users className="w-4 h-4 mr-2 text-blue-600" />
-                          Recommended Pros
-                        </h4>
-                        <div className="space-y-3">
-                          {(project.contractors || []).slice(0, 2).map((contractor, contractorIndex) => (
-                            <div
-                              key={contractorIndex}
-                              className="p-3 bg-blue-50 border border-blue-200 rounded-lg"
-                              data-testid={`card-contractor-${contractorIndex}`}
-                            >
-                              <div className="font-medium text-blue-700 mb-1">{contractor.name}</div>
-                              <div className="text-sm text-blue-600 mb-1">{contractor.specialty}</div>
-                              {(contractor.city || contractor.distanceMiles) && (
-                                <div className="text-xs text-gray-500 mb-2">
-                                  {contractor.city && contractor.state && `📍 ${contractor.city}, ${contractor.state}`}
-                                  {contractor.distanceMiles && ` • ${Math.round(contractor.distanceMiles)} miles away`}
-                                  {contractor.source && (
-                                    <span className={`ml-2 px-2 py-0.5 rounded text-xs ${getSourceBadgeStyle(contractor.source)}`}>
-                                      {getSourceLabel(contractor.source)}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              <div className="flex gap-2">
-                                {contractor.contact && (
-                                  <button
-                                    className="flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs transition-colors"
-                                    onClick={() => window.open(`tel:${contractor.contact}`, '_self')}
-                                    data-testid={`button-call-${contractorIndex}`}
-                                  >
-                                    📞 Call
-                                  </button>
-                                )}
-                                {contractor.website && (
-                                  <button
-                                    className="flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-xs transition-colors"
-                                    onClick={() => window.open(contractor.website, '_blank')}
-                                    data-testid={`button-website-${contractorIndex}`}
-                                  >
-                                    🌐 Website
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      {/* Removed Recommended Pros Section */}
                     </div>
                   </div>
                 ))}

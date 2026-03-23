@@ -173,7 +173,7 @@ export default function AuthPage() {
             <div className="hidden lg:flex flex-col justify-center bg-gray-900 text-white p-12">
                 <h1 className="text-4xl font-bold mb-6">AI-Powered Real Estate Analysis</h1>
                 <p className="text-xl text-gray-300">
-                    Make data-driven decisions with comprehensive renovation analysis, financial projections, and contractor recommendations.
+                    Make data-driven decisions with comprehensive renovation analysis, financial projections, and market comparables.
                 </p>
             </div>
         </div>

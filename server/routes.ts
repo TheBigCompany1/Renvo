@@ -3,9 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertAnalysisReportSchema, type AnalysisReport } from "@shared/schema";
 import { researchProperty, convertToPropertyData, convertToRenovationProjects, convertToComparables } from "./services/gemini-research";
-import { generateContractorRecommendations } from "./services/gemini";
 import { extractLocationFromProperty } from "./services/location-service";
-import { findLocationBasedContractors } from "./services/location-contractors";
 import { getStripeClient, getStripePublishableKey } from "./stripeClient";
 import { chatWithReport } from "./services/chat";
 
@@ -457,29 +455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Imagery generation failed, continuing without images');
       }
 
-      const projectsWithContractors = await Promise.all(
-        renovationProjects.map(async (project: any) => {
-          let projectContractors;
-          try {
-            console.log(`Finding contractors for ${project.name} in ${location.city}, ${location.state}`);
-            projectContractors = await findLocationBasedContractors(location, project.name);
-
-            if (projectContractors.length === 0) {
-              const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
-              projectContractors = await generateContractorRecommendations(locationQuery, project.name);
-            }
-          } catch (error) {
-            console.log(`Contractor lookup failed for ${project.name}, using AI generation`);
-            const locationQuery = `${location.city || 'Unknown'}, ${location.state || 'Unknown'}`;
-            projectContractors = await generateContractorRecommendations(locationQuery, project.name);
-          }
-
-          return {
-            ...project,
-            contractors: projectContractors
-          };
-        })
-      );
+      const projectsWithContractors = renovationProjects;
 
       const currentValue = propertyData.price || research.propertyData.currentEstimate || 0;
       const totalRenovationCost = renovationProjects.reduce((sum: number, p: any) => sum + ((p.costRangeLow + p.costRangeHigh) / 2 || 0), 0);

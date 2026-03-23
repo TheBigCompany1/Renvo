@@ -10,7 +10,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Check, Star, Zap, Crown, Package, Sparkles } from "lucide-react";
 
 export default function Pricing() {
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [tosAccepted, setTosAccepted] = useState(false);
 
@@ -50,6 +50,7 @@ export default function Pricing() {
   };
 
   const isPending = checkoutMutation.isPending;
+  const isIntroDisabled = isPending || Boolean(isAuthenticated && user && (user.reportCredits || 0) >= 1);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
@@ -89,7 +90,7 @@ export default function Pricing() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                {['Complete property analysis', 'ROI calculations', 'Contractor recommendations', 'Market comparables'].map((feature, i) => (
+                {['Complete property analysis', 'ROI calculations', 'Zoning & permits analysis', 'Market comparables'].map((feature, i) => (
                   <div key={i} className="flex items-center gap-2 text-white/80 text-sm">
                     <Check className="w-4 h-4 text-green-400 shrink-0" />
                     <span>{feature}</span>
@@ -99,9 +100,9 @@ export default function Pricing() {
               <Button
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border-0"
                 onClick={() => handlePurchase('first_report')}
-                disabled={isPending}
+                disabled={isIntroDisabled}
               >
-                {isPending ? 'Processing...' : 'Get Started'}
+                {isPending ? 'Processing...' : (isAuthenticated && user && (user.reportCredits || 0) >= 1) ? 'Already Claimed' : 'Get Started'}
               </Button>
             </CardContent>
           </Card>
@@ -117,7 +118,7 @@ export default function Pricing() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                {['Complete property analysis', 'ROI calculations', 'Contractor recommendations', 'Market comparables'].map((feature, i) => (
+                {['Complete property analysis', 'ROI calculations', 'Zoning & permits analysis', 'Market comparables'].map((feature, i) => (
                   <div key={i} className="flex items-center gap-2 text-white/80 text-sm">
                     <Check className="w-4 h-4 text-blue-400 shrink-0" />
                     <span>{feature}</span>

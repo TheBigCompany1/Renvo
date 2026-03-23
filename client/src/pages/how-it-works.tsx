@@ -41,12 +41,12 @@ export default function HowItWorks() {
     {
       number: "03",
       title: "Get Your Comprehensive Report",
-      description: "Receive a detailed renovation report with ROI calculations, comparable properties, and vetted contractor recommendations to maximize your investment.",
+      description: "Receive a detailed renovation report with ROI calculations, comparable properties, and actionable insights to maximize your investment.",
       icon: FileText,
       features: [
         "ROI calculations & projections",
         "Comparable property analysis",
-        "Contractor recommendations",
+        "Zoning & permits analysis",
         "Detailed renovation roadmap"
       ]
     }
@@ -65,8 +65,8 @@ export default function HowItWorks() {
     },
     {
       icon: Users,
-      title: "Contractor Network",
-      description: "Vetted contractors with reviews and competitive pricing"
+      title: "Market Analysis",
+      description: "Deep dive into local real estate trends and comparables"
     }
   ];
 
