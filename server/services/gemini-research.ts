@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 let _client: GoogleGenAI;
 function getClient() {
   if (!_client) {
-    const key = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    const key = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || process.env.Gemini_API_Key;
     if (!key) {
       throw new Error("API key missing from process.env! Available keys: " + Object.keys(process.env).join(", "));
     }
