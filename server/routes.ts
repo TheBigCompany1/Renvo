@@ -224,6 +224,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/test-reports", async (req: any, res) => {
+    try {
+      const validatedData = insertAnalysisReportSchema.parse({ inputType: "address", propertyAddress: "123 Main St" });
+      const report = await storage.createAnalysisReport(validatedData, undefined);
+      processAnalysisReport(report.id);
+      res.json({ reportId: report.id });
+    } catch (e) { res.status(500).send((e as Error).stack); }
+  });
+
   app.post("/api/reports", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;

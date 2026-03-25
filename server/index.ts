@@ -2,6 +2,8 @@ import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import { setupAuth } from "./auth";
 import { WebhookHandlers } from "./webhookHandlers";
 
@@ -70,6 +72,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  try {
+    await db.execute(sql`
+      ALTER TABLE analysis_reports 
+      ADD COLUMN IF NOT EXISTS module_data jsonb;
+    `);
+    console.log("Verified database schema for module_data column.");
+  } catch (err: any) {
+    console.error("Failed to auto-migrate module_data column:", err.message);
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
