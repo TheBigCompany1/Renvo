@@ -1,8 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
-const client = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || ""
-});
+const envKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+const client = new GoogleGenAI(envKey ? { apiKey: envKey } : {});
 
 export interface PropertyResearchResult {
   propertyData: {

@@ -5,7 +5,8 @@ import { GoogleGenAI } from "@google/genai";
 // - Using gemini-3-flash-preview model per official docs
 //   - do not change this unless explicitly requested by the user
 
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || "" });
+const envKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+const ai = new GoogleGenAI(envKey ? { apiKey: envKey } : {});
 
 
 export async function generateContractorRecommendations(

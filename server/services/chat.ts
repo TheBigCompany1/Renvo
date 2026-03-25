@@ -1,7 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 import type { AnalysisReport } from "@shared/schema";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || "" });
+const envKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+const ai = new GoogleGenAI(envKey ? { apiKey: envKey } : {});
 
 export async function chatWithReport(
     report: AnalysisReport,
