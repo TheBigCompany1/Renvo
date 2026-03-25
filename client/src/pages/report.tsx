@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getAnalysisReport } from "@/lib/api";
 import { PropertyData, RenovationProject, ComparableProperty, Contractor, FinancialSummary as FinancialSummaryType } from "@shared/schema";
-import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle, Star, GraduationCap, Footprints, Shield, CloudRain, FileText, Wallet, Building, MessageSquare, Sparkles, LineChart, Briefcase } from "lucide-react";
+import { Download, DollarSign, Home, Calendar, MapPin, Target, TrendingUp, Clock, AlertTriangle, Users, CheckCircle, Star, GraduationCap, Footprints, Shield, CloudRain, FileText, Wallet, Building, MessageSquare, Sparkles, LineChart, Briefcase, ShieldCheck, Map, Activity, Calculator, PencilRuler, Video, ArrowRight } from "lucide-react";
 import { ReportChatPanel } from "@/components/report-chat-panel";
 
 // Helper function to render star rating
@@ -108,6 +108,12 @@ export default function Report() {
   const comparableProperties = (report.comparableProperties as ComparableProperty[]) || [];
   const financialSummary = report.financialSummary as FinancialSummaryType;
   const validationSummary = report.validationSummary as any;
+  const moduleData = (report.moduleData || {}) as any;
+  const zoning = moduleData?.zoningEnvelope || {};
+  const viability = moduleData?.siteViability || {};
+  const velocity = moduleData?.marketVelocity || {};
+  const timeline = moduleData?.entitlementTimeline || {};
+  const softCosts = moduleData?.preConstructionBudget || {};
   const imagery = report.imagery as { streetViewUrl?: string; satelliteUrl?: string } | undefined;
 
   const reportDate = report.completedAt ? new Date(report.completedAt).toLocaleDateString() : new Date().toLocaleDateString();
@@ -394,6 +400,70 @@ export default function Report() {
                             <p className="text-xs text-emerald-800 mt-2 bg-emerald-100/50 p-2 rounded">
                               {validationSummary.ownerAnalysis.recommendation}
                             </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 3.1 Zoning & 3.2 Site Viability Moved Here */}
+                  {(zoning.classification || viability.floodZone) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
+                      {zoning.classification && (
+                        <div className="bg-gray-50 border border-gray-100 p-5 rounded-xl">
+                          <h4 className="font-semibold text-gray-900 mb-4 flex items-center text-sm uppercase tracking-wider">
+                            <Map className="w-4 h-4 mr-2 text-blue-600" /> Zoning Envelope
+                          </h4>
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="bg-white border border-gray-200 p-2 rounded text-center shadow-sm">
+                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Class</div>
+                                <div className="font-bold text-gray-900">{zoning.classification || '-'}</div>
+                              </div>
+                              <div className="bg-white border border-gray-200 p-2 rounded text-center shadow-sm">
+                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">FAR</div>
+                                <div className="font-bold text-gray-900">{zoning.far || '-'}</div>
+                              </div>
+                              <div className="bg-white border border-gray-200 p-2 rounded text-center shadow-sm">
+                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Height</div>
+                                <div className="font-bold text-gray-900">{zoning.maxHeight || '-'}</div>
+                              </div>
+                            </div>
+                            <div className="pt-3 border-t border-gray-200 mt-3">
+                              <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wider">Build-By-Right Check</h4>
+                              <div className="flex gap-2">
+                                {['adu', 'jadu', 'sb9'].map(type => (
+                                  <Badge key={type} variant={zoning.buildByRight?.[type] ? 'default' : 'secondary'} className={zoning.buildByRight?.[type] ? 'bg-green-100 text-green-800 border-green-200' : 'opacity-50'}>
+                                    {type.toUpperCase()}: {zoning.buildByRight?.[type] ? 'YES' : 'NO'}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {viability.floodZone && (
+                        <div className="bg-gray-50 border border-gray-100 p-5 rounded-xl">
+                          <h4 className="font-semibold text-gray-900 mb-4 flex items-center text-sm uppercase tracking-wider">
+                            <Activity className="w-4 h-4 mr-2 text-rose-600" /> Site Viability
+                          </h4>
+                          <div className="space-y-3">
+                            <div className="flex justify-between text-sm py-1.5 border-b border-gray-200 border-dashed">
+                              <span className="text-gray-500 font-medium">Flood Zone</span>
+                              <span className="font-bold text-gray-900">{viability.floodZone || '-'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm py-1.5 border-b border-gray-200 border-dashed">
+                              <span className="text-gray-500 font-medium">Fire/Seismic Risk</span>
+                              <span className="font-bold text-gray-900">{viability.fireRisk || '-'} / {viability.seismicRisk || '-'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm py-1.5 border-b border-gray-200 border-dashed">
+                              <span className="text-gray-500 font-medium">Topography</span>
+                              <span className="font-bold text-gray-900">{viability.topography || '-'}</span>
+                            </div>
+                            <div className="bg-rose-50 border border-rose-100 p-3 rounded text-xs text-rose-800 mt-3">
+                              <strong>Infrastructure:</strong> {viability.infrastructure || 'Requires investigation'}
+                            </div>
                           </div>
                         </div>
                       )}
@@ -695,75 +765,115 @@ export default function Report() {
                       })()}
 
                     </div>
+
+                    {/* Target ARV Comparables (Investment Thesis Proof) */}
+                    {(project as any).targetComparables && (project as any).targetComparables.length > 0 && (
+                      <div className="mt-8 pt-6 border-t border-gray-100">
+                        <h4 className="font-semibold text-gray-900 mb-4 text-base flex items-center">
+                          <Target className="w-5 h-5 mr-2 text-blue-600" />
+                          Investment Thesis Proof: ARV Comparables
+                        </h4>
+                        <p className="text-sm text-gray-600 mb-4">
+                          To validate the projected {(project as any).newTotalSqft ? (project as any).newTotalSqft.toLocaleString() + ' sqft' : ''} ARV, the AI identified the following newly renovated or new-build comparables in the immediate vicinity matching this exact strategy:
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {(project as any).targetComparables.map((comp: any, cIdx: number) => (
+                            <div key={cIdx} className="bg-gray-50 border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="font-bold text-gray-900">{formatCurrency(comp.price)}</span>
+                                <span className="text-xs bg-white border border-gray-200 text-gray-600 px-2 py-1 rounded shadow-sm">
+                                  ${comp.pricePsf}/sqft
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-800 font-medium truncate mb-1" title={comp.address}>
+                                {comp.address}
+                              </p>
+                              <div className="text-xs text-gray-500 font-medium flex items-center gap-2 mb-2">
+                                <span>{comp.beds} Bed</span>
+                                <span>•</span>
+                                <span>{comp.baths} Bath</span>
+                                <span>•</span>
+                                <span>{comp.sqft?.toLocaleString()} sqft</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] text-gray-400 uppercase tracking-wider font-bold border-t border-gray-200/60 pt-2 mt-2">
+                                <span>Sold: {comp.dateSold}</span>
+                                {comp.distanceMiles && <span>{comp.distanceMiles} mi away</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+
+
+                    {/* Strategy-Specific Financial Stress Test */}
+                    {(project as any).financialStressTest?.sensitivityTable && (project as any).financialStressTest.sensitivityTable.length > 0 && (
+                      <div className="mt-8 pt-6 border-t border-gray-100">
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="font-semibold text-gray-900 text-base flex items-center">
+                            <Calculator className="w-5 h-5 mr-2 text-purple-600" />
+                            Strategy Sensitivity Analysis
+                          </h4>
+                          <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100">Stress Test</Badge>
+                        </div>
+                        <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
+                          <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-600 font-bold border-b border-gray-200">
+                              <tr>
+                                <th className="px-5 py-3 uppercase tracking-wider text-xs">Cost Variance</th>
+                                <th className="px-5 py-3 uppercase tracking-wider text-xs">ARV Variance</th>
+                                <th className="px-5 py-3 uppercase tracking-wider text-xs text-right">Net Profit Outcome</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {(project as any).financialStressTest.sensitivityTable.map((row: any, i: number) => (
+                                <tr key={i} className="hover:bg-gray-50 transition-colors bg-white">
+                                  <td className="px-5 py-3 font-semibold text-rose-600">{row.costChange}</td>
+                                  <td className="px-5 py-3 font-semibold text-emerald-600">{row.priceChange}</td>
+                                  <td className="px-5 py-3 text-right font-extrabold text-gray-900">
+                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(row.netProfit)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Execution CTA (Phase 2 Bridge) */}
+                    <div className="mt-8 flex flex-col md:flex-row gap-6 items-center bg-blue-50/50 p-6 rounded-xl border border-blue-100 shadow-sm">
+                      <div className="flex-1">
+                        <h4 className="font-bold text-gray-900 text-lg flex items-center mb-2">
+                          <PencilRuler className="w-5 h-5 mr-2 text-blue-600" />
+                          Ready to execute this strategy?
+                        </h4>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          Upload a smartphone video of the property to generate instant permit-ready CAD as-builts and automatically initiate the design phase.
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0 flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                        <Button 
+                          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 px-6 shadow-md transition-all hover:shadow-lg"
+                          onClick={() => {
+                            alert('Phase 2 Feature: This will launch the Video-to-CAD upload flow.');
+                          }}
+                        >
+                          <Video className="w-5 h-5 mr-2" />
+                          Start Automated CAD Design
+                          <ArrowRight className="w-4 h-4 ml-2 opacity-70" />
+                        </Button>
+                      </div>
+                    </div>
+
                   </div>
                 ))}
               </CardContent>
             </Card>
 
 
-            {/* Local Market Comparables */}
-            {comparableProperties && comparableProperties.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold" data-testid="title-market-comparables">Local Market Comparables</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full" data-testid="table-comparables">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-3 font-semibold">Address</th>
-                          <th className="text-left py-3 font-semibold">Sale Price</th>
-                          <th className="text-left py-3 font-semibold">Summary</th>
-                          <th className="text-left py-3 font-semibold">Source</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {comparableProperties.map((comp, index) => (
-                          <tr key={index} className="border-b" data-testid={`row-comparable-${index}`}>
-                            <td className="py-3 font-medium">
-                              {comp.address}
-                              {comp.distanceMiles && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  📍 {Math.round(comp.distanceMiles)} miles away
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-3">{formatCurrency(comp.price)}</td>
-                            <td className="py-3 text-gray-600">
-                              {comp.beds} bed, {comp.baths} bath • {comp.sqft?.toLocaleString()} sqft • Sold {comp.dateSold}
-                              <div className="text-xs text-gray-500 mt-1">
-                                ${comp.pricePsf}/sq ft
-                              </div>
-                            </td>
-                            <td className="py-3">
-                              <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getSourceBadgeStyle(comp.source)}`}>
-                                {getSourceLabel(comp.source)}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
-            {/* Show message when no comparables available */}
-            {(!comparableProperties || comparableProperties.length === 0) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold" data-testid="title-market-comparables">Local Market Comparables</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-8 text-gray-500">
-                    <p>Comparable properties data is currently being processed or unavailable.</p>
-                    <p className="text-sm mt-2">This may occur when using demonstration data or if market data is limited for this area.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             {/* Neighborhood & Lifestyle Scores */}
             {(propertyData.schools || propertyData.walkScores || propertyData.crimeStats || propertyData.hazardRisk) && (
@@ -1013,6 +1123,96 @@ export default function Report() {
                 </CardContent>
               </Card>
             )}
+
+            {/* MODULE 4: Execution Roadmap */}
+            <section className="space-y-6 mt-8">
+              <div className="flex items-center gap-2 border-b pb-2 border-gray-200">
+                <Clock className="w-6 h-6 text-emerald-600" />
+                <h2 className="text-2xl font-bold text-gray-900">Execution Roadmap</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 4.1 Entitlement Timeline */}
+                <Card>
+                  <CardHeader className="bg-gray-50 pb-4 border-b border-gray-100">
+                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-gray-600" /> Local Entitlement Timeline
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <div className="relative border-l-2 border-emerald-200 ml-4 space-y-8">
+                      <div className="relative pl-6">
+                        <div className="absolute w-4 h-4 bg-emerald-500 rounded-full -left-[9px] top-0 shadow-sm border-2 border-white"></div>
+                        <div className="text-xs font-bold text-emerald-600 mb-1 uppercase tracking-wider">Phase 1</div>
+                        <div className="font-bold text-gray-900">Architectural Drafting</div>
+                        <div className="text-sm font-medium text-gray-500 mt-1">{timeline.architecturalDrafting || '-'}</div>
+                      </div>
+                      <div className="relative pl-6">
+                        <div className="absolute w-4 h-4 bg-gray-300 rounded-full -left-[9px] top-0 shadow-sm border-2 border-white"></div>
+                        <div className="text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Phase 2</div>
+                        <div className="font-bold text-gray-900">City Zoning Review</div>
+                        <div className="text-sm font-medium text-gray-500 mt-1">{timeline.cityZoningReview || '-'}</div>
+                      </div>
+                      <div className="relative pl-6">
+                        <div className="absolute w-4 h-4 bg-gray-300 rounded-full -left-[9px] top-0 shadow-sm border-2 border-white"></div>
+                        <div className="text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Phase 3</div>
+                        <div className="font-bold text-gray-900">Structural Engineering</div>
+                        <div className="text-sm font-medium text-gray-500 mt-1">{timeline.structuralEngineering || '-'}</div>
+                      </div>
+                      <div className="relative pl-6">
+                        <div className="absolute w-4 h-4 bg-amber-400 rounded-full -left-[9px] top-0 shadow-sm border-2 border-white"></div>
+                        <div className="text-xs font-bold text-amber-600 mb-1 uppercase tracking-wider">Finish</div>
+                        <div className="font-bold text-gray-900">Permit Issuance</div>
+                        <div className="text-sm font-bold text-gray-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded mt-2 inline-block">{timeline.permitIssuance || '-'}</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 4.2 Pre-Construction Budget */}
+                <Card>
+                  <CardHeader className="bg-gray-50 pb-4 border-b border-gray-100">
+                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-emerald-600" /> Estimated Soft Costs
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-4">
+                    <div className="space-y-4 mt-2">
+                      <div className="flex justify-between items-center text-sm pb-2 border-b border-gray-100 border-dashed">
+                        <span className="text-gray-600 font-medium">City Impact Fees</span>
+                        <span className="font-bold text-rose-600">
+                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(softCosts.cityImpactFees || 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm pb-2 border-b border-gray-100 border-dashed">
+                        <span className="text-gray-600 font-medium">School Fees</span>
+                        <span className="font-bold text-rose-600">
+                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(softCosts.schoolFees || 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm pb-2 border-b border-gray-100 border-dashed">
+                        <span className="text-gray-600 font-medium">Architectural Drafting</span>
+                        <span className="font-bold text-indigo-600">
+                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(softCosts.architecturalDrafting || 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm pb-4 border-b border-gray-200">
+                        <span className="text-gray-600 font-medium">Structural Engineering</span>
+                        <span className="font-bold text-indigo-600">
+                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(softCosts.engineering || 0)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 px-5 py-4 rounded-xl flex justify-between items-center text-emerald-900 font-bold shadow-sm">
+                      <span className="uppercase tracking-wider text-xs">Total Pre-Construction</span>
+                      <span className="text-lg">
+                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format((softCosts.cityImpactFees || 0) + (softCosts.schoolFees || 0) + (softCosts.architecturalDrafting || 0) + (softCosts.engineering || 0))}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </section>
           </div>
 
           {/* --- Chatbox Column --- */}

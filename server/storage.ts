@@ -53,6 +53,7 @@ export interface IStorage {
       contractors?: Contractor[];
       financialSummary?: FinancialSummary;
       validationSummary?: any;
+      moduleData?: any;
       status?: string;
       failureReason?: string;
       dataSource?: string;
@@ -163,6 +164,7 @@ export class PostgresStorage implements IStorage {
       contractors?: Contractor[];
       financialSummary?: FinancialSummary;
       validationSummary?: any;
+      moduleData?: any;
       status?: string;
       failureReason?: string;
       dataSource?: string;

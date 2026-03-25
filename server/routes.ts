@@ -497,6 +497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         renovationProjects: projectsWithContractors,
         financialSummary,
         validationSummary,
+        moduleData: research.moduleData,
         imagery,
         mapsContext,
         dataSource: 'gemini_research',

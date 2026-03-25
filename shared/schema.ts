@@ -24,6 +24,7 @@ export const analysisReports = pgTable("analysis_reports", {
   contractors: jsonb("contractors"),
   financialSummary: jsonb("financial_summary"),
   validationSummary: jsonb("validation_summary"),
+  moduleData: jsonb("module_data"),
   stripeSessionId: text("stripe_session_id"),
   paymentStatus: text("payment_status").default("unpaid"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -137,6 +138,24 @@ export const contractorSchema = z.object({
   source: z.string().optional(),
 });
 
+export const comparablePropertySchema = z.object({
+  address: z.string(),
+  price: z.number(),
+  beds: z.number(),
+  baths: z.number(),
+  sqft: z.number(),
+  dateSold: z.string(),
+  pricePsf: z.number(),
+  distanceMiles: z.number().optional(),
+  source: z.string().optional(),
+  sourceUrl: z.string().optional(),
+  yearBuilt: z.number().optional(),
+  propertyType: z.string().optional(),
+  condition: z.string().optional(),
+  comparabilityScore: z.number().min(0).max(100).optional(),
+  saleRecencyDays: z.number().optional(),
+});
+
 export const renovationProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -186,25 +205,17 @@ export const renovationProjectSchema = z.object({
     confidence: z.number().optional(),
     pricingAccuracy: z.enum(['high', 'medium', 'low']).optional(),
   }).optional(),
+  financialStressTest: z.object({
+    sensitivityTable: z.array(z.object({
+      costChange: z.string(),
+      priceChange: z.string(),
+      netProfit: z.number()
+    }))
+  }).optional(),
+  targetComparables: z.array(comparablePropertySchema).optional(),
 });
 
-export const comparablePropertySchema = z.object({
-  address: z.string(),
-  price: z.number(),
-  beds: z.number(),
-  baths: z.number(),
-  sqft: z.number(),
-  dateSold: z.string(),
-  pricePsf: z.number(),
-  distanceMiles: z.number().optional(),
-  source: z.string().optional(),
-  sourceUrl: z.string().optional(),
-  yearBuilt: z.number().optional(),
-  propertyType: z.string().optional(),
-  condition: z.string().optional(),
-  comparabilityScore: z.number().min(0).max(100).optional(),
-  saleRecencyDays: z.number().optional(),
-});
+
 
 export const financialSummarySchema = z.object({
   currentValue: z.number().nonnegative(),

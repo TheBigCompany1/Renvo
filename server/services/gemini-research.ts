@@ -116,6 +116,10 @@ export interface PropertyResearchResult {
       steps: string[];
       valueDrivers?: string[];
       targetDemographic?: string;
+      targetComparables?: any[];
+      financialStressTest?: {
+        sensitivityTable: Array<{costChange: string; priceChange: string; netProfit: number;}>;
+      };
     }>;
     ownerAnalysis?: {
       purchasePrice: number;
@@ -131,6 +135,55 @@ export interface PropertyResearchResult {
       recommendation: string;
     };
     importantConsiderations: string[];
+  };
+  moduleData?: {
+    hbuConclusion: string;
+    hbuFilterReasoning: string;
+    renovationSpecifications: {
+      proposedGlaIncrease: string;
+      highValueAdditions: string[];
+    };
+    yieldArbitrage: Array<{
+      strategy: string;
+      projectedRoi: string;
+      equityDelta: string;
+    }>;
+    marketHedge2026: string;
+    macroThesis: {
+      momentumScore: number;
+      gentrificationTrend: string;
+      sustainabilitySummary: string;
+    };
+    zoningEnvelope: {
+      classification: string;
+      far: string;
+      maxHeight: string;
+      setbacks: { front: string; side: string; rear: string; };
+      buildByRight: { adu: boolean; jadu: boolean; sb9: boolean; };
+    };
+    siteViability: {
+      floodZone: string;
+      fireRisk: string;
+      seismicRisk: string;
+      topography: string;
+      infrastructure: string;
+    };
+    marketVelocity: {
+      absorptionRate: string;
+      averageDOM: number;
+    };
+    entitlementTimeline: {
+      architecturalDrafting: string;
+      cityZoningReview: string;
+      structuralEngineering: string;
+      permitIssuance: string;
+    };
+    preConstructionBudget: {
+      cityImpactFees: number;
+      schoolFees: number;
+      architecturalDrafting: number;
+      engineering: number;
+    };
   };
   sources: string[];
   rawAnalysis: string;
@@ -150,7 +203,7 @@ Property: ${addressOrUrl}
 
 RESEARCH TASKS:
 1. Find the property's current details (beds, baths, sqft, lot size, year built, current estimated value, last sale price/date)
-2. Find 3-5 comparable sales in the same neighborhood (recently sold properties with similar characteristics)
+2. DO NOT list "comparables" at the root level anymore. INSTEAD, for EACH of your 3 specific Renovation Strategies, find 3-5 specific "ARV Target Comparables" that exactly match the FUTURE beds/baths/sqft of that specific strategy, and nest them securely inside the "targetComparables" key of that strategy's object in the "projects" array.
 3. Analyze the neighborhood and market trends
 4. Provide a comprehensive renovation investment analysis
 5. Research ENHANCED PROPERTY DATA (important for buyers):
@@ -161,6 +214,13 @@ RESEARCH TASKS:
    - Permit history (any recent work done on the property)
    - Annual property taxes
    - Rental income potential (if investor were to rent it out)
+6. Research DEEP TECHNICAL PROOF (crucial for module rendering):
+   - Highest and Best Use (HBU) conclusion
+   - Zoning envelope details (FAR, Max Height, Setbacks, ADU/SB-9 rights)
+   - Site physical viability (Topography, infrastructure, seismic)
+   - Market Velocity (Absorption rate, Avg DOM for similar props)
+   - Pre-construction entitment timeline & soft cost budgets
+   - Deep Strategic Verdict (HBU filter reasoning, exact proposed GLA increases, comparative yield arbitrage ROI across 3 paths (Cosmetic vs Hold vs HBU), and a 2026 market hedge defense)
 
 For the renovation analysis, consider:
 - Current condition vs. potential (is this a fixer or already renovated?)
@@ -178,8 +238,23 @@ IMPORTANT: Provide AT LEAST 2-3 different renovation opportunities, ranked by RO
 
 Be specific with numbers. Use real comparable sales from the area. Calculate actual profit potential.
 
-CRITICAL INSTRUCTION FOR RENOVATION DESCRIPTIONS:
-The "description" field for each renovation project MUST BE HIGHLY DETAILED. Write a comprehensive, deep narrative explaining EXACTLY what the renovation entails, the specific architectural or design changes recommended, and the strategic reasoning behind why this specific renovation maximizes ROI for this specific property. Do not write short 1-line descriptions.
+CRITICAL INSTRUCTION FOR STRATEGIC VERDICT:
+You EXACTLY MUST generate the keys "hbuFilterReasoning", "renovationSpecifications" (including "proposedGlaIncrease" string and "highValueAdditions" array), the 3-scenario "yieldArbitrage" array showing precise ROI % for Cosmetic/Hold/Expansion, and the "marketHedge2026" narrative DIRECTLY inside the top-level "moduleData" payload format block. Failure to output these properties breaks the client application dashboard.
+
+CRITICAL JSON SCHEMA CHECK:
+Before outputting the final JSON, verify that your "moduleData" object contains ALL 11 of these exact Root Keys:
+1. "hbuConclusion"
+2. "hbuFilterReasoning"
+3. "renovationSpecifications" (Object)
+4. "yieldArbitrage" (Array of 3 objects)
+5. "marketHedge2026"
+6. "macroThesis"
+7. "zoningEnvelope"
+8. "siteViability"
+9. "marketVelocity"
+10. "entitlementTimeline"
+11. "preConstructionBudget"
+Do NOT omit ANY of these keys under any circumstances.
 
 Respond with a JSON object in this exact format:
 \`\`\`json
@@ -212,19 +287,7 @@ Respond with a JSON object in this exact format:
     "propertyTaxRate": 1.12,
     "rentalPotential": {"estimatedMonthlyRent": 4500, "annualRentalIncome": 54000, "capRate": 3.2, "marketRentRange": {"low": 4000, "high": 5000}}
   },
-  "comparables": [
-    {
-      "address": "123 Example St, Los Angeles, CA 90066",
-      "beds": 4,
-      "baths": 3,
-      "sqft": 3200,
-      "price": 3500000,
-      "pricePsf": 1094,
-      "saleDate": "2024",
-      "distanceMiles": 0.1,
-      "notes": "Same block, expanded to 3200 sqft"
-    }
-  ],
+
   "neighborhoodContext": {
     "name": "Mar Vista",
     "description": "Walkable, near beach, rising market",
@@ -266,7 +329,26 @@ Respond with a JSON object in this exact format:
         "risks": ["Permit delays", "Construction cost overruns", "Market changes"],
         "steps": ["Architectural plans", "Permit application", "Construction", "Finishing"],
         "valueDrivers": ["Modernizes 1960s layout", "Creates open concept flow", "Adds highly-demanded 4th bedroom"],
-        "targetDemographic": "Growing families and upgrading professionals"
+        "targetDemographic": "Growing families and upgrading professionals",
+        "targetComparables": [
+          {
+            "address": "123 Target ARV St, Los Angeles",
+            "beds": 4,
+            "baths": 3,
+            "sqft": 3000,
+            "price": 3500000,
+            "pricePsf": 1166,
+            "saleDate": "2024",
+            "distanceMiles": 0.2
+          }
+        ],
+        "financialStressTest": {
+          "sensitivityTable": [
+            {"costChange": "-10%", "priceChange": "-5%", "netProfit": 450000},
+            {"costChange": "0%", "priceChange": "0%", "netProfit": 500000},
+            {"costChange": "+10%", "priceChange": "+5%", "netProfit": 550000}
+          ]
+        }
       },
       {
         "name": "ADU Addition (400 sqft)",
@@ -317,6 +399,59 @@ Respond with a JSON object in this exact format:
       "5-6% closing costs on sale",
       "Holding costs during construction"
     ]
+  },
+  "moduleData": {
+    "hbuConclusion": "Luxury Estate Expansion + Detached ADU",
+    "hbuFilterReasoning": "In a market with a lack of new supply for high-square-footage homes, creating a compound captures a buyer pool that a standard 3BR home cannot, outperforming a standard Lot Split or Cosmetic flip.",
+    "renovationSpecifications": {
+      "proposedGlaIncrease": "Expand primary residence by 1,500 sq ft to create a 4,500 sq ft main house plus a 1,000 sq ft ADU",
+      "highValueAdditions": [
+        "Chef's Kitchen with Indoor/Outdoor flow",
+        "Primary Suite Wing",
+        "Resort-style pool house"
+      ]
+    },
+    "yieldArbitrage": [
+      {"strategy": "Cosmetic Flip", "projectedRoi": "15%", "equityDelta": "+$180,000"},
+      {"strategy": "Hold & Rent", "projectedRoi": "3.4% Cap", "equityDelta": "N/A"},
+      {"strategy": "HBU Compound (Expansion + ADU)", "projectedRoi": "64%", "equityDelta": "+$2.3M"}
+    ],
+    "marketHedge2026": "By adding density (ADU) and luxury square footage, you create immediate equity that far outpaces the slow-growth market... manufacturing appreciation rather than waiting for it.",
+    "macroThesis": {
+      "momentumScore": 8,
+      "gentrificationTrend": "Accelerating",
+      "sustainabilitySummary": "High demand for $3M+ homes due to tech expansion"
+    },
+    "zoningEnvelope": {
+      "classification": "R1-1",
+      "far": "45%",
+      "maxHeight": "30ft",
+      "setbacks": {"front": "20ft", "side": "5ft", "rear": "15ft"},
+      "buildByRight": {"adu": true, "jadu": true, "sb9": false}
+    },
+    "siteViability": {
+      "floodZone": "X",
+      "fireRisk": "Low",
+      "seismicRisk": "High",
+      "topography": "Flat",
+      "infrastructure": "Sewer/Water Mains Connected, 200A Electrical Upgrade Required"
+    },
+    "marketVelocity": {
+      "absorptionRate": "25%",
+      "averageDOM": 14
+    },
+    "entitlementTimeline": {
+      "architecturalDrafting": "4 weeks",
+      "cityZoningReview": "8 weeks",
+      "structuralEngineering": "4 weeks",
+      "permitIssuance": "16 weeks total"
+    },
+    "preConstructionBudget": {
+      "cityImpactFees": 12000,
+      "schoolFees": 4500,
+      "architecturalDrafting": 15000,
+      "engineering": 8000
+    }
   },
   "sources": ["Redfin", "Zillow", "Public records", "MLS data"]
 }
@@ -420,6 +555,7 @@ CRITICAL DATA INTEGRITY RULES:
       comparables: parsed.comparables || [],
       neighborhoodContext: parsed.neighborhoodContext || {},
       renovationAnalysis: parsed.renovationAnalysis || {},
+      moduleData: parsed.moduleData,
       sources,
       rawAnalysis: responseText
     } as PropertyResearchResult;
@@ -524,6 +660,8 @@ export function convertToRenovationProjects(research: PropertyResearchResult): a
     roadmap_steps: project.steps,
     value_drivers: project.valueDrivers,
     target_demographic: project.targetDemographic,
+    targetComparables: project.targetComparables,
+    financialStressTest: project.financialStressTest,
   }));
 }
 
