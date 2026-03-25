@@ -1,8 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 import type { AnalysisReport } from "@shared/schema";
 
-const envKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-const ai = new GoogleGenAI(envKey ? { apiKey: envKey } : {});
+let _ai: GoogleGenAI;
+function getClient() {
+  if (!_ai) {
+    const key = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    if (!key) throw new Error("API key missing from process.env! Available keys: " + Object.keys(process.env).join(", "));
+    _ai = new GoogleGenAI({ apiKey: key });
+  }
+  return _ai;
+}
 
 export async function chatWithReport(
     report: AnalysisReport,
@@ -31,6 +38,7 @@ Be concise, professional, and highlight ROI or value-add opportunities when rele
         // Truncate user message to ~2,000,000 characters (approx 500k tokens limit per request)
         const truncatedMessage = message.length > 2000000 ? message.substring(0, 2000000) : message;
 
+        const ai = getClient();
         const configuredChat = ai.chats.create({
             model: "gemini-2.5-flash",
             config: {

@@ -5,8 +5,15 @@ import { GoogleGenAI } from "@google/genai";
 // - Using gemini-3-flash-preview model per official docs
 //   - do not change this unless explicitly requested by the user
 
-const envKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-const ai = new GoogleGenAI(envKey ? { apiKey: envKey } : {});
+let _ai: GoogleGenAI;
+function getClient() {
+  if (!_ai) {
+    const key = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    if (!key) throw new Error("API key missing from process.env! Available keys: " + Object.keys(process.env).join(", "));
+    _ai = new GoogleGenAI({ apiKey: key });
+  }
+  return _ai;
+}
 
 
 export async function generateContractorRecommendations(
@@ -44,6 +51,7 @@ export async function generateContractorRecommendations(
             ]
           }`;
 
+    const ai = getClient();
     const result = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,

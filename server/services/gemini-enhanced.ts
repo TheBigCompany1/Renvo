@@ -1,8 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 import type { GeoData, MapsContext, VisionAnalysis, Imagery } from "@shared/schema";
 
-const envKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-const ai = new GoogleGenAI(envKey ? { apiKey: envKey } : {});
+let _ai: GoogleGenAI;
+function getClient() {
+  if (!_ai) {
+    const key = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    if (!key) throw new Error("API key missing from process.env! Available keys: " + Object.keys(process.env).join(", "));
+    _ai = new GoogleGenAI({ apiKey: key });
+  }
+  return _ai;
+}
 
 function safeParseGeminiJson<T>(responseText: string | undefined, context: string): T {
   if (!responseText) {
@@ -36,6 +43,7 @@ export async function geocodeAddress(address: string): Promise<GeoData> {
   try {
     console.log(`Geocoding address with Gemini: ${address}`);
     
+    const ai = getClient();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `You are a geocoding expert. Provide the exact coordinates (lat, lng) and formatted address for: ${address}
@@ -76,6 +84,7 @@ export async function getNeighborhoodContext(
   try {
     console.log(`Getting neighborhood context for: ${address}`);
     
+    const ai = getClient();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `You are a real estate neighborhood expert. Analyze the neighborhood around ${address} for real estate investment analysis.
@@ -178,6 +187,7 @@ export async function analyzePropertyFromImages(
       };
     }
 
+    const ai = getClient();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: contentParts,

@@ -1,7 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
 
-const envKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-const client = new GoogleGenAI(envKey ? { apiKey: envKey } : {});
+let _client: GoogleGenAI;
+function getClient() {
+  if (!_client) {
+    const key = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error("API key missing from process.env! Available keys: " + Object.keys(process.env).join(", "));
+    }
+    _client = new GoogleGenAI({ apiKey: key });
+  }
+  return _client;
+}
 
 export interface PropertyResearchResult {
   propertyData: {
@@ -466,6 +475,7 @@ CRITICAL DATA INTEGRITY RULES:
 - Cost estimates for renovations can use industry standards but must be labeled as estimates`;
 
   try {
+    const client = getClient();
     console.log('🌐 Sending request to Gemini with Google Search grounding...');
 
     const response = await client.models.generateContent({
