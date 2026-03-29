@@ -10,6 +10,17 @@ export default function Processing() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
 
+  const [fakeStep, setFakeStep] = useState(0);
+
+  useEffect(() => {
+    // The Gemini pipeline takes ~24 seconds. 
+    // Advance the UI steps every 6 seconds to give the illusion of concurrent progress.
+    const interval = setInterval(() => {
+      setFakeStep(prev => (prev < 3 ? prev + 1 : prev));
+    }, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
   const { data: report, isLoading } = useQuery({
     queryKey: ['/api/reports', id],
     queryFn: () => getAnalysisReport(id!),
@@ -104,17 +115,6 @@ export default function Processing() {
       </div>
     );
   }
-
-  const [fakeStep, setFakeStep] = useState(0);
-
-  useEffect(() => {
-    // The Gemini pipeline takes ~24 seconds. 
-    // Advance the UI steps every 6 seconds to give the illusion of concurrent progress.
-    const interval = setInterval(() => {
-      setFakeStep(prev => (prev < 3 ? prev + 1 : prev));
-    }, 6000);
-    return () => clearInterval(interval);
-  }, []);
 
   const steps = [
     { id: 'extraction', label: 'Property data extraction', completed: fakeStep >= 1 || report.status === 'completed' },
