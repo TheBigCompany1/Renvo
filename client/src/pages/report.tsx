@@ -612,6 +612,18 @@ export default function Report() {
                             Validated
                           </Badge>
                         )}
+                        
+                        {/* Strategy Constraints */}
+                        {(report.moduleData as any)?.userType && (
+                          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`badge-usertype-${index}`}>
+                            Optimized for {(report.moduleData as any).userType === 'homeowner' ? 'Homeowner Equity' : 'Acquisition'}
+                          </Badge>
+                        )}
+                        {(report.moduleData as any)?.targetBudget && (
+                          <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200" data-testid={`badge-budget-${index}`}>
+                            Budget Cap: ${(report.moduleData as any).targetBudget.toLocaleString()}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center space-x-2">
                         <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-bold text-lg px-3 py-1">

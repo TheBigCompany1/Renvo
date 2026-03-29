@@ -6,11 +6,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { createAnalysisReport } from "@/lib/api";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 export default function Home() {
   const background1 = "/background1.mp4";
   const background2 = "/background2.mp4";
   const [propertyInput, setPropertyInput] = useState("");
+  const [userType, setUserType] = useState<"homeowner" | "investor" | "">("");
+  const [targetBudget, setTargetBudget] = useState<string>("");
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -24,7 +28,7 @@ export default function Home() {
   }, [isAuthenticated]);
 
   const createReportMutation = useMutation({
-    mutationFn: createAnalysisReport,
+    mutationFn: (data: any) => createAnalysisReport(data),
     onSuccess: (data) => {
       navigate(`/processing/${data.reportId}`);
     },
@@ -66,7 +70,11 @@ export default function Home() {
       return;
     }
 
-    createReportMutation.mutate(propertyInput.trim());
+    createReportMutation.mutate({
+      propertyInput: propertyInput.trim(),
+      userType: userType || undefined,
+      targetBudget: targetBudget ? parseInt(targetBudget.replace(/\D/g, '')) : undefined
+    });
   };
 
   const videoGridItems = [
@@ -115,22 +123,50 @@ export default function Home() {
         </p>
 
         <div className="w-full max-w-3xl">
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <AddressAutocomplete
-                value={propertyInput}
-                onChange={setPropertyInput}
-                placeholder="Enter property address"
-                className="h-14 text-lg px-6 bg-white/95 backdrop-blur-sm border-0 shadow-lg text-gray-900 placeholder:text-gray-500"
-              />
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <AddressAutocomplete
+                  value={propertyInput}
+                  onChange={setPropertyInput}
+                  placeholder="Enter property address"
+                  className="h-14 text-lg px-6 bg-white/95 backdrop-blur-sm border-0 shadow-lg text-gray-900 placeholder:text-gray-500"
+                />
+              </div>
+              <Button
+                type="submit"
+                className="h-14 px-8 text-lg font-semibold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 border-0 shadow-lg shrink-0"
+                disabled={createReportMutation.isPending || authLoading}
+              >
+                {createReportMutation.isPending ? "Analyzing..." : "Analyze"}
+              </Button>
             </div>
-            <Button
-              type="submit"
-              className="h-14 px-8 text-lg font-semibold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 border-0 shadow-lg"
-              disabled={createReportMutation.isPending || authLoading}
-            >
-              {createReportMutation.isPending ? "Analyzing..." : "Analyze"}
-            </Button>
+            
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <Select value={userType} onValueChange={(val) => setUserType(val as any)}>
+                  <SelectTrigger className="h-12 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/60">
+                    <SelectValue placeholder="I am a... (Optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="homeowner">Homeowner</SelectItem>
+                    <SelectItem value="investor">Potential Investor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1">
+                <Input 
+                  type="text" 
+                  value={targetBudget}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    setTargetBudget(val ? `$${parseInt(val).toLocaleString()}` : '');
+                  }}
+                  placeholder="Target Renovation Budget (Optional)" 
+                  className="h-12 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/60 focus:bg-white/20"
+                />
+              </div>
+            </div>
           </form>
 
           <div className="mt-8 text-white/80 text-sm">

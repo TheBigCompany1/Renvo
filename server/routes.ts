@@ -306,7 +306,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.incrementUserReportCount(userId);
 
       console.log('Creating report in database...');
-      const report = await storage.createAnalysisReport(validatedData, userId);
+      const report = await storage.createAnalysisReport({
+        propertyUrl: validatedData.propertyUrl,
+        propertyAddress: validatedData.propertyAddress,
+        inputType: validatedData.inputType,
+      }, userId);
+      
+      if (validatedData.userType || validatedData.targetBudget) {
+        await storage.updateAnalysisReportData(report.id, {
+          moduleData: {
+            userType: validatedData.userType,
+            targetBudget: validatedData.targetBudget
+          }
+        });
+      }
+      
       console.log('Report created:', report.id);
 
       processAnalysisReport(report.id);
@@ -434,7 +448,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('\nStarting Gemini-powered property analysis');
       console.log(`Input: ${addressOrUrl}`);
 
-      const research = await researchProperty(addressOrUrl);
+      const userType = (report.moduleData as any)?.userType;
+      const targetBudget = (report.moduleData as any)?.targetBudget;
+      
+      if (userType) console.log(`Configuring strategy for User Type: ${userType}`);
+      if (targetBudget) console.log(`Configuring strategy for Budget Ceiling: $${targetBudget}`);
+
+      const research = await researchProperty(addressOrUrl, userType, targetBudget);
 
       const propertyData = convertToPropertyData(research);
       const renovationProjects = convertToRenovationProjects(research);

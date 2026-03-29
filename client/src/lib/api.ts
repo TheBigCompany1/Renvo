@@ -5,13 +5,19 @@ export interface CreateReportResponse {
   status: string;
 }
 
-export async function createAnalysisReport(propertyInput: string): Promise<CreateReportResponse> {
+export async function createAnalysisReport(data: { propertyInput: string, userType?: "homeowner" | "investor" | "", targetBudget?: number }): Promise<CreateReportResponse> {
   // Detect if input is a URL or an address
-  const isUrl = propertyInput.includes('redfin.com') || propertyInput.includes('redf.in') || propertyInput.startsWith('http');
+  const isUrl = data.propertyInput.includes('redfin.com') || data.propertyInput.includes('redf.in') || data.propertyInput.startsWith('http');
 
-  const payload = isUrl
-    ? { inputType: 'url' as const, propertyUrl: propertyInput }
-    : { inputType: 'address' as const, propertyAddress: propertyInput };
+  const basePayload = isUrl
+    ? { inputType: 'url' as const, propertyUrl: data.propertyInput }
+    : { inputType: 'address' as const, propertyAddress: data.propertyInput };
+
+  const payload = {
+    ...basePayload,
+    ...(data.userType && { userType: data.userType }),
+    ...(data.targetBudget && { targetBudget: data.targetBudget }),
+  };
 
   const response = await apiRequest("POST", "/api/reports", payload);
   return response.json();
