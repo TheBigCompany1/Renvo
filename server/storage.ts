@@ -27,6 +27,7 @@ const PgSession = connectPgSimple(session);
 export interface IStorage {
   sessionStore: session.Store;
   getUser(id: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
   updateUserStripeCustomerId(userId: string, customerId: string): Promise<void>;
   updateUserSubscription(userId: string, subscriptionId: string, status: string): Promise<void>;
@@ -80,6 +81,10 @@ export class PostgresStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id));
     return result[0];
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(desc(users.createdAt));
   }
 
   async updateUserCredits(userId: string, credits: number): Promise<void> {

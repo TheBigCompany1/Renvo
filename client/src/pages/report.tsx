@@ -264,6 +264,7 @@ export default function Report() {
                   <div className="flex justify-center">
                     {streetViewUrl && !imageLoadError ? (
                       <img
+                        referrerPolicy="no-referrer"
                         src={streetViewUrl}
                         alt={`Street View of ${propertyData.address}`}
                         className="rounded-lg shadow-lg w-full h-64 object-cover"

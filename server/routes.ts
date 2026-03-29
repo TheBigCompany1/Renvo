@@ -629,6 +629,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/admin/users", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const user = await storage.getUser(userId);
+      if (!isAdmin(user?.email)) {
+        return res.status(403).json({ message: "Forbidden: Super Admin Access Only" });
+      }
+      const allUsers = await storage.getAllUsers();
+      res.json(allUsers);
+    } catch (error) {
+      console.error("Admin Users Route Error:", error);
+      res.status(500).json({ message: "Failed to fetch administrative records." });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

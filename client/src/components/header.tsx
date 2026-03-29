@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { User, LogOut, LayoutDashboard } from "lucide-react";
+import { User, LogOut, LayoutDashboard, Shield } from "lucide-react";
 
 export default function Header() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -40,6 +40,14 @@ export default function Header() {
                     <span className="hidden sm:inline">Dashboard</span>
                   </Button>
                 </Link>
+                {user && (user as any).isAdmin && (
+                  <Link href="/admin">
+                    <Button variant="ghost" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50">
+                      <Shield className="w-4 h-4" />
+                      <span className="hidden sm:inline font-bold">Admin</span>
+                    </Button>
+                  </Link>
+                )}
                 <div className="flex items-center gap-2">
                   {user.profileImageUrl ? (
                     <img src={user.profileImageUrl} alt="" className="w-8 h-8 rounded-full" />
