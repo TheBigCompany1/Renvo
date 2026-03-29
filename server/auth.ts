@@ -86,8 +86,14 @@ export function setupAuth(app: Express) {
         }
     });
 
+    const ADMIN_EMAILS = ['alexkingsm@gmail.com'];
+    function populateIsAdmin(user: any) {
+        if (!user) return user;
+        return { ...user, isAdmin: !!user.email && ADMIN_EMAILS.includes(user.email.toLowerCase()) };
+    }
+
     app.post("/api/login", passport.authenticate("local"), (req, res) => {
-        res.json(req.user);
+        res.json(populateIsAdmin(req.user));
     });
 
     app.post("/api/register", async (req, res, next) => {
@@ -123,7 +129,7 @@ export function setupAuth(app: Express) {
 
             req.login(user, (err) => {
                 if (err) return next(err);
-                res.json(user);
+                res.json(populateIsAdmin(user));
             });
         } catch (err) {
             next(err);
@@ -139,7 +145,7 @@ export function setupAuth(app: Express) {
 
     app.get("/api/auth/user", (req, res) => {
         if (req.isAuthenticated()) {
-            res.json(req.user);
+            res.json(populateIsAdmin(req.user));
         } else {
             res.status(401).send("Not authenticated");
         }

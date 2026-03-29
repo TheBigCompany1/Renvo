@@ -177,11 +177,12 @@ export default function Report() {
             <h1 className="text-2xl font-bold" data-testid="text-report-title">Renovation ROI Report</h1>
             <Button
               variant="secondary"
-              className="bg-orange-500 hover:bg-orange-600 text-white border-none"
+              className="bg-orange-500 hover:bg-orange-600 text-white border-none cursor-pointer print:hidden transition-all shadow-md"
               data-testid="button-download"
+              onClick={() => window.print()}
             >
               <Download className="w-4 h-4 mr-2" />
-              Download as Report
+              Download as PDF
             </Button>
           </div>
           <div className="mt-2 text-teal-100" data-testid="text-report-details">
@@ -1232,7 +1233,7 @@ export default function Report() {
           </div>
 
           {/* --- Chatbox Column --- */}
-          <div className="xl:col-span-1">
+          <div className="xl:col-span-1 print:hidden">
             <ReportChatPanel reportId={id!} />
           </div>
         </div>

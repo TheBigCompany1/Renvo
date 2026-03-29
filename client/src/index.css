@@ -107,3 +107,7 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+@media print {
+  @page { size: portrait; margin: 0.5in; }
+}
