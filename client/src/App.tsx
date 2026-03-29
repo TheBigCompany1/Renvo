@@ -14,6 +14,7 @@ import Pricing from "@/pages/pricing";
 import Processing from "@/pages/processing";
 import Report from "@/pages/report";
 import Dashboard from "@/pages/dashboard";
+import AdminDashboard from "@/pages/admin-dashboard";
 import CheckoutSuccess from "@/pages/checkout-success";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
@@ -56,6 +57,9 @@ function Router() {
       </Route>
       <Route path="/dashboard">
         {() => <ProtectedRoute component={Dashboard} />}
+      </Route>
+      <Route path="/admin">
+        {() => <ProtectedRoute component={AdminDashboard} />}
       </Route>
       <Route path="/checkout/success" component={CheckoutSuccess} />
       <Route component={NotFound} />
