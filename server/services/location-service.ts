@@ -89,13 +89,29 @@ export async function extractLocationFromProperty(
       }
     }
     
-    // For now, we'll use a simple geocoding approach
-    // In a production system, you'd integrate with Google Maps API, etc.
+    // Attempt local local dictionary map first
+    let resolvedCoords = false;
     if (location.zip) {
       const coords = getApproximateCoordinatesFromZip(location.zip);
       if (coords) {
         location.lat = coords.lat;
         location.lng = coords.lng;
+        resolvedCoords = true;
+      }
+    }
+    
+    // Fallback dynamically to Gemini Spatial reasoning if dictionary misses
+    if (!resolvedCoords) {
+      try {
+        const { geocodeAddress } = await import('./gemini-enhanced');
+        const geo = await geocodeAddress(address);
+        location.lat = geo.lat;
+        location.lng = geo.lng;
+        if (geo.formattedAddress) {
+           location.address = geo.formattedAddress;
+        }
+      } catch (geminiError) {
+        console.error("Gemini Spatial fallback failed to compute constraints:", geminiError);
       }
     }
     
