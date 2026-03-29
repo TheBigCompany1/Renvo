@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -9,6 +10,40 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
+
+  const queryClient = useQueryClient();
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [formData, setFormData] = useState({ username: '', email: '', password: '', isAdmin: false, reportCredits: 0 });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/admin/users", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
+      setCreatingUser(false);
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const { id, ...payload } = data;
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
+      setEditingUser(null);
+    }
+  });
 
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ['/api/admin/users'],
@@ -68,11 +103,21 @@ export default function AdminDashboard() {
         </div>
 
         <Card className="shadow-md border-0 bg-white">
-          <CardHeader className="bg-indigo-50/50 border-b border-indigo-100 pb-4">
+          <CardHeader className="bg-indigo-50/50 border-b border-indigo-100 pb-4 flex flex-row items-center justify-between">
             <CardTitle className="text-xl font-semibold flex items-center text-indigo-900">
               <Users className="w-5 h-5 mr-2 text-indigo-600" />
               Registered Users
             </CardTitle>
+            <Button 
+              size="sm" 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              onClick={() => {
+                setFormData({ username: '', email: '', password: '', isAdmin: false, reportCredits: 0 });
+                setCreatingUser(true);
+              }}
+            >
+              + Create New User
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             {usersList.length > 0 ? (
@@ -85,6 +130,7 @@ export default function AdminDashboard() {
                       <TableHead className="font-semibold text-gray-700">Account Age</TableHead>
                       <TableHead className="font-semibold text-gray-700 text-right">Reports Generated</TableHead>
                       <TableHead className="font-semibold text-gray-700 text-right">Remaining Credits</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -125,6 +171,25 @@ export default function AdminDashboard() {
                           <TableCell className="text-right text-gray-600">
                             {u.reportCredits || 0}
                           </TableCell>
+                          <TableCell className="text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="text-indigo-600 hover:text-indigo-900 bg-indigo-50"
+                              onClick={() => {
+                                setFormData({ 
+                                  username: u.username, 
+                                  email: u.email || '', 
+                                  password: '', 
+                                  isAdmin: !!u.isAdmin, 
+                                  reportCredits: u.reportCredits || 0 
+                                });
+                                setEditingUser(u);
+                              }}
+                            >
+                              Edit Data
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       )
                     })}
@@ -138,6 +203,70 @@ export default function AdminDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Create/Edit Generic Modals */}
+        {(creatingUser || editingUser) && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+              <h2 className="text-xl font-bold mb-4">{creatingUser ? "Provision New User" : "Modify User Record"}</h2>
+              
+              <div className="space-y-4">
+                {creatingUser && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                      <input type="text" className="w-full border p-2 rounded" value={formData.username} onChange={e => setFormData(f => ({...f, username: e.target.value}))} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <input type="email" className="w-full border p-2 rounded" value={formData.email} onChange={e => setFormData(f => ({...f, email: e.target.value}))} />
+                    </div>
+                  </>
+                )}
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {editingUser ? "Reset Password (Optional)" : "Password"}
+                  </label>
+                  <input type="password" placeholder={editingUser ? "Leave blank to keep existing password" : ""} className="w-full border p-2 rounded" value={formData.password} onChange={e => setFormData(f => ({...f, password: e.target.value}))} />
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <div className="w-1/2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Account Role</label>
+                    <select className="w-full border p-2 rounded" value={formData.isAdmin ? "admin" : "user"} onChange={e => setFormData(f => ({...f, isAdmin: e.target.value === 'admin'}))}>
+                      <option value="user">Standard User</option>
+                      <option value="admin">Super Admin</option>
+                    </select>
+                  </div>
+                  <div className="w-1/2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Report Credits</label>
+                    <input type="number" className="w-full border p-2 rounded" value={formData.reportCredits} onChange={e => setFormData(f => ({...f, reportCredits: parseInt(e.target.value) || 0}))} />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+                  <Button variant="outline" onClick={() => { setCreatingUser(false); setEditingUser(null); }} disabled={createMutation.isPending || updateMutation.isPending}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white" 
+                    disabled={createMutation.isPending || updateMutation.isPending}
+                    onClick={() => {
+                      if (creatingUser) {
+                        createMutation.mutate(formData);
+                      } else {
+                        updateMutation.mutate({ id: editingUser.id, ...formData });
+                      }
+                    }}
+                  >
+                    {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save Configuration"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

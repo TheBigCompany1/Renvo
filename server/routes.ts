@@ -1,7 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAnalysisReportSchema, type AnalysisReport } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { insertAnalysisReportSchema, type AnalysisReport, users } from "@shared/schema";
 import { researchProperty, convertToPropertyData, convertToRenovationProjects, convertToComparables } from "./services/gemini-research";
 import { extractLocationFromProperty } from "./services/location-service";
 import { getStripeClient, getStripePublishableKey } from "./stripeClient";
@@ -633,7 +635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const user = await storage.getUser(userId);
-      if (!isAdmin(user?.email)) {
+      if (!isAdmin(user?.email) && user?.isAdmin !== true) {
         return res.status(403).json({ message: "Forbidden: Super Admin Access Only" });
       }
       const allUsers = await storage.getAllUsers();
@@ -641,6 +643,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin Users Route Error:", error);
       res.status(500).json({ message: "Failed to fetch administrative records." });
+    }
+  });
+
+  app.post("/api/admin/users", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const adminUser = await storage.getUser(userId);
+      if (!isAdmin(adminUser?.email) && adminUser?.isAdmin !== true) {
+        return res.status(403).json({ message: "Forbidden: Super Admin Access Only" });
+      }
+      
+      const { username, password, email, isAdmin: newIsAdmin, reportCredits } = req.body;
+      const { hashPassword } = await import('./auth');
+      const hashedPassword = await hashPassword(password);
+      
+      const [newUser] = await db.insert(users).values({
+        username,
+        email,
+        password: hashedPassword,
+        isAdmin: newIsAdmin || false,
+        reportCredits: reportCredits || 0,
+        totalReportsGenerated: 0,
+        subscriptionStatus: "none"
+      }).returning();
+      
+      res.json(newUser);
+    } catch (error: any) {
+      console.error("Admin Create User Error:", error);
+      res.status(400).json({ message: error.message || "Failed to create user" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const adminUser = await storage.getUser(userId);
+      if (!isAdmin(adminUser?.email) && adminUser?.isAdmin !== true) {
+        return res.status(403).json({ message: "Forbidden: Super Admin Access Only" });
+      }
+      
+      const { isAdmin: updateIsAdmin, reportCredits, password } = req.body;
+      const updates: any = {};
+      
+      if (typeof updateIsAdmin === 'boolean') updates.isAdmin = updateIsAdmin;
+      if (typeof reportCredits === 'number') updates.reportCredits = reportCredits;
+      if (password) {
+        const { hashPassword } = await import('./auth');
+        updates.password = await hashPassword(password);
+      }
+      
+      const [updatedUser] = await db.update(users)
+        .set(updates)
+        .where(eq(users.id, req.params.id))
+        .returning();
+        
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Admin Update User Error:", error);
+      res.status(400).json({ message: error.message || "Failed to update user" });
     }
   });
 

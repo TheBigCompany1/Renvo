@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   stripeCustomerId: text("stripe_customer_id"),
   reportCredits: integer("report_credits").default(0).notNull(),
+  isAdmin: boolean("is_admin").default(false).notNull(),
   totalReportsGenerated: integer("total_reports_generated").default(0).notNull(),
   subscriptionStatus: text("subscription_status").default("none"),
   subscriptionId: text("subscription_id"),
