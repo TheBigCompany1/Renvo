@@ -78,8 +78,14 @@ app.use((req, res, next) => {
       ADD COLUMN IF NOT EXISTS module_data jsonb;
     `);
     console.log("Verified database schema for module_data column.");
+
+    await db.execute(sql`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS is_admin boolean DEFAULT false NOT NULL;
+    `);
+    console.log("Verified database schema for is_admin column.");
   } catch (err: any) {
-    console.error("Failed to auto-migrate module_data column:", err.message);
+    console.error("Failed to auto-migrate database schema columns:", err.message);
   }
 
   const server = await registerRoutes(app);
