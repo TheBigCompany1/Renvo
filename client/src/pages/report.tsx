@@ -587,19 +587,41 @@ export default function Report() {
                 {renovationProjects.map((project, index) => (
                   <div key={project.id} className="border rounded-lg p-6 bg-white shadow-sm" data-testid={`card-renovation-${index}`}>
                     {/* Project Header */}
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-teal-600 text-white rounded-full flex items-center justify-center font-bold" data-testid={`text-project-rank-${index}`}>
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-6">
+                      <div className="flex items-start space-x-4">
+                        <div className="w-10 h-10 flex-shrink-0 bg-teal-600 text-white rounded-full flex items-center justify-center font-bold shadow-sm text-lg mt-0.5" data-testid={`text-project-rank-${index}`}>
                           #{project.rank ?? index + 1}
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold" data-testid={`text-project-name-${index}`}>
-                            {project.name}
-                          </h3>
+                        <div className="space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <h3 className="text-xl font-bold text-gray-900 leading-tight" data-testid={`text-project-name-${index}`}>
+                              {project.name ? project.name.replace(/^(Strategy|Option)\s*\d+:\s*/i, '').trim() : 'Renovation Plan'}
+                            </h3>
+                            
+                            {/* Validation Badge */}
+                            {(project as any).corrected && (
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200" data-testid={`badge-corrected-${index}`}>
+                                <CheckCircle className="w-3 h-3 mr-1" /> Validated
+                              </Badge>
+                            )}
+                            
+                            {/* Strategy Constraints */}
+                            {(report.moduleData as any)?.userType && (
+                              <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`badge-usertype-${index}`}>
+                                Optimized for {(report.moduleData as any).userType === 'homeowner' ? 'Homeowner Equity' : 'Acquisition'}
+                              </Badge>
+                            )}
+                            {(report.moduleData as any)?.targetBudget && (
+                              <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200" data-testid={`badge-budget-${index}`}>
+                                Budget Cap: ${(report.moduleData as any).targetBudget.toLocaleString()}
+                              </Badge>
+                            )}
+                          </div>
+                          
                           {/* Star Rating - uses backend value, falls back for older reports */}
-                          <div className="flex items-center gap-2 mt-1" data-testid={`star-rating-${index}`}>
+                          <div className="flex items-center gap-2" data-testid={`star-rating-${index}`}>
                             <StarRating rating={project.starRating ?? getRoiStarRating(calculateROI(project))} />
-                            <span className="text-sm text-gray-500">
+                            <span className="text-sm font-medium text-gray-500">
                               {(() => {
                                 const stars = project.starRating ?? getRoiStarRating(calculateROI(project));
                                 return `(${stars >= 4 ? 'Excellent' : stars >= 3 ? 'Good' : 'Fair'} ROI)`;
@@ -607,28 +629,10 @@ export default function Report() {
                             </span>
                           </div>
                         </div>
-                        {/* Validation Badge */}
-                        {(project as any).corrected && (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200" data-testid={`badge-corrected-${index}`}>
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Validated
-                          </Badge>
-                        )}
-                        
-                        {/* Strategy Constraints */}
-                        {(report.moduleData as any)?.userType && (
-                          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`badge-usertype-${index}`}>
-                            Optimized for {(report.moduleData as any).userType === 'homeowner' ? 'Homeowner Equity' : 'Acquisition'}
-                          </Badge>
-                        )}
-                        {(report.moduleData as any)?.targetBudget && (
-                          <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200" data-testid={`badge-budget-${index}`}>
-                            Budget Cap: ${(report.moduleData as any).targetBudget.toLocaleString()}
-                          </Badge>
-                        )}
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-bold text-lg px-3 py-1">
+
+                      <div className="flex-shrink-0 ml-14 md:ml-0">
+                        <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-extrabold text-lg px-4 py-1.5 border border-orange-200 shadow-sm">
                           {calculateROI(project)}% ROI
                         </Badge>
                       </div>
