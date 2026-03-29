@@ -97,13 +97,13 @@ export default function Report() {
 
   const propertyData = report.propertyData as PropertyData;
   const renovationProjectsRaw = report.renovationProjects as RenovationProject[];
-  // Sort by calculated ROI for consistency with displayed values
+  // Sort by Net Profit (Value Add - Cost) instead of ROI, prioritizing absolute return scale over relative efficiency
   const renovationProjects = [...renovationProjectsRaw].sort((a, b) => {
     const costA = (a.costRangeLow + a.costRangeHigh) / 2;
     const costB = (b.costRangeLow + b.costRangeHigh) / 2;
-    const roiA = costA > 0 ? ((a.valueAdd - costA) / costA) * 100 : 0;
-    const roiB = costB > 0 ? ((b.valueAdd - costB) / costB) * 100 : 0;
-    return roiB - roiA;
+    const netProfitA = a.valueAdd - costA;
+    const netProfitB = b.valueAdd - costB;
+    return netProfitB - netProfitA;
   });
   const comparableProperties = (report.comparableProperties as ComparableProperty[]) || [];
   const financialSummary = report.financialSummary as FinancialSummaryType;
