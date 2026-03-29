@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,15 +105,26 @@ export default function Processing() {
     );
   }
 
+  const [fakeStep, setFakeStep] = useState(0);
+
+  useEffect(() => {
+    // The Gemini pipeline takes ~24 seconds. 
+    // Advance the UI steps every 6 seconds to give the illusion of concurrent progress.
+    const interval = setInterval(() => {
+      setFakeStep(prev => (prev < 3 ? prev + 1 : prev));
+    }, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
   const steps = [
-    { id: 'extraction', label: 'Property data extraction', completed: !!report.propertyData },
-    { id: 'analysis', label: 'AI renovation analysis', completed: !!report.renovationProjects },
-    { id: 'calculations', label: 'Financial calculations', completed: !!report.financialSummary },
-    { id: 'comparables', label: 'Comparable property search', completed: !!report.comparableProperties },
+    { id: 'extraction', label: 'Property data extraction', completed: fakeStep >= 1 || report.status === 'completed' },
+    { id: 'analysis', label: 'AI renovation analysis', completed: fakeStep >= 2 || report.status === 'completed' },
+    { id: 'calculations', label: 'Financial calculations', completed: fakeStep >= 3 || report.status === 'completed' },
+    { id: 'comparables', label: 'Comparable property search', completed: report.status === 'completed' },
   ];
 
-  const currentStep = steps.findIndex(step => !step.completed);
-  const completedSteps = steps.filter(step => step.completed).length;
+  const currentStep = report.status === 'completed' ? 4 : fakeStep;
+  const completedSteps = report.status === 'completed' ? 4 : fakeStep;
 
   return (
     <div className="py-20">

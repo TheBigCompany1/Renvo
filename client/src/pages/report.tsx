@@ -854,31 +854,6 @@ export default function Report() {
                       </div>
                     )}
 
-                    {/* Execution CTA (Phase 2 Bridge) */}
-                    <div className="mt-8 flex flex-col md:flex-row gap-6 items-center bg-blue-50/50 p-6 rounded-xl border border-blue-100 shadow-sm">
-                      <div className="flex-1">
-                        <h4 className="font-bold text-gray-900 text-lg flex items-center mb-2">
-                          <PencilRuler className="w-5 h-5 mr-2 text-blue-600" />
-                          Ready to execute this strategy?
-                        </h4>
-                        <p className="text-sm text-gray-600 leading-relaxed">
-                          Upload a smartphone video of the property to generate instant permit-ready CAD as-builts and automatically initiate the design phase.
-                        </p>
-                      </div>
-                      <div className="flex-shrink-0 flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                        <Button 
-                          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 px-6 shadow-md transition-all hover:shadow-lg"
-                          onClick={() => {
-                            alert('Phase 2 Feature: This will launch the Video-to-CAD upload flow.');
-                          }}
-                        >
-                          <Video className="w-5 h-5 mr-2" />
-                          Start Automated CAD Design
-                          <ArrowRight className="w-4 h-4 ml-2 opacity-70" />
-                        </Button>
-                      </div>
-                    </div>
-
                   </div>
                 ))}
               </CardContent>
@@ -1223,6 +1198,34 @@ export default function Report() {
                     </div>
                   </CardContent>
                 </Card>
+              </div>
+            </section>
+            
+            {/* Architecture Waitlist CTA */}
+            <section className="mt-12 mb-8">
+              <div className="bg-gradient-to-br from-indigo-900 to-blue-900 rounded-2xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="flex-1 space-y-4">
+                    <h3 className="text-2xl md:text-3xl font-bold flex items-center">
+                      <PencilRuler className="w-8 h-8 mr-3 text-blue-300" />
+                      Ready to bring this vision to life?
+                    </h3>
+                    <p className="text-blue-100 text-lg max-w-2xl">
+                      We're building an automated architectural workflow that transforms a simple smartphone scan of your property into permit-ready CAD plans in minutes. Let us know if you're interested in skipping the manual drafting phase!
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 w-full md:w-auto">
+                    <Button 
+                      className="w-full md:w-auto mt-4 md:mt-0 bg-white text-indigo-900 hover:bg-blue-50 font-bold py-7 px-8 text-lg rounded-xl shadow-lg border-0 transition-transform hover:scale-105"
+                      onClick={() => {
+                        alert("Thanks for your interest! You've been added to the early access waitlist for Phase 2: Automated CAD Processing.");
+                      }}
+                    >
+                      Join the Architecture Waitlist
+                    </Button>
+                  </div>
+                </div>
               </div>
             </section>
           </div>
