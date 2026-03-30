@@ -1110,6 +1110,15 @@ export default function Report() {
               </Card>
             )}
 
+
+            
+
+
+            </div>
+
+            {/* TAB 3: PLANS, PERMITS & BUILDING */}
+
+            <div className={`space-y-8 ${activeTab === "planning" ? "block" : "hidden print:!block print:!opacity-100"}`}>
             {/* MODULE 4: Execution Roadmap */}
             <section className="space-y-6 mt-8">
               <div className="flex items-center gap-2 border-b pb-2 border-gray-200">
@@ -1199,14 +1208,7 @@ export default function Report() {
                 </Card>
               </div>
             </section>
-            
 
-
-            </div>
-
-            {/* TAB 3: PLANS, PERMITS & BUILDING */}
-
-            <div className={`space-y-8 ${activeTab === "planning" ? "block" : "hidden print:!block print:!opacity-100"}`}>
             {/* Architecture Waitlist CTA */}
             <section className="mt-12 mb-8">
               <div className="bg-gradient-to-br from-indigo-900 to-blue-900 rounded-2xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden">
