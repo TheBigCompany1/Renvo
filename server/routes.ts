@@ -711,6 +711,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/admin/users/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const adminUser = await storage.getUser(userId);
+      if (!isAdmin(adminUser?.email) && adminUser?.isAdmin !== true) {
+          return res.status(403).json({ message: "Forbidden: Super Admin Access Only" });
+      }
+      
+      const targetUserId = req.params.id;
+      if (targetUserId === userId) {
+        return res.status(400).json({ message: "Cannot delete your own admin account." });
+      }
+
+      await storage.deleteUser(targetUserId);
+      res.json({ success: true, message: "User hard-deleted from database." });
+    } catch (error: any) {
+      console.error("Admin Delete User Error:", error);
+      res.status(400).json({ message: error.message || "Failed to delete user" });
+    }
+  });
+
   // Phase 4 RAG: Manual Admin Semantic Ingestion Gateway
   app.post("/api/admin/knowledge/ingest", isAuthenticated, async (req: any, res) => {
     try {

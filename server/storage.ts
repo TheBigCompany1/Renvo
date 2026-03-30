@@ -31,6 +31,7 @@ export interface IStorage {
   sessionStore: session.Store;
   getUser(id: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+  deleteUser(userId: string): Promise<void>;
   updateUserCredits(userId: string, credits: number): Promise<void>;
   updateUserStripeCustomerId(userId: string, customerId: string): Promise<void>;
   updateUserSubscription(userId: string, subscriptionId: string, status: string): Promise<void>;
@@ -92,6 +93,10 @@ export class PostgresStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, userId));
   }
 
   async updateUserCredits(userId: string, credits: number): Promise<void> {

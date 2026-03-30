@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Shield, Users, RefreshCw, LayoutDashboard } from "lucide-react";
+import { Shield, Users, RefreshCw, LayoutDashboard, BrainCircuit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -42,6 +42,32 @@ export default function AdminDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
       setEditingUser(null);
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
+    }
+  });
+
+  const [ragData, setRagData] = useState({ sourceType: 'construction_costs', title: '', content: '' });
+  const ingestMutation = useMutation({
+    mutationFn: async (data: typeof ragData) => {
+      const res = await fetch("/api/admin/knowledge/ingest", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      setRagData({ sourceType: 'construction_costs', title: '', content: '' });
+      alert("Manual knowledge record successfully injected and vectorized into High-Trust RAG context!");
     }
   });
 
@@ -172,23 +198,39 @@ export default function AdminDashboard() {
                             {u.reportCredits || 0}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="text-indigo-600 hover:text-indigo-900 bg-indigo-50"
-                              onClick={() => {
-                                setFormData({ 
-                                  username: u.username, 
-                                  email: u.email || '', 
-                                  password: '', 
-                                  isAdmin: !!u.isAdmin, 
-                                  reportCredits: u.reportCredits || 0 
-                                });
-                                setEditingUser(u);
-                              }}
-                            >
-                              Edit Data
-                            </Button>
+                            <div className="flex justify-end gap-2">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-indigo-600 hover:text-indigo-900 bg-indigo-50"
+                                onClick={() => {
+                                  setFormData({ 
+                                    username: u.username, 
+                                    email: u.email || '', 
+                                    password: '', 
+                                    isAdmin: !!u.isAdmin, 
+                                    reportCredits: u.reportCredits || 0 
+                                  });
+                                  setEditingUser(u);
+                                }}
+                              >
+                                Edit Data
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-red-600 hover:text-red-900 bg-red-50"
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to permanently delete user ${u.email || u.username}?`)) {
+                                    deleteMutation.mutate(u.id);
+                                  }
+                                }}
+                                disabled={deleteMutation.isPending}
+                              >
+                                <Trash2 className="w-4 h-4 mr-1"/>
+                                Delete
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       )
@@ -201,6 +243,61 @@ export default function AdminDashboard() {
                 No users found.
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Phase 4 RAG: System Memory Ingestion */}
+        <Card className="mt-8 shadow-md border-0 bg-white shadow-indigo-100/50">
+          <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
+            <CardTitle className="text-xl font-semibold flex items-center text-slate-800">
+              <BrainCircuit className="w-5 h-5 mr-2 text-indigo-600" />
+              Agentic Auditor: Manual Knowledge Ingestion
+            </CardTitle>
+            <p className="text-sm text-gray-500 mt-1">Force-push verified systemic parameters, zoning ordinances, or specialized contractor pricing layouts directly into the foundational semantic memory banks.</p>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="flex flex-col gap-4 max-w-2xl">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Knowledge Source Target Pillar</label>
+                <select 
+                  className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                  value={ragData.sourceType} 
+                  onChange={e => setRagData(f => ({...f, sourceType: e.target.value}))}
+                >
+                  <option value="construction_costs">Cost Validation Index (Permits/Labor/Materials)</option>
+                  <option value="zoning_codes">Municipal Zoning Envelope Ordiance</option>
+                  <option value="financial_incentives">Government Financial Incentives (SB-9/Credits)</option>
+                  <option value="property_meta">Specialized Valuation Overrides</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Memory Title</label>
+                <input 
+                  type="text" 
+                  className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                  placeholder="e.g. Santa Monica Detached ADU Impact Fees 2026"
+                  value={ragData.title} 
+                  onChange={e => setRagData(f => ({...f, title: e.target.value}))} 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contextual Text (Will be mapped identically into 768-D Vector Space)</label>
+                <textarea 
+                  className="w-full border p-2 rounded min-h-[150px] focus:ring-2 focus:ring-indigo-500 outline-none" 
+                  placeholder="Paste raw verified logic arrays, structural codes, or textual constraints here..."
+                  value={ragData.content} 
+                  onChange={e => setRagData(f => ({...f, content: e.target.value}))} 
+                />
+              </div>
+              <Button 
+                className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
+                disabled={ingestMutation.isPending || !ragData.title || !ragData.content}
+                onClick={() => ingestMutation.mutate(ragData)}
+              >
+                <BrainCircuit className="w-4 h-4" />
+                {ingestMutation.isPending ? "Configuring Neural Matrix..." : "Inject High-Trust Record into RAG"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
