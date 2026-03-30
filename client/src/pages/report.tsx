@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { useParams } from "wouter";
+import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -116,6 +116,8 @@ export default function Report() {
   const softCosts = moduleData?.preConstructionBudget || {};
   const imagery = report.imagery as { streetViewUrl?: string; satelliteUrl?: string } | undefined;
 
+  const [activeTab, setActiveTab] = useState<'overview' | 'thesis' | 'planning'>('overview');
+
   const reportDate = report.completedAt ? new Date(report.completedAt).toLocaleDateString() : new Date().toLocaleDateString();
 
   // Use the Street View URL from the backend (already includes API key)
@@ -192,9 +194,36 @@ export default function Report() {
       </div>
 
       <div className="max-w-[1400px] mx-auto px-4 py-8">
+        
+        {/* Navigation Tabs Framework */}
+        <div className="flex border-b border-gray-200 mb-8 print:hidden overflow-x-auto whitespace-nowrap scrollbar-hide">
+          <button 
+            onClick={() => setActiveTab('overview')} 
+            className={`px-4 py-3 font-semibold text-sm border-b-2 transition-colors ${activeTab === 'overview' ? 'border-teal-600 text-teal-600 bg-teal-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+          >
+            Property Overview
+          </button>
+          <button 
+            onClick={() => setActiveTab('thesis')} 
+            className={`px-4 py-3 font-semibold text-sm border-b-2 transition-colors ${activeTab === 'thesis' ? 'border-teal-600 text-teal-600 bg-teal-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+          >
+            Investment Thesis & Renovation Opportunities
+          </button>
+          <button 
+            onClick={() => setActiveTab('planning')} 
+            className={`px-4 py-3 font-semibold text-sm border-b-2 transition-colors ${activeTab === 'planning' ? 'border-teal-600 text-teal-600 bg-teal-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+          >
+            Plans, Permits & Building
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-          {/* Main Report Column (Spans 3 cols on xl) */}
+          {/* Main Report Column */}
           <div className="xl:col-span-3 space-y-8">
+
+            {/* TAB 1: PROPERTY OVERVIEW */}
+            <div className={`space-y-8 ${activeTab === 'overview' ? 'block' : 'hidden print:!block print:!opacity-100'}`}>
+              
             {/* Property Overview */}
             <Card>
               <CardHeader>
@@ -298,184 +327,6 @@ export default function Report() {
               </CardContent>
             </Card>
 
-            {/* Investment Verdict & Scoring Overview */}
-            {validationSummary && (
-              <Card className={`border-2 ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'border-green-500' : validationSummary.verdict?.includes('Poor') ? 'border-red-500' : 'border-orange-500'}`}>
-                <CardHeader className={`bg-gradient-to-r ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'from-green-50' : validationSummary.verdict?.includes('Poor') ? 'from-red-50' : 'from-orange-50'} to-white`}>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-xl font-bold flex items-center gap-2" data-testid="title-investment-analysis">
-                        <LineChart className={`w-6 h-6 ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'text-green-600' : 'text-orange-600'}`} />
-                        Investment Thesis & Verdict
-                      </CardTitle>
-                      <p className="text-sm text-gray-600 mt-1">AI-generated risk assessment and strategic recommendation</p>
-                    </div>
-                    <div className="text-right">
-                      <Badge className={`text-sm px-3 py-1 ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'bg-green-100 text-green-800' : validationSummary.verdict?.includes('Poor') ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>
-                        {validationSummary.verdict || (opportunityScore >= 75 ? 'Strong Investment' : opportunityScore >= 50 ? 'Good Opportunity' : opportunityScore >= 25 ? 'Marginal' : 'High Risk')}
-                      </Badge>
-                      <div className="text-xs text-gray-500 mt-2 font-medium">Confidence Score: {Math.round(opportunityScore)}/100</div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-6 space-y-6">
-                  {/* Thesis Reasoning */}
-                  {validationSummary.reasoning && (
-                    <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
-                      <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
-                        <Target className="w-4 h-4 mr-2 text-blue-600" />
-                        Executive Summary
-                      </h4>
-                      <p className="text-gray-700 leading-relaxed text-sm">
-                        {validationSummary.reasoning}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Best Strategy */}
-                    {validationSummary.bestStrategy && (
-                      <div className="space-y-2">
-                        <h4 className="font-semibold text-gray-900 text-sm uppercase tracking-wider">Primary Strategy</h4>
-                        <div className="flex bg-blue-50/50 p-4 rounded-lg border border-blue-100 h-full items-center">
-                          <span className="font-medium text-blue-900">{validationSummary.bestStrategy}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Important Considerations */}
-                    {validationSummary.importantConsiderations && validationSummary.importantConsiderations.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="font-semibold text-gray-900 text-sm uppercase tracking-wider">Critical Factors</h4>
-                        <ul className="bg-orange-50/50 p-4 rounded-lg border border-orange-100 h-full space-y-2">
-                          {validationSummary.importantConsiderations.map((consideration: string, i: number) => (
-                            <li key={i} className="flex items-start text-sm text-orange-900">
-                              <span className="mr-2 opacity-60">•</span>
-                              <span className="leading-snug">{consideration}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Investor vs Owner Analysis */}
-                  {(validationSummary.investorAnalysis || validationSummary.ownerAnalysis) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
-                      {validationSummary.investorAnalysis && (
-                        <div>
-                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center text-sm uppercase tracking-wider">
-                            <Briefcase className="w-4 h-4 mr-2 text-indigo-600" />
-                            Investor Profile
-                          </h4>
-                          <div className="space-y-3 bg-indigo-50/30 p-4 rounded-lg">
-                            <div className="flex justify-between text-sm py-1 border-b border-indigo-100 border-dashed">
-                              <span className="text-gray-600">Target Profit Margin</span>
-                              <span className="font-medium text-indigo-900">{formatCurrency(validationSummary.investorAnalysis.targetProfit || 0)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm py-1 border-b border-indigo-100 border-dashed">
-                              <span className="text-gray-600">Max Purchase Price</span>
-                              <span className="font-medium text-indigo-900">{formatCurrency(validationSummary.investorAnalysis.maxPurchasePriceForProfit || 0)}</span>
-                            </div>
-                            <p className="text-xs text-indigo-800 mt-2 bg-indigo-100/50 p-2 rounded">
-                              {validationSummary.investorAnalysis.recommendation}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {validationSummary.ownerAnalysis && (
-                        <div>
-                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center text-sm uppercase tracking-wider">
-                            <Home className="w-4 h-4 mr-2 text-emerald-600" />
-                            Homeowner Profile
-                          </h4>
-                          <div className="space-y-3 bg-emerald-50/30 p-4 rounded-lg">
-                            <div className="flex justify-between text-sm py-1 border-b border-emerald-100 border-dashed">
-                              <span className="text-gray-600">Current Equity Est.</span>
-                              <span className="font-medium text-emerald-900">{formatCurrency(validationSummary.ownerAnalysis.currentEquity || 0)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm py-1 border-b border-emerald-100 border-dashed">
-                              <span className="text-gray-600">Best Path Forward</span>
-                              <span className="font-medium text-emerald-900">{validationSummary.ownerAnalysis.bestProjectForOwner}</span>
-                            </div>
-                            <p className="text-xs text-emerald-800 mt-2 bg-emerald-100/50 p-2 rounded">
-                              {validationSummary.ownerAnalysis.recommendation}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 3.1 Zoning & 3.2 Site Viability Moved Here */}
-                  {(zoning.classification || viability.floodZone) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
-                      {zoning.classification && (
-                        <div className="bg-gray-50 border border-gray-100 p-5 rounded-xl">
-                          <h4 className="font-semibold text-gray-900 mb-4 flex items-center text-sm uppercase tracking-wider">
-                            <Map className="w-4 h-4 mr-2 text-blue-600" /> Zoning Envelope
-                          </h4>
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-3 gap-2">
-                              <div className="bg-white border border-gray-200 p-2 rounded text-center shadow-sm">
-                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Class</div>
-                                <div className="font-bold text-gray-900">{zoning.classification || '-'}</div>
-                              </div>
-                              <div className="bg-white border border-gray-200 p-2 rounded text-center shadow-sm">
-                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">FAR</div>
-                                <div className="font-bold text-gray-900">{zoning.far || '-'}</div>
-                              </div>
-                              <div className="bg-white border border-gray-200 p-2 rounded text-center shadow-sm">
-                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Height</div>
-                                <div className="font-bold text-gray-900">{zoning.maxHeight || '-'}</div>
-                              </div>
-                            </div>
-                            <div className="pt-3 border-t border-gray-200 mt-3">
-                              <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wider">Build-By-Right Check</h4>
-                              <div className="flex gap-2">
-                                {['adu', 'jadu', 'sb9'].map(type => (
-                                  <Badge key={type} variant={zoning.buildByRight?.[type] ? 'default' : 'secondary'} className={zoning.buildByRight?.[type] ? 'bg-green-100 text-green-800 border-green-200' : 'opacity-50'}>
-                                    {type.toUpperCase()}: {zoning.buildByRight?.[type] ? 'YES' : 'NO'}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {viability.floodZone && (
-                        <div className="bg-gray-50 border border-gray-100 p-5 rounded-xl">
-                          <h4 className="font-semibold text-gray-900 mb-4 flex items-center text-sm uppercase tracking-wider">
-                            <Activity className="w-4 h-4 mr-2 text-rose-600" /> Site Viability
-                          </h4>
-                          <div className="space-y-3">
-                            <div className="flex justify-between text-sm py-1.5 border-b border-gray-200 border-dashed">
-                              <span className="text-gray-500 font-medium">Flood Zone</span>
-                              <span className="font-bold text-gray-900">{viability.floodZone || '-'}</span>
-                            </div>
-                            <div className="flex justify-between text-sm py-1.5 border-b border-gray-200 border-dashed">
-                              <span className="text-gray-500 font-medium">Fire/Seismic Risk</span>
-                              <span className="font-bold text-gray-900">{viability.fireRisk || '-'} / {viability.seismicRisk || '-'}</span>
-                            </div>
-                            <div className="flex justify-between text-sm py-1.5 border-b border-gray-200 border-dashed">
-                              <span className="text-gray-500 font-medium">Topography</span>
-                              <span className="font-bold text-gray-900">{viability.topography || '-'}</span>
-                            </div>
-                            <div className="bg-rose-50 border border-rose-100 p-3 rounded text-xs text-rose-800 mt-3">
-                              <strong>Infrastructure:</strong> {viability.infrastructure || 'Requires investigation'}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                </CardContent>
-              </Card>
-            )}
-
             {/* Property History & Financials */}
             {(propertyData.permitHistory || propertyData.propertyTaxAnnual || propertyData.rentalPotential) && (
               <Card>
@@ -577,296 +428,6 @@ export default function Report() {
                 </CardContent>
               </Card>
             )}
-
-            {/* Top Renovation Opportunities */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-xl font-semibold" data-testid="title-renovation-opportunities">Top Renovation Opportunities</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                {renovationProjects.map((project, index) => (
-                  <div key={project.id} className="border rounded-lg p-6 bg-white shadow-sm" data-testid={`card-renovation-${index}`}>
-                    {/* Project Header */}
-                    <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-6">
-                      <div className="flex items-start space-x-4">
-                        <div className="w-10 h-10 flex-shrink-0 bg-teal-600 text-white rounded-full flex items-center justify-center font-bold shadow-sm text-lg mt-0.5" data-testid={`text-project-rank-${index}`}>
-                          #{project.rank ?? index + 1}
-                        </div>
-                        <div className="space-y-1.5">
-                          <div className="flex flex-wrap items-center gap-2.5">
-                            <h3 className="text-xl font-bold text-gray-900 leading-tight" data-testid={`text-project-name-${index}`}>
-                              {project.name ? project.name.replace(/^(Strategy|Option)\s*\d+:\s*/i, '').trim() : 'Renovation Plan'}
-                            </h3>
-                            
-                            {/* Validation Badge */}
-                            {(project as any).corrected && (
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200" data-testid={`badge-corrected-${index}`}>
-                                <CheckCircle className="w-3 h-3 mr-1" /> Validated
-                              </Badge>
-                            )}
-                            
-                            {/* Strategy Constraints */}
-                            {(report.moduleData as any)?.userType && (
-                              <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`badge-usertype-${index}`}>
-                                Optimized for {(report.moduleData as any).userType === 'homeowner' ? 'Homeowner Equity' : 'Acquisition'}
-                              </Badge>
-                            )}
-                            {(report.moduleData as any)?.targetBudget && (
-                              <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200" data-testid={`badge-budget-${index}`}>
-                                Budget Cap: ${(report.moduleData as any).targetBudget.toLocaleString()}
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          {/* Star Rating - uses backend value, falls back for older reports */}
-                          <div className="flex items-center gap-2" data-testid={`star-rating-${index}`}>
-                            <StarRating rating={project.starRating ?? getRoiStarRating(calculateROI(project))} />
-                            <span className="text-sm font-medium text-gray-500">
-                              {(() => {
-                                const stars = project.starRating ?? getRoiStarRating(calculateROI(project));
-                                return `(${stars >= 4 ? 'Excellent' : stars >= 3 ? 'Good' : 'Fair'} ROI)`;
-                              })()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex-shrink-0 ml-14 md:ml-0">
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-extrabold text-lg px-4 py-1.5 border border-orange-200 shadow-sm">
-                          {calculateROI(project)}% ROI
-                        </Badge>
-                      </div>
-                    </div>
-
-                    {/* Balanced UX Layout */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mt-6">
-                      
-                      {/* Left Column: Narrative Analysis & Structured Data */}
-                      <div className="lg:col-span-2 space-y-6">
-                        {/* Narrative Description */}
-                        <div>
-                          <h4 className="font-semibold text-gray-900 mb-3 text-lg flex items-center">
-                            <Sparkles className="w-5 h-5 mr-2 text-blue-500" />
-                            Strategy & Opportunity
-                          </h4>
-                          <div className="prose prose-blue max-w-none text-gray-700 leading-relaxed bg-blue-50/50 p-5 rounded-xl border border-blue-100" data-testid={`text-project-description-${index}`}>
-                            {project.description}
-                          </div>
-                        </div>
-
-                        {/* Value Drivers & Target Demographic */}
-                        {((project as any).value_drivers?.length > 0 || (project as any).target_demographic) && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {(project as any).value_drivers?.length > 0 && (
-                              <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100">
-                                <h4 className="font-semibold text-emerald-900 mb-3 text-sm uppercase tracking-wider flex items-center">
-                                  <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
-                                  Value Drivers
-                                </h4>
-                                <ul className="space-y-2 text-emerald-800 text-sm">
-                                  {(project as any).value_drivers.map((driver: string, i: number) => (
-                                    <li key={i} className="flex items-start">
-                                      <span className="mr-2 text-emerald-500">✓</span>
-                                      <span className="leading-snug">{driver}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {(project as any).target_demographic && (
-                              <div className="bg-purple-50/50 p-5 rounded-xl border border-purple-100">
-                                <h4 className="font-semibold text-purple-900 mb-3 text-sm uppercase tracking-wider flex items-center">
-                                  <Users className="w-4 h-4 mr-2 text-purple-600" />
-                                  Target Market
-                                </h4>
-                                <p className="text-purple-800 text-sm leading-relaxed">
-                                  {(project as any).target_demographic}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Execution Roadmap & Risks */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {(project as any).roadmap_steps && (project as any).roadmap_steps.length > 0 && (
-                            <div className="bg-gray-50/50 p-5 rounded-xl border border-gray-200">
-                              <h4 className="font-semibold text-gray-900 mb-3 text-sm uppercase tracking-wider flex items-center">
-                                <CheckCircle className="w-4 h-4 mr-2 text-gray-600" />
-                                Execution Roadmap
-                              </h4>
-                              <ul className="space-y-3 text-gray-700 text-sm">
-                                {(project as any).roadmap_steps.map((step: string, i: number) => (
-                                  <li key={i} className="flex items-start">
-                                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">{i + 1}</div>
-                                    <span className="leading-snug">{step}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {(project as any).potential_risks && (project as any).potential_risks.length > 0 && (
-                            <div className="bg-orange-50/50 p-5 rounded-xl border border-orange-100">
-                              <h4 className="font-semibold text-orange-900 mb-3 text-sm uppercase tracking-wider flex items-center">
-                                <AlertTriangle className="w-4 h-4 mr-2 text-orange-500" />
-                                Risk Factors
-                              </h4>
-                              <ul className="space-y-2 text-orange-800 text-sm">
-                                {(project as any).potential_risks.map((risk: string, i: number) => (
-                                  <li key={i} className="flex items-start">
-                                    <span className="mr-2 opacity-60">•</span>
-                                    <span className="leading-snug">{risk}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-
-                      </div>
-
-                      {/* Right Column: Financial Breakdown ("Receipt" format) */}
-                      {(() => {
-                        const projectCost = (project as any).computedCost || (project.costRangeLow + project.costRangeHigh) / 2;
-                        const netProfit = project.valueAdd - projectCost;
-                        return (
-                          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col justify-center space-y-4">
-                            <h4 className="font-semibold text-gray-900 mb-1 border-b pb-3 text-center tracking-tight uppercase text-sm">
-                              Financial Breakdown
-                            </h4>
-
-                            <div className="flex justify-between items-center py-2 border-b border-gray-50 border-dashed">
-                              <span className="text-gray-600 font-medium">Est. Cost</span>
-                              <div className="text-right">
-                                <span className="font-bold text-teal-700">{formatCurrency(projectCost)}</span>
-                                {(project as any).costPerSqftUsed && <div className="text-xs text-gray-400 mt-0.5">${(project as any).costPerSqftUsed}/sqft</div>}
-                              </div>
-                            </div>
-
-                            <div className="flex justify-between items-center py-2 border-b border-gray-50 border-dashed">
-                              <span className="text-gray-600 font-medium">Value Add</span>
-                              <div className="text-right">
-                                <span className="font-bold text-green-700">+{formatCurrency(project.valueAdd)}</span>
-                                {(project as any).pricePsfUsed && <div className="text-xs text-gray-400 mt-0.5">${(project as any).pricePsfUsed}/sqft</div>}
-                              </div>
-                            </div>
-
-                            <div className="flex justify-between items-center py-2 border-b border-gray-50 border-dashed">
-                              <span className="text-gray-600 font-medium">Timeline</span>
-                              <span className="font-bold text-blue-700">{project.timeline}</span>
-                            </div>
-
-                            <div className={`flex justify-between items-center p-3 rounded-lg ${netProfit > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                              <span className="font-semibold text-gray-800">Net Profit</span>
-                              <span className={`font-bold ${netProfit > 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                {netProfit > 0 ? '+' : ''}{formatCurrency(netProfit)}
-                              </span>
-                            </div>
-
-                            <div className="flex justify-between items-center p-3 bg-gray-900 rounded-lg text-white mt-2">
-                              <span className="font-medium text-gray-300">Post-Reno Value</span>
-                              <div className="text-right">
-                                <span className="font-bold text-lg text-white">
-                                  {(project as any).computedValue ?
-                                    formatCurrency((project as any).computedValue) :
-                                    (financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue + project.valueAdd) : 'N/A')
-                                  }
-                                </span>
-                                {(project as any).newTotalSqft && <div className="text-xs text-gray-400 mt-0.5">{(project as any).newTotalSqft.toLocaleString()} sqft</div>}
-                              </div>
-                            </div>
-
-                          </div>
-                        );
-                      })()}
-
-                    </div>
-
-                    {/* Target ARV Comparables (Investment Thesis Proof) */}
-                    {(project as any).targetComparables && (project as any).targetComparables.length > 0 && (
-                      <div className="mt-8 pt-6 border-t border-gray-100">
-                        <h4 className="font-semibold text-gray-900 mb-4 text-base flex items-center">
-                          <Target className="w-5 h-5 mr-2 text-blue-600" />
-                          Investment Thesis Proof: ARV Comparables
-                        </h4>
-                        <p className="text-sm text-gray-600 mb-4">
-                          To validate the projected {(project as any).newTotalSqft ? (project as any).newTotalSqft.toLocaleString() + ' sqft' : ''} ARV, the AI identified the following newly renovated or new-build comparables in the immediate vicinity matching this exact strategy:
-                        </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {(project as any).targetComparables.map((comp: any, cIdx: number) => (
-                            <div key={cIdx} className="bg-gray-50 border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-                              <div className="flex justify-between items-start mb-2">
-                                <span className="font-bold text-gray-900">{formatCurrency(comp.price)}</span>
-                                <span className="text-xs bg-white border border-gray-200 text-gray-600 px-2 py-1 rounded shadow-sm">
-                                  ${comp.pricePsf}/sqft
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-800 font-medium truncate mb-1" title={comp.address}>
-                                {comp.address}
-                              </p>
-                              <div className="text-xs text-gray-500 font-medium flex items-center gap-2 mb-2">
-                                <span>{comp.beds} Bed</span>
-                                <span>•</span>
-                                <span>{comp.baths} Bath</span>
-                                <span>•</span>
-                                <span>{comp.sqft?.toLocaleString()} sqft</span>
-                              </div>
-                              <div className="flex justify-between items-center text-[10px] text-gray-400 uppercase tracking-wider font-bold border-t border-gray-200/60 pt-2 mt-2">
-                                <span>Sold: {comp.dateSold}</span>
-                                {comp.distanceMiles && <span>{comp.distanceMiles} mi away</span>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-
-
-                    {/* Strategy-Specific Financial Stress Test */}
-                    {(project as any).financialStressTest?.sensitivityTable && (project as any).financialStressTest.sensitivityTable.length > 0 && (
-                      <div className="mt-8 pt-6 border-t border-gray-100">
-                        <div className="flex justify-between items-center mb-4">
-                          <h4 className="font-semibold text-gray-900 text-base flex items-center">
-                            <Calculator className="w-5 h-5 mr-2 text-purple-600" />
-                            Strategy Sensitivity Analysis
-                          </h4>
-                          <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100">Stress Test</Badge>
-                        </div>
-                        <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
-                          <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 text-gray-600 font-bold border-b border-gray-200">
-                              <tr>
-                                <th className="px-5 py-3 uppercase tracking-wider text-xs">Cost Variance</th>
-                                <th className="px-5 py-3 uppercase tracking-wider text-xs">ARV Variance</th>
-                                <th className="px-5 py-3 uppercase tracking-wider text-xs text-right">Net Profit Outcome</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {(project as any).financialStressTest.sensitivityTable.map((row: any, i: number) => (
-                                <tr key={i} className="hover:bg-gray-50 transition-colors bg-white">
-                                  <td className="px-5 py-3 font-semibold text-rose-600">{row.costChange}</td>
-                                  <td className="px-5 py-3 font-semibold text-emerald-600">{row.priceChange}</td>
-                                  <td className="px-5 py-3 text-right font-extrabold text-gray-900">
-                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(row.netProfit)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-
-
 
             {/* Neighborhood & Lifestyle Scores */}
             {(propertyData.schools || propertyData.walkScores || propertyData.crimeStats || propertyData.hazardRisk) && (
@@ -1207,6 +768,482 @@ export default function Report() {
               </div>
             </section>
             
+            </div>
+
+            {/* TAB 2: INVESTMENT THESIS & RENOVATION OPPORTUNITIES */}
+            <div className={`space-y-8 ${activeTab === "thesis" ? "block" : "hidden print:!block print:!opacity-100"}`}>
+            {/* Investment Verdict & Scoring Overview */}
+            {validationSummary && (
+              <Card className={`border-2 ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'border-green-500' : validationSummary.verdict?.includes('Poor') ? 'border-red-500' : 'border-orange-500'}`}>
+                <CardHeader className={`bg-gradient-to-r ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'from-green-50' : validationSummary.verdict?.includes('Poor') ? 'from-red-50' : 'from-orange-50'} to-white`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-xl font-bold flex items-center gap-2" data-testid="title-investment-analysis">
+                        <LineChart className={`w-6 h-6 ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'text-green-600' : 'text-orange-600'}`} />
+                        Investment Thesis & Verdict
+                      </CardTitle>
+                      <p className="text-sm text-gray-600 mt-1">AI-generated risk assessment and strategic recommendation</p>
+                    </div>
+                    <div className="text-right">
+                      <Badge className={`text-sm px-3 py-1 ${validationSummary.verdict?.includes('Strong') || opportunityScore >= 75 ? 'bg-green-100 text-green-800' : validationSummary.verdict?.includes('Poor') ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>
+                        {validationSummary.verdict || (opportunityScore >= 75 ? 'Strong Investment' : opportunityScore >= 50 ? 'Good Opportunity' : opportunityScore >= 25 ? 'Marginal' : 'High Risk')}
+                      </Badge>
+                      <div className="text-xs text-gray-500 mt-2 font-medium">Confidence Score: {Math.round(opportunityScore)}/100</div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-6 space-y-6">
+                  {/* Thesis Reasoning */}
+                  {validationSummary.reasoning && (
+                    <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
+                      <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
+                        <Target className="w-4 h-4 mr-2 text-blue-600" />
+                        Executive Summary
+                      </h4>
+                      <p className="text-gray-700 leading-relaxed text-sm">
+                        {validationSummary.reasoning}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Best Strategy */}
+                    {validationSummary.bestStrategy && (
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-gray-900 text-sm uppercase tracking-wider">Primary Strategy</h4>
+                        <div className="flex bg-blue-50/50 p-4 rounded-lg border border-blue-100 h-full items-center">
+                          <span className="font-medium text-blue-900">{validationSummary.bestStrategy}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Important Considerations */}
+                    {validationSummary.importantConsiderations && validationSummary.importantConsiderations.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-gray-900 text-sm uppercase tracking-wider">Critical Factors</h4>
+                        <ul className="bg-orange-50/50 p-4 rounded-lg border border-orange-100 h-full space-y-2">
+                          {validationSummary.importantConsiderations.map((consideration: string, i: number) => (
+                            <li key={i} className="flex items-start text-sm text-orange-900">
+                              <span className="mr-2 opacity-60">•</span>
+                              <span className="leading-snug">{consideration}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Investor vs Owner Analysis */}
+                  {(validationSummary.investorAnalysis || validationSummary.ownerAnalysis) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
+                      {validationSummary.investorAnalysis && (
+                        <div>
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center text-sm uppercase tracking-wider">
+                            <Briefcase className="w-4 h-4 mr-2 text-indigo-600" />
+                            Investor Profile
+                          </h4>
+                          <div className="space-y-3 bg-indigo-50/30 p-4 rounded-lg">
+                            <div className="flex justify-between text-sm py-1 border-b border-indigo-100 border-dashed">
+                              <span className="text-gray-600">Target Profit Margin</span>
+                              <span className="font-medium text-indigo-900">{formatCurrency(validationSummary.investorAnalysis.targetProfit || 0)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm py-1 border-b border-indigo-100 border-dashed">
+                              <span className="text-gray-600">Max Purchase Price</span>
+                              <span className="font-medium text-indigo-900">{formatCurrency(validationSummary.investorAnalysis.maxPurchasePriceForProfit || 0)}</span>
+                            </div>
+                            <p className="text-xs text-indigo-800 mt-2 bg-indigo-100/50 p-2 rounded">
+                              {validationSummary.investorAnalysis.recommendation}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {validationSummary.ownerAnalysis && (
+                        <div>
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center text-sm uppercase tracking-wider">
+                            <Home className="w-4 h-4 mr-2 text-emerald-600" />
+                            Homeowner Profile
+                          </h4>
+                          <div className="space-y-3 bg-emerald-50/30 p-4 rounded-lg">
+                            <div className="flex justify-between text-sm py-1 border-b border-emerald-100 border-dashed">
+                              <span className="text-gray-600">Current Equity Est.</span>
+                              <span className="font-medium text-emerald-900">{formatCurrency(validationSummary.ownerAnalysis.currentEquity || 0)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm py-1 border-b border-emerald-100 border-dashed">
+                              <span className="text-gray-600">Best Path Forward</span>
+                              <span className="font-medium text-emerald-900">{validationSummary.ownerAnalysis.bestProjectForOwner}</span>
+                            </div>
+                            <p className="text-xs text-emerald-800 mt-2 bg-emerald-100/50 p-2 rounded">
+                              {validationSummary.ownerAnalysis.recommendation}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 3.1 Zoning & 3.2 Site Viability Moved Here */}
+                  {(zoning.classification || viability.floodZone) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
+                      {zoning.classification && (
+                        <div className="bg-gray-50 border border-gray-100 p-5 rounded-xl">
+                          <h4 className="font-semibold text-gray-900 mb-4 flex items-center text-sm uppercase tracking-wider">
+                            <Map className="w-4 h-4 mr-2 text-blue-600" /> Zoning Envelope
+                          </h4>
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="bg-white border border-gray-200 p-2 rounded text-center shadow-sm">
+                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Class</div>
+                                <div className="font-bold text-gray-900">{zoning.classification || '-'}</div>
+                              </div>
+                              <div className="bg-white border border-gray-200 p-2 rounded text-center shadow-sm">
+                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">FAR</div>
+                                <div className="font-bold text-gray-900">{zoning.far || '-'}</div>
+                              </div>
+                              <div className="bg-white border border-gray-200 p-2 rounded text-center shadow-sm">
+                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Height</div>
+                                <div className="font-bold text-gray-900">{zoning.maxHeight || '-'}</div>
+                              </div>
+                            </div>
+                            <div className="pt-3 border-t border-gray-200 mt-3">
+                              <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wider">Build-By-Right Check</h4>
+                              <div className="flex gap-2">
+                                {['adu', 'jadu', 'sb9'].map(type => (
+                                  <Badge key={type} variant={zoning.buildByRight?.[type] ? 'default' : 'secondary'} className={zoning.buildByRight?.[type] ? 'bg-green-100 text-green-800 border-green-200' : 'opacity-50'}>
+                                    {type.toUpperCase()}: {zoning.buildByRight?.[type] ? 'YES' : 'NO'}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {viability.floodZone && (
+                        <div className="bg-gray-50 border border-gray-100 p-5 rounded-xl">
+                          <h4 className="font-semibold text-gray-900 mb-4 flex items-center text-sm uppercase tracking-wider">
+                            <Activity className="w-4 h-4 mr-2 text-rose-600" /> Site Viability
+                          </h4>
+                          <div className="space-y-3">
+                            <div className="flex justify-between text-sm py-1.5 border-b border-gray-200 border-dashed">
+                              <span className="text-gray-500 font-medium">Flood Zone</span>
+                              <span className="font-bold text-gray-900">{viability.floodZone || '-'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm py-1.5 border-b border-gray-200 border-dashed">
+                              <span className="text-gray-500 font-medium">Fire/Seismic Risk</span>
+                              <span className="font-bold text-gray-900">{viability.fireRisk || '-'} / {viability.seismicRisk || '-'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm py-1.5 border-b border-gray-200 border-dashed">
+                              <span className="text-gray-500 font-medium">Topography</span>
+                              <span className="font-bold text-gray-900">{viability.topography || '-'}</span>
+                            </div>
+                            <div className="bg-rose-50 border border-rose-100 p-3 rounded text-xs text-rose-800 mt-3">
+                              <strong>Infrastructure:</strong> {viability.infrastructure || 'Requires investigation'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Top Renovation Opportunities */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl font-semibold" data-testid="title-renovation-opportunities">Top Renovation Opportunities</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                {renovationProjects.map((project, index) => (
+                  <div key={project.id} className="border rounded-lg p-6 bg-white shadow-sm" data-testid={`card-renovation-${index}`}>
+                    {/* Project Header */}
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-6">
+                      <div className="flex items-start space-x-4">
+                        <div className="w-10 h-10 flex-shrink-0 bg-teal-600 text-white rounded-full flex items-center justify-center font-bold shadow-sm text-lg mt-0.5" data-testid={`text-project-rank-${index}`}>
+                          #{project.rank ?? index + 1}
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <h3 className="text-xl font-bold text-gray-900 leading-tight" data-testid={`text-project-name-${index}`}>
+                              {project.name ? project.name.replace(/^(Strategy|Option)\s*\d+:\s*/i, '').trim() : 'Renovation Plan'}
+                            </h3>
+                            
+                            {/* Validation Badge */}
+                            {(project as any).corrected && (
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200" data-testid={`badge-corrected-${index}`}>
+                                <CheckCircle className="w-3 h-3 mr-1" /> Validated
+                              </Badge>
+                            )}
+                            
+                            {/* Strategy Constraints */}
+                            {(report.moduleData as any)?.userType && (
+                              <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`badge-usertype-${index}`}>
+                                Optimized for {(report.moduleData as any).userType === 'homeowner' ? 'Homeowner Equity' : 'Acquisition'}
+                              </Badge>
+                            )}
+                            {(report.moduleData as any)?.targetBudget && (
+                              <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200" data-testid={`badge-budget-${index}`}>
+                                Budget Cap: ${(report.moduleData as any).targetBudget.toLocaleString()}
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          {/* Star Rating - uses backend value, falls back for older reports */}
+                          <div className="flex items-center gap-2" data-testid={`star-rating-${index}`}>
+                            <StarRating rating={project.starRating ?? getRoiStarRating(calculateROI(project))} />
+                            <span className="text-sm font-medium text-gray-500">
+                              {(() => {
+                                const stars = project.starRating ?? getRoiStarRating(calculateROI(project));
+                                return `(${stars >= 4 ? 'Excellent' : stars >= 3 ? 'Good' : 'Fair'} ROI)`;
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex-shrink-0 ml-14 md:ml-0">
+                        <Badge variant="secondary" className="bg-orange-100 text-orange-700 font-extrabold text-lg px-4 py-1.5 border border-orange-200 shadow-sm">
+                          {calculateROI(project)}% ROI
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Balanced UX Layout */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mt-6">
+                      
+                      {/* Left Column: Narrative Analysis & Structured Data */}
+                      <div className="lg:col-span-2 space-y-6">
+                        {/* Narrative Description */}
+                        <div>
+                          <h4 className="font-semibold text-gray-900 mb-3 text-lg flex items-center">
+                            <Sparkles className="w-5 h-5 mr-2 text-blue-500" />
+                            Strategy & Opportunity
+                          </h4>
+                          <div className="prose prose-blue max-w-none text-gray-700 leading-relaxed bg-blue-50/50 p-5 rounded-xl border border-blue-100" data-testid={`text-project-description-${index}`}>
+                            {project.description}
+                          </div>
+                        </div>
+
+                        {/* Value Drivers & Target Demographic */}
+                        {((project as any).value_drivers?.length > 0 || (project as any).target_demographic) && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {(project as any).value_drivers?.length > 0 && (
+                              <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100">
+                                <h4 className="font-semibold text-emerald-900 mb-3 text-sm uppercase tracking-wider flex items-center">
+                                  <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
+                                  Value Drivers
+                                </h4>
+                                <ul className="space-y-2 text-emerald-800 text-sm">
+                                  {(project as any).value_drivers.map((driver: string, i: number) => (
+                                    <li key={i} className="flex items-start">
+                                      <span className="mr-2 text-emerald-500">✓</span>
+                                      <span className="leading-snug">{driver}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {(project as any).target_demographic && (
+                              <div className="bg-purple-50/50 p-5 rounded-xl border border-purple-100">
+                                <h4 className="font-semibold text-purple-900 mb-3 text-sm uppercase tracking-wider flex items-center">
+                                  <Users className="w-4 h-4 mr-2 text-purple-600" />
+                                  Target Market
+                                </h4>
+                                <p className="text-purple-800 text-sm leading-relaxed">
+                                  {(project as any).target_demographic}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Execution Roadmap & Risks */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {(project as any).roadmap_steps && (project as any).roadmap_steps.length > 0 && (
+                            <div className="bg-gray-50/50 p-5 rounded-xl border border-gray-200">
+                              <h4 className="font-semibold text-gray-900 mb-3 text-sm uppercase tracking-wider flex items-center">
+                                <CheckCircle className="w-4 h-4 mr-2 text-gray-600" />
+                                Execution Roadmap
+                              </h4>
+                              <ul className="space-y-3 text-gray-700 text-sm">
+                                {(project as any).roadmap_steps.map((step: string, i: number) => (
+                                  <li key={i} className="flex items-start">
+                                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">{i + 1}</div>
+                                    <span className="leading-snug">{step}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {(project as any).potential_risks && (project as any).potential_risks.length > 0 && (
+                            <div className="bg-orange-50/50 p-5 rounded-xl border border-orange-100">
+                              <h4 className="font-semibold text-orange-900 mb-3 text-sm uppercase tracking-wider flex items-center">
+                                <AlertTriangle className="w-4 h-4 mr-2 text-orange-500" />
+                                Risk Factors
+                              </h4>
+                              <ul className="space-y-2 text-orange-800 text-sm">
+                                {(project as any).potential_risks.map((risk: string, i: number) => (
+                                  <li key={i} className="flex items-start">
+                                    <span className="mr-2 opacity-60">•</span>
+                                    <span className="leading-snug">{risk}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+
+                      {/* Right Column: Financial Breakdown ("Receipt" format) */}
+                      {(() => {
+                        const projectCost = (project as any).computedCost || (project.costRangeLow + project.costRangeHigh) / 2;
+                        const netProfit = project.valueAdd - projectCost;
+                        return (
+                          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col justify-center space-y-4">
+                            <h4 className="font-semibold text-gray-900 mb-1 border-b pb-3 text-center tracking-tight uppercase text-sm">
+                              Financial Breakdown
+                            </h4>
+
+                            <div className="flex justify-between items-center py-2 border-b border-gray-50 border-dashed">
+                              <span className="text-gray-600 font-medium">Est. Cost</span>
+                              <div className="text-right">
+                                <span className="font-bold text-teal-700">{formatCurrency(projectCost)}</span>
+                                {(project as any).costPerSqftUsed && <div className="text-xs text-gray-400 mt-0.5">${(project as any).costPerSqftUsed}/sqft</div>}
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center py-2 border-b border-gray-50 border-dashed">
+                              <span className="text-gray-600 font-medium">Value Add</span>
+                              <div className="text-right">
+                                <span className="font-bold text-green-700">+{formatCurrency(project.valueAdd)}</span>
+                                {(project as any).pricePsfUsed && <div className="text-xs text-gray-400 mt-0.5">${(project as any).pricePsfUsed}/sqft</div>}
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center py-2 border-b border-gray-50 border-dashed">
+                              <span className="text-gray-600 font-medium">Timeline</span>
+                              <span className="font-bold text-blue-700">{project.timeline}</span>
+                            </div>
+
+                            <div className={`flex justify-between items-center p-3 rounded-lg ${netProfit > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                              <span className="font-semibold text-gray-800">Net Profit</span>
+                              <span className={`font-bold ${netProfit > 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                {netProfit > 0 ? '+' : ''}{formatCurrency(netProfit)}
+                              </span>
+                            </div>
+
+                            <div className="flex justify-between items-center p-3 bg-gray-900 rounded-lg text-white mt-2">
+                              <span className="font-medium text-gray-300">Post-Reno Value</span>
+                              <div className="text-right">
+                                <span className="font-bold text-lg text-white">
+                                  {(project as any).computedValue ?
+                                    formatCurrency((project as any).computedValue) :
+                                    (financialSummary?.currentValue ? formatCurrency(financialSummary.currentValue + project.valueAdd) : 'N/A')
+                                  }
+                                </span>
+                                {(project as any).newTotalSqft && <div className="text-xs text-gray-400 mt-0.5">{(project as any).newTotalSqft.toLocaleString()} sqft</div>}
+                              </div>
+                            </div>
+
+                          </div>
+                        );
+                      })()}
+
+                    </div>
+
+                    {/* Target ARV Comparables (Investment Thesis Proof) */}
+                    {(project as any).targetComparables && (project as any).targetComparables.length > 0 && (
+                      <div className="mt-8 pt-6 border-t border-gray-100">
+                        <h4 className="font-semibold text-gray-900 mb-4 text-base flex items-center">
+                          <Target className="w-5 h-5 mr-2 text-blue-600" />
+                          Investment Thesis Proof: ARV Comparables
+                        </h4>
+                        <p className="text-sm text-gray-600 mb-4">
+                          To validate the projected {(project as any).newTotalSqft ? (project as any).newTotalSqft.toLocaleString() + ' sqft' : ''} ARV, the AI identified the following newly renovated or new-build comparables in the immediate vicinity matching this exact strategy:
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {(project as any).targetComparables.map((comp: any, cIdx: number) => (
+                            <div key={cIdx} className="bg-gray-50 border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="font-bold text-gray-900">{formatCurrency(comp.price)}</span>
+                                <span className="text-xs bg-white border border-gray-200 text-gray-600 px-2 py-1 rounded shadow-sm">
+                                  ${comp.pricePsf}/sqft
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-800 font-medium truncate mb-1" title={comp.address}>
+                                {comp.address}
+                              </p>
+                              <div className="text-xs text-gray-500 font-medium flex items-center gap-2 mb-2">
+                                <span>{comp.beds} Bed</span>
+                                <span>•</span>
+                                <span>{comp.baths} Bath</span>
+                                <span>•</span>
+                                <span>{comp.sqft?.toLocaleString()} sqft</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] text-gray-400 uppercase tracking-wider font-bold border-t border-gray-200/60 pt-2 mt-2">
+                                <span>Sold: {comp.dateSold}</span>
+                                {comp.distanceMiles && <span>{comp.distanceMiles} mi away</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+
+
+                    {/* Strategy-Specific Financial Stress Test */}
+                    {(project as any).financialStressTest?.sensitivityTable && (project as any).financialStressTest.sensitivityTable.length > 0 && (
+                      <div className="mt-8 pt-6 border-t border-gray-100">
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="font-semibold text-gray-900 text-base flex items-center">
+                            <Calculator className="w-5 h-5 mr-2 text-purple-600" />
+                            Strategy Sensitivity Analysis
+                          </h4>
+                          <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100">Stress Test</Badge>
+                        </div>
+                        <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
+                          <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-600 font-bold border-b border-gray-200">
+                              <tr>
+                                <th className="px-5 py-3 uppercase tracking-wider text-xs">Cost Variance</th>
+                                <th className="px-5 py-3 uppercase tracking-wider text-xs">ARV Variance</th>
+                                <th className="px-5 py-3 uppercase tracking-wider text-xs text-right">Net Profit Outcome</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {(project as any).financialStressTest.sensitivityTable.map((row: any, i: number) => (
+                                <tr key={i} className="hover:bg-gray-50 transition-colors bg-white">
+                                  <td className="px-5 py-3 font-semibold text-rose-600">{row.costChange}</td>
+                                  <td className="px-5 py-3 font-semibold text-emerald-600">{row.priceChange}</td>
+                                  <td className="px-5 py-3 text-right font-extrabold text-gray-900">
+                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(row.netProfit)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+
+
+
+            </div>
+
+            {/* TAB 3: PLANS, PERMITS & BUILDING */}
+            <div className={`space-y-8 ${activeTab === "planning" ? "block" : "hidden print:!block print:!opacity-100"}`}>
             {/* Architecture Waitlist CTA */}
             <section className="mt-12 mb-8">
               <div className="bg-gradient-to-br from-indigo-900 to-blue-900 rounded-2xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden">
@@ -1234,6 +1271,7 @@ export default function Report() {
                 </div>
               </div>
             </section>
+            </div>
           </div>
 
           {/* --- Chatbox Column --- */}
