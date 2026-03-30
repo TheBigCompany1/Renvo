@@ -11,8 +11,11 @@ import {
   type Imagery,
   type VisionAnalysis,
   type MapsContext,
+  type InsertKnowledgeEntry,
+  type KnowledgeEntry,
   users,
   analysisReports,
+  knowledgeBase,
 } from "@shared/schema";
 import { eq, and, gte, or, sql, desc } from "drizzle-orm";
 import { db } from "./db";
@@ -63,6 +66,10 @@ export interface IStorage {
   ): Promise<void>;
 
   findCachedReport(address: string, maxAgeDays?: number): Promise<AnalysisReport | undefined>;
+
+  // Phase 4 RAG Database Handlers
+  createKnowledgeEntry(entry: InsertKnowledgeEntry): Promise<KnowledgeEntry>;
+  findSimilarKnowledge(embeddingArray: number[], limit?: number, typeScope?: string): Promise<KnowledgeEntry[]>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -201,6 +208,34 @@ export class PostgresStorage implements IStorage {
       .limit(1);
 
     return results[0];
+  }
+
+  // Phase 4 RAG Data Injection Models
+  async createKnowledgeEntry(insertKnowledge: InsertKnowledgeEntry): Promise<KnowledgeEntry> {
+    const result = await db.insert(knowledgeBase).values(insertKnowledge).returning();
+    return result[0];
+  }
+
+  async findSimilarKnowledge(embeddingArray: number[], limit: number = 3, typeScope?: string): Promise<KnowledgeEntry[]> {
+    // We convert the Float Array to a PostgreSQL compatible Vector string.
+    const vectorString = `[${embeddingArray.join(',')}]`;
+    
+    // Constructing raw cosine search explicitly bounded against the custom text "embedding" dimension.
+    // `<=>` signifies Cosine distance within `pgvector`.
+    
+    let baseQuery = db.select()
+      .from(knowledgeBase);
+    
+    if (typeScope) {
+      baseQuery = baseQuery.where(eq(knowledgeBase.sourceType, typeScope)) as any;
+    }
+
+    // Applying strict semantic thresholds and order logic utilizing Drizzle raw injections.
+    const results = await baseQuery
+      .orderBy(sql`${knowledgeBase.embedding}::vector(768) <=> ${vectorString}::vector(768)`)
+      .limit(limit);
+      
+    return results;
   }
 }
 

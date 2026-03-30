@@ -31,6 +31,22 @@ export const analysisReports = pgTable("analysis_reports", {
   completedAt: timestamp("completed_at"),
 });
 
+// ── RAG Knowledge Base (Phase 4: 5-Pillar Architecture) ──
+export const knowledgeBase = pgTable("knowledge_base", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceType: text("source_type").notNull(), // 'zoning', 'permit', 'incentive', 'price_index', 'property_meta'
+  verificationStatus: text("verification_status").notNull().default("unverified"), // 'unverified', 'agent_verified', 'admin_approved'
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  metadata: jsonb("metadata"), // { city, state, zip, region, confidence, source_url, etc. }
+  embedding: text("embedding"), // Stored as stringified float[] — cast via pgvector in queries
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type KnowledgeEntry = typeof knowledgeBase.$inferSelect;
+export type InsertKnowledgeEntry = typeof knowledgeBase.$inferInsert;
+
 export const locationSchema = z.object({
   address: z.string(),
   city: z.string().optional(),

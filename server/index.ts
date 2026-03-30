@@ -79,6 +79,10 @@ app.use((req, res, next) => {
     `);
     console.log("Verified database schema for module_data column.");
 
+    // Phase 4: Bootstrap pgvector extension organically inside the Neon instance natively.
+    await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector;`);
+    console.log("Verified pgvector extension is activated natively via Drizzle.");
+
     await db.execute(sql`
       ALTER TABLE users 
       ADD COLUMN IF NOT EXISTS is_admin boolean DEFAULT false NOT NULL;

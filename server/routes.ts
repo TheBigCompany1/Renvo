@@ -8,6 +8,8 @@ import { researchProperty, convertToPropertyData, convertToRenovationProjects, c
 import { extractLocationFromProperty } from "./services/location-service";
 import { getStripeClient, getStripePublishableKey } from "./stripeClient";
 import { chatWithReport } from "./services/chat";
+import { generateContentEmbedding } from "./services/embedding";
+import { knowledgeBase } from "@shared/schema";
 
 const ADMIN_EMAILS = ['alexkingsm@gmail.com'];
 
@@ -540,6 +542,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('\nAnalysis complete and saved!');
 
+      // Phase 4 RAG: Fire and Forget the Agentic Auditor verification gate asynchronously.
+      verifyAndIngestReport(reportId).catch(e => console.error("Agentic Auditor ingestion failed:", e.message));
+
     } catch (error) {
       console.error("Error processing analysis report:", error);
 
@@ -681,7 +686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.id;
       const adminUser = await storage.getUser(userId);
       if (!isAdmin(adminUser?.email) && adminUser?.isAdmin !== true) {
-        return res.status(403).json({ message: "Forbidden: Super Admin Access Only" });
+          return res.status(403).json({ message: "Forbidden: Super Admin Access Only" });
       }
       
       const { isAdmin: updateIsAdmin, reportCredits, password } = req.body;
@@ -706,6 +711,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Phase 4 RAG: Manual Admin Semantic Ingestion Gateway
+  app.post("/api/admin/knowledge/ingest", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const adminUser = await storage.getUser(userId);
+      if (!isAdmin(adminUser?.email) && adminUser?.isAdmin !== true) {
+        return res.status(403).json({ message: "Forbidden: Super Admin Access Only" });
+      }
+
+      const { sourceType, title, content, metadata } = req.body;
+      if (!sourceType || !title || !content) {
+        return res.status(400).json({ message: "Missing required vector payload arguments." });
+      }
+
+      // Encode the text into 768 dimensions using Gemini
+      const embeddingFloatArray = await generateContentEmbedding(content);
+
+      // Save directly into the semantic storage structure as 'admin_approved'
+      const entry = await storage.createKnowledgeEntry({
+        sourceType,
+        title,
+        content,
+        metadata: metadata || {},
+        verificationStatus: 'admin_approved',
+        embedding: `[${embeddingFloatArray.join(',')}]`,
+      });
+
+      res.status(201).json({ success: true, entryId: entry.id });
+    } catch (error: any) {
+      console.error("RAG Embedding Error:", error);
+      res.status(500).json({ message: "Failed to construct the embedding vector space.", error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
+}
+
+// Phase 4 RAG: Agentic Auditor Async Pipeline
+async function verifyAndIngestReport(reportId: string): Promise<void> {
+  const report = await storage.getAnalysisReport(reportId);
+  if (!report || report.status !== 'completed' || !report.propertyData) return;
+
+  // The Agentic Auditor evaluates the logic confidence of the report. We rely on the 
+  // embedded validationSummary.pricingAccuracy logic to act as the internal Quality Gate.
+  const validation = report.validationSummary as any;
+  const isHighConfidence = validation?.pricingAccuracy === 'high' || validation?.confidence >= 0.8;
+
+  if (isHighConfidence) {
+    console.log(`[RAG Auditor] Vectorizing Report ${reportId} for Semantic Context`);
+    
+    // Construct a condensed textual representation of the property logic.
+    const propertyFacts = report.propertyData as any;
+    const sqft = propertyFacts.sqft || 0;
+    const price = propertyFacts.price || propertyFacts.lastSoldPrice || 0;
+    const pricePerSqft = sqft > 0 ? (price / sqft).toFixed(2) : 0;
+    
+    // We bind the textual memory that the LLM will scan contextually.
+    const memoryString = `Verified Property Record: ${propertyFacts.address}. ` +
+      `Layout: ${propertyFacts.beds} beds, ${propertyFacts.baths} baths, ${sqft} sqft. ` +
+      `Valuation: Extracted Price $${price.toLocaleString()} ($${pricePerSqft}/sqft). ` +
+      `AI Verification Strategy: ${validation?.bestStrategy || 'Unknown'}.`;
+
+    const docEmbedding = await generateContentEmbedding(memoryString);
+    
+    await storage.createKnowledgeEntry({
+      sourceType: 'property_meta',
+      title: propertyFacts.address,
+      content: memoryString,
+      metadata: { reportId, type: 'agentic_audit', confidence: validation?.confidence || 1.0 },
+      verificationStatus: 'agent_verified',
+      embedding: `[${docEmbedding.join(',')}]`,
+    });
+    console.log(`[RAG Auditor] Report ${reportId} mapped efficiently into 768-D space.`);
+  } else {
+    console.log(`[RAG Auditor] Report ${reportId} rejected by Quality Gate (Low confidence).`);
+  }
 }

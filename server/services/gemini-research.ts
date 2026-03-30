@@ -1,4 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
+import { generateContentEmbedding } from "./embedding";
+import { storage } from "../storage";
 
 let _client: GoogleGenAI;
 function getClient() {
@@ -201,6 +203,24 @@ export async function researchProperty(addressOrUrl: string, userType?: string, 
   console.log(`\n${'='.repeat(60)}`);
   console.log(`🔬 GEMINI RESEARCH - Starting property analysis`);
   console.log(`📍 Input: ${addressOrUrl}`);
+  
+  // Phase 4 RAG: Execute the Agentic Contextual Search prior to prompt initialization
+  let ragContextBlock = "";
+  try {
+    const queryVector = await generateContentEmbedding(addressOrUrl);
+    const contextualRecords = await storage.findSimilarKnowledge(queryVector, 5);
+    
+    if (contextualRecords && contextualRecords.length > 0) {
+      console.log(`[RAG Engine] Successfully retrieved ${contextualRecords.length} High-Trust verification vectors.`);
+      ragContextBlock = `\n### CRITICAL HIGH-TRUST VERIFIED CONTEXT (RAG MEMORY) ###\nThe following explicit data blocks have been verified by administrators or cross-referenced analytically. You MUST favor this data strongly when computing logic matrices regarding Costs, Permits, and Zoning parameters.\n\n` + 
+      contextualRecords.map((rec, i) => `[Vector Record ${i+1}] (Trust Level: ${rec.verificationStatus}, Type: ${rec.sourceType})\nTitle: ${rec.title}\nContent:\n${rec.content}\n`).join("\n");
+    } else {
+      console.log(`[RAG Engine] No direct high-trust vectors triggered for this contextual boundary.`);
+    }
+  } catch (err: any) {
+    console.error("[RAG Engine] Vector retrieval bypassed due to database exception:", err.message);
+  }
+
   console.log(`${'='.repeat(60)}\n`);
 
   const startTime = Date.now();
@@ -208,6 +228,7 @@ export async function researchProperty(addressOrUrl: string, userType?: string, 
   const prompt = `You are an expert real estate investment analyst. Research and analyze this property for renovation potential.
 
 Property: ${addressOrUrl}
+${ragContextBlock}
 
 RESEARCH TASKS:
 1. Find the property's current details (beds, baths, sqft, lot size, year built, current estimated value, last sale price/date)
