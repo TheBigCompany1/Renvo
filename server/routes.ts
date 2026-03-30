@@ -244,14 +244,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const userIsAdmin = isAdmin(user.email);
-
-      if (!userIsAdmin && !user.tosAcceptedAt) {
-        return res.status(403).json({ message: "Please accept the Terms of Service before generating a report." });
-      }
+      const userIsAdmin = isAdmin(user.email) || user.isAdmin === true;
 
       const hasCredits = (user.reportCredits || 0) > 0;
       const hasSubscription = user.subscriptionStatus === 'active';
+
+      // Bypass TOS requirement if they are an admin or manually provisioned with credits
+      if (!userIsAdmin && !user.tosAcceptedAt && !hasCredits && !hasSubscription) {
+        return res.status(403).json({ message: "Please accept the Terms of Service before generating a report." });
+      }
 
       if (!userIsAdmin && !hasCredits && !hasSubscription) {
         return res.status(402).json({ message: "Please purchase a report or subscribe to generate analyses." });

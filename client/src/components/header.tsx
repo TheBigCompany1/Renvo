@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { User, LogOut, LayoutDashboard, Shield } from "lucide-react";
 
 export default function Header() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, logoutMutation } = useAuth();
 
   return (
     <header className="bg-white border-b border-border">
@@ -60,11 +60,9 @@ export default function Header() {
                     {user.firstName || user.email?.split('@')[0] || 'Account'}
                   </span>
                 </div>
-                <a href="/api/logout">
-                  <Button variant="ghost" size="sm">
-                    <LogOut className="w-4 h-4" />
-                  </Button>
-                </a>
+                <Button variant="ghost" size="sm" onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending}>
+                  <LogOut className="w-4 h-4" />
+                </Button>
               </>
             ) : (
               <Link href="/auth">
