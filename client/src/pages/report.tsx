@@ -37,6 +37,7 @@ const getRoiStarRating = (roi: number): number => {
 export default function Report() {
   const { id } = useParams<{ id: string }>();
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'thesis' | 'planning'>('overview');
 
   const { data: report, isLoading, error } = useQuery({
     queryKey: ['/api/reports', id],
@@ -115,8 +116,6 @@ export default function Report() {
   const timeline = moduleData?.entitlementTimeline || {};
   const softCosts = moduleData?.preConstructionBudget || {};
   const imagery = report.imagery as { streetViewUrl?: string; satelliteUrl?: string } | undefined;
-
-  const [activeTab, setActiveTab] = useState<'overview' | 'thesis' | 'planning'>('overview');
 
   const reportDate = report.completedAt ? new Date(report.completedAt).toLocaleDateString() : new Date().toLocaleDateString();
 
