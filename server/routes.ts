@@ -755,9 +755,9 @@ async function verifyAndIngestReport(reportId: string): Promise<void> {
   if (!report || report.status !== 'completed' || !report.propertyData) return;
 
   // The Agentic Auditor evaluates the logic confidence of the report. We rely on the 
-  // embedded validationSummary.pricingAccuracy logic to act as the internal Quality Gate.
+  // embedded validationSummary.verdict to act as the internal Quality Gate.
   const validation = report.validationSummary as any;
-  const isHighConfidence = validation?.pricingAccuracy === 'high' || validation?.confidence >= 0.8;
+  const isHighConfidence = validation?.verdict === 'Strong Investment' || validation?.verdict === 'Strong' || validation?.verdict?.includes('Strong');
 
   if (isHighConfidence) {
     console.log(`[RAG Auditor] Vectorizing Report ${reportId} for Semantic Context`);

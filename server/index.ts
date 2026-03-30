@@ -84,6 +84,21 @@ app.use((req, res, next) => {
     console.log("Verified pgvector extension is activated natively via Drizzle.");
 
     await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS knowledge_base (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_type text NOT NULL,
+        verification_status text NOT NULL DEFAULT 'unverified',
+        title text NOT NULL,
+        content text NOT NULL,
+        metadata jsonb,
+        embedding text,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      );
+    `);
+    console.log("Verified database schema for knowledge_base table.");
+
+    await db.execute(sql`
       ALTER TABLE users 
       ADD COLUMN IF NOT EXISTS is_admin boolean DEFAULT false NOT NULL;
     `);
