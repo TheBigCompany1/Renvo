@@ -52,7 +52,7 @@ export default function Report() {
           <Skeleton className="h-64 w-full mb-8" />
           <Skeleton className="h-32 w-full mb-8" />
           <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
+            {[1, 2, 3]?.map((i) => (
               <Skeleton key={i} className="h-48 w-full" />
             ))}
           </div>
@@ -98,7 +98,7 @@ export default function Report() {
   const propertyData = (report.propertyData || {}) as PropertyData;
   const renovationProjectsRaw = (report.renovationProjects || []) as RenovationProject[];
   // Sort by Net Profit (Value Add - Cost) instead of ROI, prioritizing absolute return scale over relative efficiency
-  const renovationProjects = [...renovationProjectsRaw].sort((a, b) => {
+  const renovationProjects = [...(renovationProjectsRaw || [])]?.sort((a, b) => {
     const costA = ((a.costRangeLow || 0) + (a.costRangeHigh || 0)) / 2;
     const costB = ((b.costRangeLow || 0) + (b.costRangeHigh || 0)) / 2;
     const netProfitA = (a.valueAdd || 0) - costA;
@@ -132,7 +132,7 @@ export default function Report() {
 
   // Calculate opportunity score (average ROI across all projects)
   const opportunityScore = renovationProjects.length > 0
-    ? Math.round(renovationProjects.reduce((sum, project) => sum + calculateROI(project), 0) / renovationProjects.length)
+    ? Math.round(renovationProjects?.reduce((sum, project) => sum + calculateROI(project), 0) / renovationProjects.length)
     : 0;
 
   const formatCurrency = (amount: number) => {
@@ -346,7 +346,7 @@ export default function Report() {
                           Permit History
                         </div>
                         <div className="space-y-2">
-                          {propertyData.permitHistory.slice(0, 4).map((permit: any, idx: number) => (
+                          {propertyData.permitHistory?.slice(0, 4)?.map((permit: any, idx: number) => (
                             <div key={idx} className="text-sm bg-gray-50 p-2 rounded">
                               <div className="flex justify-between">
                                 <span className="font-medium text-gray-800">{permit.type}</span>
@@ -408,7 +408,7 @@ export default function Report() {
                           <GraduationCap className="w-4 h-4" />
                           Nearby Schools
                         </div>
-                        {propertyData.schools.slice(0, 3).map((school: any, idx: number) => (
+                        {propertyData.schools?.slice(0, 3)?.map((school: any, idx: number) => (
                           <div key={idx} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
                             <span className="text-gray-700 truncate max-w-[60%]">{school.name}</span>
                             <Badge variant={school.rating >= 8 ? "default" : school.rating >= 5 ? "secondary" : "outline"}>
@@ -586,7 +586,7 @@ export default function Report() {
                       <div className="space-y-2">
                         <h4 className="font-semibold text-gray-900 text-sm uppercase tracking-wider">Critical Factors</h4>
                         <ul className="bg-orange-50/50 p-4 rounded-lg border border-orange-100 h-full space-y-2">
-                          {validationSummary.importantConsiderations.map((consideration: string, i: number) => (
+                          {validationSummary.importantConsiderations?.map((consideration: string, i: number) => (
                             <li key={i} className="flex items-start text-sm text-orange-900">
                               <span className="mr-2 opacity-60">•</span>
                               <span className="leading-snug">{consideration}</span>
@@ -672,7 +672,7 @@ export default function Report() {
                             <div className="pt-3 border-t border-gray-200 mt-3">
                               <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wider">Build-By-Right Check</h4>
                               <div className="flex gap-2">
-                                {['adu', 'jadu', 'sb9'].map(type => (
+                                {['adu', 'jadu', 'sb9']?.map(type => (
                                   <Badge key={type} variant={zoning.buildByRight?.[type] ? 'default' : 'secondary'} className={zoning.buildByRight?.[type] ? 'bg-green-100 text-green-800 border-green-200' : 'opacity-50'}>
                                     {type.toUpperCase()}: {zoning.buildByRight?.[type] ? 'YES' : 'NO'}
                                   </Badge>
@@ -720,7 +720,7 @@ export default function Report() {
                 <CardTitle className="text-xl font-semibold" data-testid="title-renovation-opportunities">Top Renovation Opportunities</CardTitle>
               </CardHeader>
               <CardContent className="space-y-8">
-                {renovationProjects.map((project, index) => (
+                {renovationProjects?.map((project, index) => (
                   <div key={project.id} className="border rounded-lg p-6 bg-white shadow-sm" data-testid={`card-renovation-${index}`}>
                     {/* Project Header */}
                     <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-6">
@@ -800,7 +800,7 @@ export default function Report() {
                                   Value Drivers
                                 </h4>
                                 <ul className="space-y-2 text-emerald-800 text-sm">
-                                  {(project as any).value_drivers.map((driver: string, i: number) => (
+                                  {(project as any).value_drivers?.map((driver: string, i: number) => (
                                     <li key={i} className="flex items-start">
                                       <span className="mr-2 text-emerald-500">✓</span>
                                       <span className="leading-snug">{driver}</span>
@@ -833,7 +833,7 @@ export default function Report() {
                                 Execution Roadmap
                               </h4>
                               <ul className="space-y-3 text-gray-700 text-sm">
-                                {(project as any).roadmap_steps.map((step: string, i: number) => (
+                                {(project as any).roadmap_steps?.map((step: string, i: number) => (
                                   <li key={i} className="flex items-start">
                                     <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">{i + 1}</div>
                                     <span className="leading-snug">{step}</span>
@@ -850,7 +850,7 @@ export default function Report() {
                                 Risk Factors
                               </h4>
                               <ul className="space-y-2 text-orange-800 text-sm">
-                                {(project as any).potential_risks.map((risk: string, i: number) => (
+                                {(project as any).potential_risks?.map((risk: string, i: number) => (
                                   <li key={i} className="flex items-start">
                                     <span className="mr-2 opacity-60">•</span>
                                     <span className="leading-snug">{risk}</span>
@@ -931,7 +931,7 @@ export default function Report() {
                           To validate the projected {(project as any).newTotalSqft ? (project as any).newTotalSqft.toLocaleString() + ' sqft' : ''} ARV, the AI identified the following newly renovated or new-build comparables in the immediate vicinity matching this exact strategy:
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {(project as any).targetComparables.map((comp: any, cIdx: number) => (
+                          {(project as any).targetComparables?.map((comp: any, cIdx: number) => (
                             <div key={cIdx} className="bg-gray-50 border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
                               <div className="flex justify-between items-start mb-2">
                                 <span className="font-bold text-gray-900">{formatCurrency(comp.price)}</span>
@@ -981,7 +981,7 @@ export default function Report() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                              {(project as any).financialStressTest.sensitivityTable.map((row: any, i: number) => (
+                              {(project as any).financialStressTest.sensitivityTable?.map((row: any, i: number) => (
                                 <tr key={i} className="hover:bg-gray-50 transition-colors bg-white">
                                   <td className="px-5 py-3 font-semibold text-rose-600">{row.costChange}</td>
                                   <td className="px-5 py-3 font-semibold text-emerald-600">{row.priceChange}</td>
