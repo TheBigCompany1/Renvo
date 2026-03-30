@@ -25,7 +25,7 @@ export async function generateContentEmbedding(content: string): Promise<number[
   try {
     const ai = getClient();
     const response = await ai.models.embedContent({
-      model: 'gemini-embedding-001',
+      model: 'gemini-embedding-2-preview',
       contents: [content],
       config: {
         outputDimensionality: 768, // Fixed explicitly for uniform cosine distances
