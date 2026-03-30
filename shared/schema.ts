@@ -293,8 +293,9 @@ export const insertAnalysisReportSchema = createInsertSchema(analysisReports)
     propertyUrl: z.string().url().optional(),
     propertyAddress: z.string().min(5).optional(),
     inputType: z.enum(["url", "address"]),
-    userType: z.enum(["homeowner", "investor"]).optional(),
+    userType: z.enum(["owner", "investor"]).optional(),
     targetBudget: z.number().nonnegative().optional(),
+    investmentGoal: z.string().optional(),
   })
   .refine(
     (data) => data.propertyUrl || data.propertyAddress,

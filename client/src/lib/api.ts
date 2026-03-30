@@ -5,7 +5,7 @@ export interface CreateReportResponse {
   status: string;
 }
 
-export async function createAnalysisReport(data: { propertyInput: string, userType?: "homeowner" | "investor" | "", targetBudget?: number }): Promise<CreateReportResponse> {
+export async function createAnalysisReport(data: { propertyInput: string, userType?: "owner" | "investor" | "", targetBudget?: number, investmentGoal?: string }): Promise<CreateReportResponse> {
   // Detect if input is a URL or an address
   const isUrl = data.propertyInput.includes('redfin.com') || data.propertyInput.includes('redf.in') || data.propertyInput.startsWith('http');
 

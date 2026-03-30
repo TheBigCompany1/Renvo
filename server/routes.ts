@@ -317,11 +317,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         inputType: validatedData.inputType,
       }, userId);
       
-      if (validatedData.userType || validatedData.targetBudget) {
+      if (validatedData.userType || validatedData.targetBudget || validatedData.investmentGoal) {
         await storage.updateAnalysisReportData(report.id, {
           moduleData: {
             userType: validatedData.userType,
-            targetBudget: validatedData.targetBudget
+            targetBudget: validatedData.targetBudget,
+            investmentGoal: validatedData.investmentGoal
           }
         });
       }
@@ -455,11 +456,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userType = (report.moduleData as any)?.userType;
       const targetBudget = (report.moduleData as any)?.targetBudget;
+      const investmentGoal = (report.moduleData as any)?.investmentGoal;
       
       if (userType) console.log(`Configuring strategy for User Type: ${userType}`);
       if (targetBudget) console.log(`Configuring strategy for Budget Ceiling: $${targetBudget}`);
+      if (investmentGoal) console.log(`Configuring strategy for Goal: ${investmentGoal}`);
 
-      const research = await researchProperty(addressOrUrl, userType, targetBudget);
+      const research = await researchProperty(addressOrUrl, userType, targetBudget, investmentGoal);
 
       const propertyData = convertToPropertyData(research);
       const renovationProjects = convertToRenovationProjects(research);

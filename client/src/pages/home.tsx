@@ -14,7 +14,8 @@ export default function Home() {
   const background1 = "/background1.mp4";
   const background2 = "/background2.mp4";
   const [propertyInput, setPropertyInput] = useState("");
-  const [userType, setUserType] = useState<"homeowner" | "investor" | "">("");
+  const [userType, setUserType] = useState<"owner" | "investor" | "">("");
+  const [investmentGoal, setInvestmentGoal] = useState<string>("");
   const [targetBudget, setTargetBudget] = useState<string>("");
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -97,6 +98,7 @@ export default function Home() {
     createReportMutation.mutate({
       propertyInput: propertyInput.trim(),
       userType: userType || undefined,
+      investmentGoal: investmentGoal || undefined,
       targetBudget: targetBudget ? parseInt(targetBudget.replace(/\D/g, '')) : undefined
     });
   };
@@ -173,8 +175,21 @@ export default function Home() {
                     <SelectValue placeholder="I am a... (Optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="homeowner">Homeowner</SelectItem>
+                    <SelectItem value="owner">Property Owner</SelectItem>
                     <SelectItem value="investor">Potential Investor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1">
+                <Select value={investmentGoal} onValueChange={setInvestmentGoal}>
+                  <SelectTrigger className="h-12 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/60">
+                    <SelectValue placeholder="Investment Goal (Optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Buy & Flip">Buy & Flip</SelectItem>
+                    <SelectItem value="3-5 Year Hold">3-5 Year Hold</SelectItem>
+                    <SelectItem value="Long Term Hold">Long Term Hold</SelectItem>
+                    <SelectItem value="Short-term Rentals">Short-term Rentals (Airbnb, etc.)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -186,7 +201,7 @@ export default function Home() {
                     const val = e.target.value.replace(/[^0-9]/g, '');
                     setTargetBudget(val ? `$${parseInt(val).toLocaleString()}` : '');
                   }}
-                  placeholder="Target Renovation Budget (Optional)" 
+                  placeholder="Target Budget (Optional)" 
                   className="h-12 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/60 focus:bg-white/20"
                 />
               </div>

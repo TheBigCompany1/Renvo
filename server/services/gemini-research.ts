@@ -199,7 +199,7 @@ export interface PropertyResearchResult {
   rawAnalysis: string;
 }
 
-export async function researchProperty(addressOrUrl: string, userType?: string, targetBudget?: number): Promise<PropertyResearchResult> {
+export async function researchProperty(addressOrUrl: string, userType?: string, targetBudget?: number, investmentGoal?: string): Promise<PropertyResearchResult> {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`🔬 GEMINI RESEARCH - Starting property analysis`);
   console.log(`📍 Input: ${addressOrUrl}`);
@@ -267,12 +267,14 @@ IMPORTANT: Provide AT LEAST 2-3 different renovation opportunities, ranked by RO
 
 Be specific with numbers. Use real comparable sales from the area. Calculate actual profit potential.
 
-${userType === 'homeowner' ? `### IDENTITY CONSTRAINT: HOMEOWNER
-The user is the current Homeowner. Focus your renovation strategy entirely on maximizing their property value based on the historical price they bought it at (which you must find via grounding search). Calculate their equity and ROI aggressively based on holding the asset.` : ''}
+${userType === 'owner' ? `### IDENTITY CONSTRAINT: OWNER
+The user is the current Property Owner. Focus your renovation strategy entirely on maximizing their property value based on the historical price they bought it at (which you must find via grounding search). Calculate their equity and ROI aggressively based on holding the asset.` : ''}
 ${userType === 'investor' ? `### IDENTITY CONSTRAINT: INVESTOR
 The user is a Potential Investor exploring an acquisition. Focus your renovation analysis on determining the maximum ideal purchase price they should target to ensure the renovations are highly profitable. Output specific acquisition caps.` : ''}
 ${targetBudget ? `### FINANCIAL CONSTRAINT: MAX RENOVATION BUDGET
 The user has a strict maximum renovation budget ceiling of $${targetBudget.toLocaleString()}. DO NOT suggest any renovation project whose estimated total cost exceeds this budget. Limit your generated strategies to those feasible within this financial threshold.` : ''}
+${investmentGoal ? `### TACTICAL CONSTRAINT: PRIMARY STRATEGY GOAL
+The overarching strategy goal for this asset is explicitly: [${investmentGoal}]. Calibrate your generated renovation projects strictly to maximize systemic outcomes aligning with this exact hold strategy over others.` : ''}
 
 CRITICAL INSTRUCTION FOR STRATEGIC VERDICT:
 You EXACTLY MUST generate the keys "hbuFilterReasoning", "renovationSpecifications" (including "proposedGlaIncrease" string and "highValueAdditions" array), the 3-scenario "yieldArbitrage" array showing precise ROI % for Cosmetic/Hold/Expansion, and the "marketHedge2026" narrative DIRECTLY inside the top-level "moduleData" payload format block. Failure to output these properties breaks the client application dashboard.

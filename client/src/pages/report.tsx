@@ -625,7 +625,7 @@ export default function Report() {
                         <div>
                           <h4 className="font-semibold text-gray-900 mb-3 flex items-center text-sm uppercase tracking-wider">
                             <Home className="w-4 h-4 mr-2 text-emerald-600" />
-                            Homeowner Profile
+                            Owner Profile
                           </h4>
                           <div className="space-y-3 bg-emerald-50/30 p-4 rounded-lg">
                             <div className="flex justify-between text-sm py-1 border-b border-emerald-100 border-dashed">
@@ -743,7 +743,7 @@ export default function Report() {
                             {/* Strategy Constraints */}
                             {(report.moduleData as any)?.userType && (
                               <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`badge-usertype-${index}`}>
-                                Optimized for {(report.moduleData as any).userType === 'homeowner' ? 'Homeowner Equity' : 'Acquisition'}
+                                Optimized for {(report.moduleData as any).userType === 'owner' ? 'Owner Equity' : 'Acquisition'}
                               </Badge>
                             )}
                             {(report.moduleData as any)?.targetBudget && (
