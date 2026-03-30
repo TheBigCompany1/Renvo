@@ -475,7 +475,7 @@ export default function Report() {
                                     ? "secondary"
                                     : "destructive"
                               }>
-                                {propertyData.crimeStats.overallRating.replace('_', ' ').toUpperCase()} CRIME
+                                {propertyData.crimeStats.overallRating?.replace('_', ' ').toUpperCase()} CRIME
                               </Badge>
                             </div>
                           )}
@@ -731,7 +731,7 @@ export default function Report() {
                         <div className="space-y-1.5">
                           <div className="flex flex-wrap items-center gap-2.5">
                             <h3 className="text-xl font-bold text-gray-900 leading-tight" data-testid={`text-project-name-${index}`}>
-                              {project.name ? project.name.replace(/^(Strategy|Option)\s*\d+:\s*/i, '').trim() : 'Renovation Plan'}
+                              {project.name ? String(project.name)?.replace(/^(Strategy|Option)\s*\d+:\s*/i, '').trim() : 'Renovation Plan'}
                             </h3>
                             
                             {/* Validation Badge */}
@@ -1111,10 +1111,6 @@ export default function Report() {
               </Card>
             )}
 
-            </div>
-
-            {/* TAB 3: PLANS, PERMITS & BUILDING */}
-
             {/* MODULE 4: Execution Roadmap */}
             <section className="space-y-6 mt-8">
               <div className="flex items-center gap-2 border-b pb-2 border-gray-200">
@@ -1205,6 +1201,11 @@ export default function Report() {
               </div>
             </section>
             
+
+
+            </div>
+
+            {/* TAB 3: PLANS, PERMITS & BUILDING */}
 
             <div className={`space-y-8 ${activeTab === "planning" ? "block" : "hidden print:!block print:!opacity-100"}`}>
             {/* Architecture Waitlist CTA */}
