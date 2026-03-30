@@ -8,3 +8,5 @@ vite.config.ts.*
 .env.local
 renvo
 renvo.pub
+
+**/*.icloud
