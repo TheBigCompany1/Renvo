@@ -8,6 +8,7 @@ import { createAnalysisReport } from "@/lib/api";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function Home() {
   const background1 = "/background1.mp4";
@@ -18,6 +19,30 @@ export default function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [showTosModal, setShowTosModal] = useState(false);
+
+  const acceptTosMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/user/accept-tos", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to accept TOS");
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowTosModal(false);
+      createReportMutation.mutate({
+        propertyInput: propertyInput.trim(),
+        userType: userType || undefined,
+        targetBudget: targetBudget ? parseInt(targetBudget.replace(/\D/g, '')) : undefined
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to accept Terms of Service. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
 
   useEffect(() => {
     const pending = sessionStorage.getItem('pendingAddress');
@@ -40,8 +65,7 @@ export default function Home() {
         return;
       }
       if (message.includes("403") && message.toLowerCase().includes("terms")) {
-        sessionStorage.setItem('pendingAddress', propertyInput.trim());
-        navigate("/pricing");
+        setShowTosModal(true);
         return;
       }
       toast({
@@ -174,6 +198,32 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <Dialog open={showTosModal} onOpenChange={setShowTosModal}>
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-gray-900">Terms of Service Required</DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Please accept our Terms of Service to continue generating reports. This is securely required for all accounts to verify platform usage parameters.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center space-x-2 py-4">
+            <p className="text-sm text-gray-500 font-medium leading-relaxed">
+              By clicking accept, you officially agree to our <a href="/terms" className="text-teal-600 hover:text-teal-700 hover:underline" target="_blank">Terms of Service</a> and <a href="/privacy" className="text-teal-600 hover:text-teal-700 hover:underline" target="_blank">Privacy Policy</a> for the Renvo.ai platform.
+            </p>
+          </div>
+          <DialogFooter className="sm:justify-end gap-2">
+            <Button variant="outline" className="text-gray-700 bg-white" onClick={() => setShowTosModal(false)}>Cancel</Button>
+            <Button 
+              onClick={() => acceptTosMutation.mutate()} 
+              disabled={acceptTosMutation.isPending}
+              className="bg-teal-600 hover:bg-teal-700 text-white border-0 shadow-md"
+            >
+              {acceptTosMutation.isPending ? "Accepting..." : "I Accept & Continue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

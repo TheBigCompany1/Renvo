@@ -249,8 +249,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasCredits = (user.reportCredits || 0) > 0;
       const hasSubscription = user.subscriptionStatus === 'active';
 
-      // Bypass TOS requirement if they are an admin or manually provisioned with credits
-      if (!userIsAdmin && !user.tosAcceptedAt && !hasCredits && !hasSubscription) {
+      // STRICT ENFORCEMENT: Everyone must accept TOS, even admins or manually provisioned accounts
+      if (!user.tosAcceptedAt) {
         return res.status(403).json({ message: "Please accept the Terms of Service before generating a report." });
       }
 
